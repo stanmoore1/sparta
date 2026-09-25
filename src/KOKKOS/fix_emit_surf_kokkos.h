@@ -67,7 +67,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   void operator()(TagFixEmitSurf_subsonic_grid, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixEmitSurf_mflow_grid, const int&, double&) const;
+  void operator()(TagFixEmitSurf_mflow_grid, const int&, double&) const;  // KK_DOUBLE: reduction value
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixEmitSurf_mflow_nrho, const int&) const;

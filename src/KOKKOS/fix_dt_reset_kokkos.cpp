@@ -181,9 +181,9 @@ void FixDtResetKokkos::copy_gridstep(DAT::t_kkacc_1d d_src, int n)
 KOKKOS_INLINE_FUNCTION
 void FixDtResetKokkos::operator()(TagFixDtReset_MinMaxSumReduction,
                                   const int &i,
-                                  double& dtmin,
-                                  double& dtmax,
-                                  double& dtsum,
+                                  double& dtmin,  // KK_DOUBLE: reduction value
+                                  double& dtmax,  // KK_DOUBLE: reduction value
+                                  double& dtsum,  // KK_DOUBLE: reduction value
                                   int& count) const {
   if (d_gridstep(i) == static_cast<KK_ACC_FLOAT>(0.0)) return;
 

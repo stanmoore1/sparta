@@ -1459,8 +1459,8 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
   //   small tolerance insures exact roots are not rounded down
 
   int nsub;
-  if (DIM == 2) nsub = static_cast<int> (Kokkos::sqrt((double) np) + 1.0e-9);
-  else nsub = static_cast<int> (Kokkos::cbrt((double) np) + 1.0e-9);
+  if (DIM == 2) nsub = static_cast<int> (Kokkos::sqrt((double) np) + 1.0e-9);  // KK_DOUBLE: integer result
+  else nsub = static_cast<int> (Kokkos::cbrt((double) np) + 1.0e-9);  // KK_DOUBLE: integer result
   const int nsubsq = nsub*nsub;
 
   auto cell = grid_kk_copy.obj.k_cells.view_device()[icell];
@@ -3750,7 +3750,7 @@ double CollideVSSKokkos::attempt_collision_kokkos(int icell, int np, double volu
 
 KOKKOS_INLINE_FUNCTION
 double CollideVSSKokkos::attempt_collision_kokkos(int icell, int igroup, int jgroup,  // KK_DOUBLE: precision_map.json keep_double_identifiers
-                                                  int ni, int nj, double volume,
+                                                  int ni, int nj, double volume,  // KK_DOUBLE: collision attempt count
                                                   rand_type &rand_gen) const
 {
   double nattempt;  // KK_DOUBLE: precision_map.json keep_double_identifiers
@@ -3762,7 +3762,7 @@ double CollideVSSKokkos::attempt_collision_kokkos(int icell, int igroup, int jgr
 
   double npairs;  // KK_DOUBLE: precision_map.json keep_double_identifiers
   if (igroup == jgroup) npairs = 0.5 * ni * (ni-1);
-  else npairs = (double) ni * nj;
+  else npairs = (double) ni * nj;  // KK_DOUBLE: collision attempt count
 
   nattempt = npairs * d_vremax(icell,igroup,jgroup) * dt * fnum / volume;
 
@@ -3893,7 +3893,7 @@ int CollideVSSKokkos::perform_collision_kokkos(OnePartKK *&ip,
                                   OnePartKK *&jp,
                                   OnePartKK *&kp,
                                   struct State &precoln, struct State &postcoln, rand_type &rand_gen,
-                                  OnePartKK *&p3, int &recomb_species, double &recomb_density,
+                                  OnePartKK *&p3, int &recomb_species, double &recomb_density,  // KK_DOUBLE: recombination density
                                   int &index_kpart) const
 {
   int reaction,kspecies;
@@ -4433,7 +4433,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(OnePartKK *ip,
         do {
           ivib = static_cast<int>
             (rand_gen.drand()*(max_level+AdjustFactor));
-          p->evib = (double)
+          p->evib = (double)  // KK_DOUBLE: vib level energy
             (ivib * boltz * d_species[sp].vibtemp[0]);
           State_prob = Kokkos::pow((static_cast<KK_FLOAT>(1.0) - p->evib / E_Dispose), b_vib);
         } while (State_prob < static_cast<KK_FLOAT>(rand_gen.drand()));

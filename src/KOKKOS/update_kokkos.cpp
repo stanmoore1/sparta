@@ -1607,7 +1607,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     //   positions, so a double precision build is unchanged.
 
     if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
-      if (dtremain == static_cast<KK_POS_FLOAT>(0.0)) outface = INTERIOR;
+      if (dtremain == 0.0) outface = INTERIOR;
     }
 
 #ifdef MOVE_DEBUG

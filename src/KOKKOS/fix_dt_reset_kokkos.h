@@ -42,7 +42,7 @@ namespace SPARTA_NS {
     void operator()(TagFixDtReset_LoadGridstepVecFromArray, const int&) const;
 
     KOKKOS_INLINE_FUNCTION
-    void operator()(TagFixDtReset_MinMaxSumReduction, const int&, double&, double&, double&, int&) const;
+    void operator()(TagFixDtReset_MinMaxSumReduction, const int&, double&, double&, double&, int&) const;  // KK_DOUBLE: reduction values
 
 
   private:

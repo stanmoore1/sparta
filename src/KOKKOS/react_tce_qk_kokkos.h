@@ -49,7 +49,7 @@ KOKKOS_INLINE_FUNCTION
 int attempt_kk(OnePartKK *ip, OnePartKK *jp,
          KK_FLOAT pre_etrans, KK_FLOAT pre_erot, KK_FLOAT pre_evib,
          KK_FLOAT &post_etotal, int &kspecies,
-         int & /*recomb_species*/, double & /*recomb_density*/,
+         int & /*recomb_species*/, double & /*recomb_density*/,  // KK_DOUBLE: recombination density
          const t_species_1d_const &d_species) const
 {
   const int isp = ip->ispecies;
@@ -125,7 +125,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
                 KK_FLOAT prob = 0.0;
                 do {
                   iv = static_cast<int> (rand_gen.drand()*(maxlev+0.99999999));
-                  KK_FLOAT evib = static_cast<double> (iv / inverse_kT);
+                  KK_FLOAT evib = static_cast<KK_FLOAT> (iv / inverse_kT);
                   if (evib < eccq) prob = Kokkos::pow(static_cast<KK_FLOAT>(1.0)-evib/eccq,static_cast<KK_FLOAT>(1.5)-omega);
                   else prob = 0.0;
                 } while (static_cast<KK_FLOAT>(rand_gen.drand()) < prob);
@@ -141,7 +141,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
               KK_FLOAT prob = 0.0;
               do {
                 iv = rand_gen.drand()*(maxlev+0.99999999);
-                KK_FLOAT evib = static_cast<double> (iv * boltz*d_species[mspec].vibtemp[0]);
+                KK_FLOAT evib = static_cast<KK_FLOAT> (iv * boltz*d_species[mspec].vibtemp[0]);
                 if (evib < eccq) prob = Kokkos::pow(static_cast<KK_FLOAT>(1.0)-evib/eccq,static_cast<KK_FLOAT>(1.5) - r->d_coeff[6]);
                 else prob = 0.0;
               } while (static_cast<KK_FLOAT>(rand_gen.drand()) < prob);

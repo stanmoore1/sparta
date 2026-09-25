@@ -132,7 +132,7 @@ KOKKOS_INLINE_FUNCTION
 int attempt_kk(OnePartKK *ip, OnePartKK *jp,
          KK_FLOAT pre_etrans, KK_FLOAT pre_erot, KK_FLOAT pre_evib,
          KK_FLOAT &post_etotal, int &kspecies,
-         int &recomb_species, double &recomb_density, const t_species_1d_const &d_species) const
+         int &recomb_species, double &recomb_density, const t_species_1d_const &d_species) const  // KK_DOUBLE: recombination density
 {
   OneReactionKokkos *r;
 

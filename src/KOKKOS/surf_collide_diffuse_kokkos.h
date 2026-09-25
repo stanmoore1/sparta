@@ -363,7 +363,7 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  KK_FLOAT erot(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const
+  KK_FLOAT erot(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const  // KK_DOUBLE: host constant
   {
     KK_FLOAT eng,a,erm,b;
 
@@ -401,7 +401,7 @@ class SurfCollideDiffuseKokkos : public SurfCollideDiffuse {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  KK_FLOAT evib(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const
+  KK_FLOAT evib(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const  // KK_DOUBLE: host constant
   {
     KK_FLOAT eng,a,erm,b;
 

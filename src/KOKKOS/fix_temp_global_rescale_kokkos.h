@@ -36,7 +36,7 @@ class FixTempGlobalRescaleKokkos : public FixTempGlobalRescale {
   void end_of_step() override;
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixTempGlobalRescale_reduce, const int&, double&) const;
+  void operator()(TagFixTempGlobalRescale_reduce, const int&, double&) const;  // KK_DOUBLE: reduction value
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixTempGlobalRescale_scale, const int&) const;

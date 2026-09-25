@@ -133,7 +133,7 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   int perform_collision_kokkos(OnePartKK *&, OnePartKK *&,
                         OnePartKK *&, struct State &, struct State &, rand_type &,
-                        OnePartKK *&, int &, double &,
+                        OnePartKK *&, int &, double &,  // KK_DOUBLE: recombination density
                         int &) const;
 
   KOKKOS_INLINE_FUNCTION

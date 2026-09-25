@@ -1084,7 +1084,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
     const KK_FLOAT THIRD = static_cast<KK_FLOAT>(1.0)/static_cast<KK_FLOAT>(3.0);
     switch (p) {
     case 0: return 1.0;
-    case 1: return (base >= p) ? double(base) : static_cast<KK_FLOAT>(0.0);
+    case 1: return (base >= p) ? static_cast<KK_FLOAT>(base) : static_cast<KK_FLOAT>(0.0);
     case 2: return (base >= p) ? static_cast<KK_FLOAT>(0.5)*base*(base-1) : static_cast<KK_FLOAT>(0.0);
     case 3: return (base >= p) ? static_cast<KK_FLOAT>(0.5)*static_cast<KK_FLOAT>(THIRD)*base*(base-1)*(base-2) : static_cast<KK_FLOAT>(0.0);
     case 4: return (base >= p) ? static_cast<KK_FLOAT>(0.125)*static_cast<KK_FLOAT>(THIRD)*base*(base-1)*(base-2)*(base-3) : static_cast<KK_FLOAT>(0.0);
