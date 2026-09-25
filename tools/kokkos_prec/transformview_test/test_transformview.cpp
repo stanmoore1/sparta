@@ -384,7 +384,8 @@ void test_particles()
 }
 
 // a legacy and a Kokkos modification with no sync in between abort, in
-//   any order; checked in a child process
+//   any order; checked in a child process, which must not launch a
+//   parallel kernel (an OpenMP runtime is not usable after fork())
 
 template<class F>
 bool aborts(F f)
@@ -409,14 +410,20 @@ void test_concurrent()
   CHECK(aborts([&]() { tv.modify_device(); tv.modify_host(); }));
   CHECK(aborts([&]() { tv.modify_host(); tv.modify_hostkk(); }));
   CHECK(aborts([&]() { tv.modify_hostkk(); tv.modify_host(); }));
-  // sequential modifications with a sync in between are fine
-  CHECK(!aborts([&]() { tv.modify_host(); tv.sync_device(); tv.modify_device();
-                        tv.sync_host(); tv.modify_host(); tv.sync_hostkk();
-                        tv.modify_hostkk(); tv.sync_host(); tv.modify_host(); }));
-  // repeated modification of the same side is fine
-  CHECK(!aborts([&]() { tv.modify_device(); tv.modify_device(); }));
-  CHECK(!aborts([&]() { tv.modify_host(); tv.modify_host(); }));
+  // sequential modifications with a sync in between, and repeated
+  //   modification of the same side, are fine; run in this process, since
+  //   a sync launches a host parallel_for, which an OpenMP runtime cannot
+  //   run in a forked child
+  tv.modify_host(); tv.sync_device(); tv.modify_device();
+  tv.sync_host(); tv.modify_host(); tv.sync_hostkk();
+  tv.modify_hostkk(); tv.sync_host(); tv.modify_host();
+  tv.sync_device();
+  tv.modify_device(); tv.modify_device();
+  tv.sync_host();
+  tv.modify_host(); tv.modify_host();
+  tv.sync_device();
   CHECK(!tv.need_sync_host());
+  CHECK(!tv.need_sync_device());
 }
 
 int main(int argc, char **argv)

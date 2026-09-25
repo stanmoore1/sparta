@@ -189,8 +189,8 @@ jobs:
           --spa "$PWD/src/spa_kokkos_mpi_only -k on -sf kk" \
           --out examples_${{ matrix.prec }}
         python3 ../tools/kokkos_prec/compare_logs.py --gold --stats \
-          --only $(cat ../tools/kokkos_prec/ci_examples.txt) \
-          ../examples examples_${{ matrix.prec }}
+          ../examples examples_${{ matrix.prec }} \
+          --only $(cat ../tools/kokkos_prec/ci_examples.txt)
   bigbig:
     runs-on: ubuntu-22.04
     steps:
