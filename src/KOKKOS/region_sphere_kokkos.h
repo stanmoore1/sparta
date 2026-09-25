@@ -66,7 +66,7 @@ class RegSphereKokkos : public RegSphere, public KokkosBase {
   void operator()(TagRegSphereMatchAll, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(double x, double y, double z) const
+  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
   {
     return !(k_inside(x,y,z) ^ interior);
   }
@@ -77,12 +77,12 @@ class RegSphereKokkos : public RegSphere, public KokkosBase {
   t_particle_1d d_particles;
 
   KOKKOS_INLINE_FUNCTION
-  int k_inside(double x, double y, double z) const
+  int k_inside(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
   {
-    double delx = x - xc;
-    double dely = y - yc;
-    double delz = z - zc;
-    double r = sqrt(delx*delx + dely*dely + delz*delz);
+    KK_FLOAT delx = x - xc;
+    KK_FLOAT dely = y - yc;
+    KK_FLOAT delz = z - zc;
+    KK_FLOAT r = Kokkos::sqrt(delx*delx + dely*dely + delz*delz);
 
     if (r <= radius) return 1;
     return 0;

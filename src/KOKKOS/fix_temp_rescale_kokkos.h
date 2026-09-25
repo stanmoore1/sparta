@@ -65,7 +65,7 @@ class FixTempRescaleKokkos : public FixTempRescale {
  private:
   double t_target,vscale;
 
-  DAT::t_float_1d_3 d_vcom;
+  DAT::t_kkfloat_1d_3 d_vcom;
 
   t_particle_1d d_particles;
   t_species_1d d_species;

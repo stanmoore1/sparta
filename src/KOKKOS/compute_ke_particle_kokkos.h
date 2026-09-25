@@ -37,7 +37,7 @@ class ComputeKEParticleKokkos : public ComputeKEParticle, public KokkosBase {
   KOKKOS_INLINE_FUNCTION
   void operator()(const int&) const;
 
-  DAT::tdual_float_1d k_vector_particle;
+  DAT::ttransform_kkacc_1d k_vector_particle;
 
  private:
   t_particle_1d d_particles;

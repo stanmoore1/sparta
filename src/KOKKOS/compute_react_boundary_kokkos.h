@@ -52,10 +52,10 @@ class ComputeReactBoundaryKokkos : public ComputeReactBoundary, public KokkosBas
 
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  void boundary_tally_kk(double /*dtremain*/, int iface, int /*istyle*/,
-                         int reaction, Particle::OnePart * /*iorig*/,
-                         Particle::OnePart * /*ip*/, Particle::OnePart * /*jp*/,
-                         const double * /*norm*/) const
+  void boundary_tally_kk(KK_POS_FLOAT /*dtremain*/, int iface, int /*istyle*/,
+                         int reaction, OnePartKK * /*iorig*/,
+                         OnePartKK * /*ip*/, OnePartKK * /*jp*/,
+                         const KK_POS_FLOAT * /*norm*/) const
   {
     // skip if no reaction
 
@@ -74,20 +74,20 @@ class ComputeReactBoundaryKokkos : public ComputeReactBoundary, public KokkosBas
 
     if (rpflag) {
       for (int i = 0; i < ntotal; i++)
-        if (d_reaction2col(reaction,i)) a_myarray(iface,i) += 1.0;
-    } else a_myarray(iface,reaction) += 1.0;
+        if (d_reaction2col(reaction,i)) a_myarray(iface,i) += static_cast<KK_FLOAT>(1.0);
+    } else a_myarray(iface,reaction) += static_cast<KK_FLOAT>(1.0);
   }
 
  private:
-  DAT::tdual_float_2d_lr k_myarray;     // local accumulator array
-  DAT::t_float_2d_lr d_myarray;
+  DAT::ttransform_kkacc_2d_lr k_myarray;     // local accumulator array
+  DAT::t_kkacc_2d_lr d_myarray;
 
   DAT::t_int_1d d_surf_react;           // per box face: its surf react model
   DAT::t_int_2d d_reaction2col;         // 1 if ireaction tallies into icol
 
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_myarray;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_myarray;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_myarray;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_myarray;
 };
 
 }

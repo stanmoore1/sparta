@@ -47,13 +47,13 @@ namespace SPARTA_NS {
 
   private:
 
-    DAT::t_float_1d d_gridstep;
+    DAT::t_kkacc_1d d_gridstep;
 
     // copy the first N cells of a source per-grid vector into d_gridstep
     // d_gridstep is sized to a high-water mark which the current cell count
     //   can be below, so the two views cannot be deep_copied whole
 
-    void copy_gridstep(DAT::t_float_1d, int);
+    void copy_gridstep(DAT::t_kkacc_1d, int);
 
 };
 

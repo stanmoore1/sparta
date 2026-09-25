@@ -61,7 +61,7 @@ namespace SPARTA_NS {
     KOKKOS_INLINE_FUNCTION
     void operator()(TagComputeDtGrid_ComputePerGrid, const int&) const;
 
-    DAT::tdual_float_1d k_vector_grid;
+    DAT::ttransform_kkacc_1d k_vector_grid;
 
   private:
     t_cell_1d d_cells;
@@ -72,13 +72,13 @@ namespace SPARTA_NS {
     // the two views need not have equal extents, so they cannot be
     //   deep_copied whole
 
-    void copy_source(DAT::t_float_1d, DAT::t_float_1d, int);
+    void copy_source(DAT::t_kkacc_1d, DAT::t_kkacc_1d, int);
 
-    DAT::t_float_1d d_tau_vector;
-    DAT::t_float_1d d_temp_vector;
-    DAT::t_float_1d d_usq_vector;
-    DAT::t_float_1d d_vsq_vector;
-    DAT::t_float_1d d_wsq_vector;
+    DAT::t_kkacc_1d d_tau_vector;
+    DAT::t_kkacc_1d d_temp_vector;
+    DAT::t_kkacc_1d d_usq_vector;
+    DAT::t_kkacc_1d d_vsq_vector;
+    DAT::t_kkacc_1d d_wsq_vector;
 
     int dimension;
     double boltz;

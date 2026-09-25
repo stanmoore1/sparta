@@ -155,8 +155,8 @@ void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_compute_per_grid_ato
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const double mass = d_species[ispecies].mass;
-  double *v = d_particles[i].v;
+  const KK_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT *v = d_particles[i].v;
 
   // loop has all possible values particle needs to accumulate
   // subset defined by user values are indexed by accumulate vector
@@ -213,8 +213,8 @@ void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_compute_per_grid, co
     const int igroup = d_s2g(imix,ispecies);
     if (igroup < 0) return;
 
-    const double mass = d_species[ispecies].mass;
-    double *v = d_particles[i].v;
+    const KK_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT *v = d_particles[i].v;
 
     int k = igroup*npergroup;
 
@@ -263,7 +263,7 @@ void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_compute_per_grid, co
    also return cols = ptr to list of columns in tally for this index
 ------------------------------------------------------------------------- */
 
-int ComputePFluxGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
+int ComputePFluxGridKokkos::query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &d_array)
 {
   d_array = d_tally;
   return 0;
@@ -284,7 +284,7 @@ int ComputePFluxGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
 ------------------------------------------------------------------------- */
 
 void ComputePFluxGridKokkos::post_process_grid_kokkos(int index, int nsample,
-                         DAT::t_float_2d_lr d_etally, int *emap, DAT::t_float_1d_strided d_vec)
+                         DAT::t_kkacc_2d_lr d_etally, int *emap, DAT::t_kkacc_1d_strided d_vec)
 {
   index--;
   int ivalue = index % nvalue;
@@ -352,9 +352,9 @@ void ComputePFluxGridKokkos::post_process_grid_kokkos(int index, int nsample,
 
 KOKKOS_INLINE_FUNCTION
 void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_post_process_grid_diag, const int &icell) const {
-  double summass, summv, wt;
+  KK_FLOAT summass, summv, wt;
   summass = d_etally(icell,mass);
-  if (summass == 0.0) d_vec[icell] = 0.0;
+  if (summass == static_cast<KK_ACC_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else{
     wt = fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     summv = d_etally(icell,mv);
@@ -366,9 +366,9 @@ void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_post_process_grid_di
 
 KOKKOS_INLINE_FUNCTION
 void ComputePFluxGridKokkos::operator()(TagComputePFluxGrid_post_process_grid_offdiag, const int &icell) const {
-  double summass, wt;
+  KK_FLOAT summass, wt;
   summass = d_etally(icell,mass);
-  if (summass == 0.0) d_vec[icell] = 0.0;
+  if (summass == static_cast<KK_ACC_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else{
     wt = fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     d_vec[icell] = wt/nsample * (d_etally(icell,mvv) -

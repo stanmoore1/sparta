@@ -49,9 +49,9 @@ class ComputeGasCollisionGridKokkos : public ComputeGasCollisionGrid, public Kok
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void gas_tally_kk(int icell, int reaction,
-                    Particle::OnePart *iorig, Particle::OnePart *jorig,
-                    Particle::OnePart * /*ip*/, Particle::OnePart * /*jp*/,
-                    Particle::OnePart * /*kp*/) const
+                    OnePartKK *iorig, OnePartKK *jorig,
+                    OnePartKK * /*ip*/, OnePartKK * /*jp*/,
+                    OnePartKK * /*kp*/) const
   {
     // skip if a reaction (reactions tallied by compute gas/reaction/grid)
 
@@ -69,11 +69,11 @@ class ComputeGasCollisionGridKokkos : public ComputeGasCollisionGrid, public Kok
 
     // tally the collision to its grid cell
 
-    d_vector_grid(icell) += 1.0;
+    d_vector_grid(icell) += static_cast<KK_FLOAT>(1.0);
   }
 
  private:
-  DAT::tdual_float_1d k_vector_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
   // d_vector_grid is inherited from KokkosBase (read by fix ave/grid/kk)
 
   t_cinfo_1d d_cinfo;

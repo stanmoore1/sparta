@@ -46,14 +46,14 @@ class ComputeFFTGridKokkos : public ComputeFFTGrid, public KokkosBase {
 
  private:
 
-  DAT::tdual_float_1d k_ingrid; // input grid values from compute,fix,variable
+  DAT::ttransform_kkacc_1d k_ingrid; // input grid values from compute,fix,variable
                                 // may be NULL if ingridptr just points to c/f/v
-  DAT::t_float_1d d_ingrid;
+  DAT::t_kkacc_1d d_ingrid;
 
-  DAT::tdual_float_1d k_fftwork; // work buf in FFT decomp, length = nfft
-  DAT::t_float_1d d_fftwork;
+  DAT::ttransform_kkacc_1d k_fftwork; // work buf in FFT decomp, length = nfft
+  DAT::t_kkacc_1d d_fftwork;
   DAT::t_char_1d d_fftwork_char;
-  DAT::t_float_1d d_gridwork;    // work buf in grid decomp, length = nglocal
+  DAT::t_kkacc_1d d_gridwork;    // work buf in grid decomp, length = nglocal
   DAT::t_char_1d d_gridwork_char;
 
   FFT_DAT::t_FFT_SCALAR_1d d_fft; // complex buf for performing FFT, length = nfft
@@ -70,8 +70,8 @@ class ComputeFFTGridKokkos : public ComputeFFTGrid, public KokkosBase {
                         //           in buffer received from FFT decomp via
                         //           irregular comm
 
-  DAT::tdual_float_2d_lr k_array_grid;
-  DAT::tdual_float_1d k_vector_grid;
+  DAT::ttransform_kkacc_2d_lr k_array_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
 
   FFT2dKokkos<DeviceType> *fft2dKK;
   FFT3dKokkos<DeviceType> *fft3dKK;

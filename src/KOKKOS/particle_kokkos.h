@@ -52,7 +52,7 @@ class ParticleKokkos : public Particle {
   ~ParticleKokkos() override;
   static KOKKOS_INLINE_FUNCTION
   int add_particle_kokkos(t_particle_1d particles, int, int, int, int,
-                           double *, double *, double, double);
+                           KK_POS_FLOAT *, KK_FLOAT *, KK_FLOAT, KK_FLOAT);
 #ifndef SPARTA_KOKKOS_EXACT
   void compress_migrate(int, int *) override;
 #endif
@@ -103,10 +103,10 @@ class ParticleKokkos : public Particle {
 #endif
 
   KOKKOS_INLINE_FUNCTION
-  double erot(int, double, rand_type &) const;
+  KK_FLOAT erot(int, KK_FLOAT, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
-  double evib(int, double, rand_type &) const;
+  KK_FLOAT evib(int, KK_FLOAT, rand_type &) const;
 
   KOKKOS_INLINE_FUNCTION
   void pack_custom_kokkos(int, char *) const;
@@ -209,9 +209,9 @@ class ParticleKokkos : public Particle {
 
 KOKKOS_INLINE_FUNCTION
 int ParticleKokkos::add_particle_kokkos(t_particle_1d particles, int index, int id,
-      int ispecies, int icell, double *x, double *v, double erot, double evib)
+      int ispecies, int icell, KK_POS_FLOAT *x, KK_FLOAT *v, KK_FLOAT erot, KK_FLOAT evib)
 {
-  OnePart tmp;
+  OnePartKK tmp;
   tmp.id = id;
   tmp.ispecies = ispecies;
   tmp.icell = icell;
@@ -282,25 +282,25 @@ void ParticleKokkos::copy_custom_kokkos(int i, int j) const
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double ParticleKokkos::erot(int isp, double temp_thermal, rand_type &erandom) const
+KK_FLOAT ParticleKokkos::erot(int isp, KK_FLOAT temp_thermal, rand_type &erandom) const
 {
- double eng,a,erm,b;
+ KK_FLOAT eng,a,erm,b;
 
  if (!collide_rot) return 0.0;
  if (d_species[isp].rotdof < 2) return 0.0;
 
  if (d_species[isp].rotdof == 2)
-   eng = -log(erandom.drand()) * boltz * temp_thermal;
+   eng = -Kokkos::log(erandom.drand()) * boltz * temp_thermal;
  else {
-   a = 0.5*d_species[isp].rotdof-1.0;
+   a = static_cast<KK_FLOAT>(0.5)*d_species[isp].rotdof-static_cast<KK_FLOAT>(1.0);
    // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
    // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
    // at 10 kT, which is below the mean for large dof
-   double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
+   KK_FLOAT xmax = a + static_cast<KK_FLOAT>(1.0) + static_cast<KK_FLOAT>(9.0)*Kokkos::sqrt(a+static_cast<KK_FLOAT>(1.0));
    while (1) {
-     erm = xmax*erandom.drand();
-     b = pow(erm/a,a) * exp(a-erm);
-     if (b > erandom.drand()) break;
+     erm = xmax*static_cast<KK_FLOAT>(erandom.drand());
+     b = Kokkos::pow(erm/a,a) * Kokkos::exp(a-erm);
+     if (b > static_cast<KK_FLOAT>(erandom.drand())) break;
    }
    eng = erm * boltz * temp_thermal;
  }
@@ -314,31 +314,31 @@ double ParticleKokkos::erot(int isp, double temp_thermal, rand_type &erandom) co
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double ParticleKokkos::evib(int isp, double temp_thermal, rand_type &erandom) const
+KK_FLOAT ParticleKokkos::evib(int isp, KK_FLOAT temp_thermal, rand_type &erandom) const
 {
-  double eng,a,erm,b;
+  KK_FLOAT eng,a,erm,b;
 
   enum{NONE,DISCRETE,SMOOTH};            // several files
   if (vibstyle == NONE || d_species[isp].vibdof < 2) return 0.0;
 
   eng = 0.0;
   if (vibstyle == DISCRETE && d_species[isp].vibdof == 2) {
-    int ivib = static_cast<int> (-log(erandom.drand()) * temp_thermal /
+    int ivib = static_cast<int> (-Kokkos::log(erandom.drand()) * temp_thermal /
                                  d_species[isp].vibtemp[0]);
     eng = ivib * boltz * d_species[isp].vibtemp[0];
   } else if (vibstyle == SMOOTH || d_species[isp].vibdof >= 2) {
     if (d_species[isp].vibdof == 2)
-      eng = -log(erandom.drand()) * boltz * temp_thermal;
+      eng = -Kokkos::log(erandom.drand()) * boltz * temp_thermal;
     else if (d_species[isp].vibdof > 2) {
-      a = 0.5*d_species[isp].vibdof-1.;
+      a = static_cast<KK_FLOAT>(0.5)*d_species[isp].vibdof-static_cast<KK_FLOAT>(1.);
       // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
       // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
       // at 10 kT, which is below the mean for large dof
-      double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
+      KK_FLOAT xmax = a + static_cast<KK_FLOAT>(1.0) + static_cast<KK_FLOAT>(9.0)*Kokkos::sqrt(a+static_cast<KK_FLOAT>(1.0));
       while (1) {
-        erm = xmax*erandom.drand();
-        b = pow(erm/a,a) * exp(a-erm);
-        if (b > erandom.drand()) break;
+        erm = xmax*static_cast<KK_FLOAT>(erandom.drand());
+        b = Kokkos::pow(erm/a,a) * Kokkos::exp(a-erm);
+        if (b > static_cast<KK_FLOAT>(erandom.drand())) break;
       }
       eng = erm * boltz * temp_thermal;
     }

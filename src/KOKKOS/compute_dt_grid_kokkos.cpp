@@ -94,7 +94,7 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
       ctau->invoked_flag |= INVOKED_PER_GRID;
     }
     if (ctau->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(tau_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(tau_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (tau_index == 0 || ctau->post_process_grid_flag)
       copy_source(d_tau_vector,computeKKBase->d_vector_grid,nglocal);
@@ -130,7 +130,7 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
       ctemp->invoked_flag |= INVOKED_PER_GRID;
     }
     if (ctemp->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(temp_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(temp_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (temp_index == 0 || ctemp->post_process_grid_flag)
       copy_source(d_temp_vector,computeKKBase->d_vector_grid,nglocal);
@@ -166,7 +166,7 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
       cusq->invoked_flag |= INVOKED_PER_GRID;
     }
     if (cusq->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(usq_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(usq_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (usq_index == 0 || cusq->post_process_grid_flag)
       copy_source(d_usq_vector,computeKKBase->d_vector_grid,nglocal);
@@ -202,7 +202,7 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
       cvsq->invoked_flag |= INVOKED_PER_GRID;
     }
     if (cvsq->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(vsq_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(vsq_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (vsq_index == 0 || cvsq->post_process_grid_flag)
       copy_source(d_vsq_vector,computeKKBase->d_vector_grid,nglocal);
@@ -238,7 +238,7 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
       cwsq->invoked_flag |= INVOKED_PER_GRID;
     }
     if (cwsq->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(wsq_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(wsq_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (wsq_index == 0 || cwsq->post_process_grid_flag)
       copy_source(d_wsq_vector,computeKKBase->d_vector_grid,nglocal);
@@ -338,49 +338,49 @@ void ComputeDtGridKokkos::operator()(TagComputeDtGrid_ComputePerGrid, const int 
   if (d_cellcount[i] == 0) return;
 
   // exclude cells with zero mean collision time
-  if ( !(d_tau_vector(i) > 0.) ) return;
+  if ( !(d_tau_vector(i) > static_cast<KK_ACC_FLOAT>(0.)) ) return;
 
   // exclude cells with zero temperature
-  if ( !(d_temp_vector(i) > 0.) ) return;
+  if ( !(d_temp_vector(i) > static_cast<KK_ACC_FLOAT>(0.)) ) return;
 
   // exclude cells with zero speed
-  double speed_squared = 0.;
+  KK_FLOAT speed_squared = 0.;
   if (dimension == 3)
     speed_squared = d_usq_vector(i) + d_vsq_vector(i) + d_wsq_vector(i);
   else
     speed_squared = d_usq_vector(i) + d_vsq_vector(i);
-  if ( !(speed_squared > 0.) ) return;
+  if ( !(speed_squared > static_cast<KK_FLOAT>(0.)) ) return;
 
   // cell dt based on mean collision time
-  double cell_dt_desired = collision_fraction*d_tau_vector(i);
+  KK_FLOAT cell_dt_desired = collision_fraction*d_tau_vector(i);
 
   // cell size
-  double dx = d_cells[i].hi[0] - d_cells[i].lo[0];
-  double dy = d_cells[i].hi[1] - d_cells[i].lo[1];
-  double dz = d_cells[i].hi[2] - d_cells[i].lo[2];
+  KK_FLOAT dx = d_cells[i].hi[0] - d_cells[i].lo[0];
+  KK_FLOAT dy = d_cells[i].hi[1] - d_cells[i].lo[1];
+  KK_FLOAT dz = d_cells[i].hi[2] - d_cells[i].lo[2];
 
   // cell dt based on transit time using average velocities
-  double dt_candidate;
-  double umag = sqrt(d_usq_vector(i));
-  if (umag > 0.) {
+  KK_FLOAT dt_candidate;
+  KK_FLOAT umag = Kokkos::sqrt(d_usq_vector(i));
+  if (umag > static_cast<KK_FLOAT>(0.)) {
     dt_candidate = transit_fraction*dx/umag;
     cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   }
-  double vmag = sqrt(d_vsq_vector(i));
-  if (vmag > 0.) {
+  KK_FLOAT vmag = Kokkos::sqrt(d_vsq_vector(i));
+  if (vmag > static_cast<KK_FLOAT>(0.)) {
     dt_candidate = transit_fraction*dy/vmag;
     cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   }
   if (dimension == 3) {
-    double wmag = sqrt(d_wsq_vector(i));
-    if (wmag > 0.) {
+    KK_FLOAT wmag = Kokkos::sqrt(d_wsq_vector(i));
+    if (wmag > static_cast<KK_FLOAT>(0.)) {
       dt_candidate = transit_fraction*dz/wmag;
       cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
     }
   }
 
   // cell dt based on transit time using maximum most probable speed
-  double vrm_max = sqrt(2.0*boltz * d_temp_vector(i) / min_species_mass);
+  KK_FLOAT vrm_max = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0)*boltz * d_temp_vector(i) / min_species_mass);
   dt_candidate = transit_fraction*dx/vrm_max;
   cell_dt_desired = MIN(dt_candidate,cell_dt_desired);
   dt_candidate = transit_fraction*dy/vrm_max;
@@ -400,8 +400,8 @@ void ComputeDtGridKokkos::operator()(TagComputeDtGrid_ComputePerGrid, const int 
      whole.  the non-Kokkos style memcpy's exactly N values
 ------------------------------------------------------------------------- */
 
-void ComputeDtGridKokkos::copy_source(DAT::t_float_1d d_dst,
-                                      DAT::t_float_1d d_src, int n)
+void ComputeDtGridKokkos::copy_source(DAT::t_kkacc_1d d_dst,
+                                      DAT::t_kkacc_1d d_src, int n)
 {
   if (n <= 0) return;
   auto range = Kokkos::make_pair(0,n);
@@ -423,9 +423,9 @@ void ComputeDtGridKokkos::reallocate()
   memoryKK->create_kokkos(k_vector_grid,vector_grid,nglocal,"ComputeDtGridKokkos:vector_grid");
   d_vector_grid = k_vector_grid.view_device();
 
-  d_tau_vector = DAT::t_float_1d ("d_tau_vector", nglocal);
-  d_temp_vector = DAT::t_float_1d ("d_temp_vector", nglocal);
-  d_usq_vector = DAT::t_float_1d ("d_usq_vector", nglocal);
-  d_vsq_vector = DAT::t_float_1d ("d_vsq_vector", nglocal);
-  d_wsq_vector = DAT::t_float_1d ("d_wsq_vector", nglocal);
+  d_tau_vector = DAT::t_kkacc_1d ("d_tau_vector", nglocal);
+  d_temp_vector = DAT::t_kkacc_1d ("d_temp_vector", nglocal);
+  d_usq_vector = DAT::t_kkacc_1d ("d_usq_vector", nglocal);
+  d_vsq_vector = DAT::t_kkacc_1d ("d_vsq_vector", nglocal);
+  d_wsq_vector = DAT::t_kkacc_1d ("d_wsq_vector", nglocal);
 }

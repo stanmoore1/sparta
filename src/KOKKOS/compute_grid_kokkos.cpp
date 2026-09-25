@@ -161,11 +161,11 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid_atomic<NEED_A
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const double mass = d_species[ispecies].mass;
-  double* v = d_particles[i].v;
+  const KK_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT* v = d_particles[i].v;
 
   if (cellmass) a_tally(icell,cellmass) += mass;
-  if (cellcount) a_tally(icell,cellcount) += 1.0;
+  if (cellcount) a_tally(icell,cellcount) += static_cast<KK_FLOAT>(1.0);
 
   // loop has all possible values particle needs to accumulate
   // subset defined by user values are indexed by accumulate vector
@@ -175,7 +175,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid_atomic<NEED_A
   for (int m = 0; m < npergroup; m++) {
     switch (d_unique[m]) {
     case COUNT:
-      a_tally(icell,k++) += 1.0;
+      a_tally(icell,k++) += static_cast<KK_FLOAT>(1.0);
       break;
     case MASSSUM:
       a_tally(icell,k++) += mass;
@@ -231,11 +231,11 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
     const int igroup = d_s2g(imix,ispecies);
     if (igroup < 0) return;
 
-    const double mass = d_species[ispecies].mass;
-    double* v = d_particles[i].v;
+    const KK_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT* v = d_particles[i].v;
 
     if (cellmass) d_tally(icell,cellmass) += mass;
-    if (cellcount) d_tally(icell,cellcount) += 1.0;
+    if (cellcount) d_tally(icell,cellcount) += static_cast<KK_ACC_FLOAT>(1.0);
 
     // loop has all possible values particle needs to accumulate
     // subset defined by user values are indexed by accumulate vector
@@ -245,7 +245,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
     for (int m = 0; m < npergroup; m++) {
       switch (d_unique[m]) {
       case COUNT:
-        d_tally(icell,k++) += 1.0;
+        d_tally(icell,k++) += static_cast<KK_ACC_FLOAT>(1.0);
         break;
       case MASSSUM:
         d_tally(icell,k++) += mass;
@@ -296,7 +296,7 @@ void ComputeGridKokkos::operator()(TagComputeGrid_compute_per_grid, const int &i
    also return cols = ptr to list of columns in tally for this index
 ------------------------------------------------------------------------- */
 
-int ComputeGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
+int ComputeGridKokkos::query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &d_array)
 {
   d_array = d_tally;
   return 0;
@@ -319,8 +319,8 @@ int ComputeGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
 ------------------------------------------------------------------------- */
 
 void ComputeGridKokkos::post_process_grid_kokkos(int index, int nsample,
-                                      DAT::t_float_2d_lr d_etally, int *emap,
-                                      DAT::t_float_1d_strided d_vec)
+                                      DAT::t_kkacc_2d_lr d_etally, int *emap,
+                                      DAT::t_kkacc_1d_strided d_vec)
 {
   index--;
   int ivalue = index % nvalue;
@@ -467,8 +467,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_NUM, const int &icell) const {
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_MASS, const int &icell) const {
-  const double norm = d_etally(icell,count);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,count);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,mass) / norm;
 }
 
@@ -476,10 +476,10 @@ void ComputeGridKokkos::operator()(TagComputeGrid_MASS, const int &icell) const 
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_NRHO, const int &icell) const {
-  const double norm = d_cinfo[icell].volume;
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_cinfo[icell].volume;
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const double wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,count) / nsample;
   }
 }
@@ -488,10 +488,10 @@ void ComputeGridKokkos::operator()(TagComputeGrid_NRHO, const int &icell) const 
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_MASSRHO, const int &icell) const {
-  const double norm = d_cinfo[icell].volume;
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_cinfo[icell].volume;
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const double wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,mass) / nsample;
   }
 }
@@ -500,8 +500,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_MASSRHO, const int &icell) con
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_NFRAC, const int &icell) const {
-  const double norm = d_etally(icell,cell_count_or_mass);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,cell_count_or_mass);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,count_or_mass) / norm;
 }
 
@@ -509,8 +509,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_NFRAC, const int &icell) const
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_U, const int &icell) const {
-  const double norm = d_etally(icell,mass);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,mass);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,velocity) / norm;
 }
 
@@ -518,8 +518,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_U, const int &icell) const {
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_KE, const int &icell) const {
-  const double norm = d_etally(icell,count);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,count);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = eprefactor * d_etally(icell,mvsq) / norm;
 }
 
@@ -527,8 +527,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_KE, const int &icell) const {
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_TEMPERATURE, const int &icell) const {
-  const double norm = d_etally(icell,count);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,count);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = tprefactor * d_etally(icell,mvsq) / norm;
 }
 
@@ -536,8 +536,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_TEMPERATURE, const int &icell)
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_EROT, const int &icell) const {
-  const double norm = d_etally(icell,count);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,count);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,eng) / norm;
 }
 
@@ -545,8 +545,8 @@ void ComputeGridKokkos::operator()(TagComputeGrid_EROT, const int &icell) const 
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_TROT, const int &icell) const {
-  const double norm = d_etally(icell,dof);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_etally(icell,dof);
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = rvprefactor * d_etally(icell,eng) / norm;
 }
 
@@ -554,10 +554,10 @@ void ComputeGridKokkos::operator()(TagComputeGrid_TROT, const int &icell) const 
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_PXRHO, const int &icell) const {
-  const double norm = d_cinfo[icell].volume;
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_cinfo[icell].volume;
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const double wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = wt * d_etally(icell,mom) / nsample;
   }
 }
@@ -566,10 +566,10 @@ void ComputeGridKokkos::operator()(TagComputeGrid_PXRHO, const int &icell) const
 
 KOKKOS_INLINE_FUNCTION
 void ComputeGridKokkos::operator()(TagComputeGrid_KERHO, const int &icell) const {
-  const double norm = d_cinfo[icell].volume;
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  const KK_POS_FLOAT norm = d_cinfo[icell].volume;
+  if (norm == static_cast<KK_POS_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else {
-    const double wt = fnum * d_cinfo[icell].weight / norm;
+    const KK_FLOAT wt = fnum * d_cinfo[icell].weight / norm;
     d_vec[icell] = eprefactor * wt * d_etally(icell,ke) / nsample;
   }
 }

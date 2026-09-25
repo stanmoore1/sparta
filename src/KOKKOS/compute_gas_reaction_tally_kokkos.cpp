@@ -133,7 +133,7 @@ void ComputeGasReactionTallyKokkos::post_gas_tally()
   //   every step.
 
   if (ntally) {
-    static_assert(std::is_same<F_FLOAT,double>::value,
+    static_assert(std::is_same<KK_ACC_FLOAT,double>::value,
                   "array_tally is double**, so F_FLOAT must be double "
                   "for the unmanaged wrap below to alias it");
     if (ntally > maxtally_host) {
@@ -142,7 +142,7 @@ void ComputeGasReactionTallyKokkos::post_gas_tally()
       memory->create(array_tally,maxtally_host,nvalue,
                      "gas/reaction/tally/kk:array_tally_host");
     }
-    Kokkos::View<F_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+    Kokkos::View<KK_ACC_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
                  Kokkos::MemoryTraits<Kokkos::Unmanaged> >
       h_rows(array_tally[0],ntally,nvalue);
     Kokkos::deep_copy(h_rows,

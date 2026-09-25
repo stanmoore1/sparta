@@ -158,8 +158,8 @@ void ComputeEFluxGridKokkos::operator()(TagComputeEFluxGrid_compute_per_grid_ato
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const double mass = d_species[ispecies].mass;
-  double *v = d_particles[i].v;
+  const KK_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT *v = d_particles[i].v;
 
   // loop has all possible values particle needs to accumulate
   // subset defined by user values are indexed by accumulate vector
@@ -243,8 +243,8 @@ void ComputeEFluxGridKokkos::operator()(TagComputeEFluxGrid_compute_per_grid, co
     const int igroup = d_s2g(imix,ispecies);
     if (igroup < 0) continue;
 
-    const double mass = d_species[ispecies].mass;
-    double *v = d_particles[i].v;
+    const KK_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT *v = d_particles[i].v;
 
     int k = igroup*npergroup;
 
@@ -320,7 +320,7 @@ void ComputeEFluxGridKokkos::operator()(TagComputeEFluxGrid_compute_per_grid, co
    also return cols = ptr to list of columns in tally for this index
 ------------------------------------------------------------------------- */
 
-int ComputeEFluxGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
+int ComputeEFluxGridKokkos::query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &d_array)
 {
   d_array = d_tally;
   return 0;
@@ -343,7 +343,7 @@ int ComputeEFluxGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
 ------------------------------------------------------------------------- */
 
 void ComputeEFluxGridKokkos::post_process_grid_kokkos(int index, int nsample,
-                         DAT::t_float_2d_lr d_etally, int *emap, DAT::t_float_1d_strided d_vec)
+                         DAT::t_kkacc_2d_lr d_etally, int *emap, DAT::t_kkacc_1d_strided d_vec)
 {
   index--;
 
@@ -408,19 +408,19 @@ void ComputeEFluxGridKokkos::post_process_grid_kokkos(int index, int nsample,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeEFluxGridKokkos::operator()(TagComputeEFluxGrid_post_process_grid, const int &icell) const {
-  double h, h1, h2, wt;
-  const double summass = d_etally(icell,mass);
-  if (summass == 0.0) d_vec[icell] = 0.0;
+  KK_FLOAT h, h1, h2, wt;
+  const KK_FLOAT summass = d_etally(icell,mass);
+  if (summass == static_cast<KK_ACC_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else{
-    h = d_etally(icell,mvvv) - 3.0*d_etally(icell,mv)*d_etally(icell,mvv)/summass +
-      2.0*d_etally(icell,mv)*d_etally(icell,mv)*d_etally(icell,mv)/summass/summass;
-    h1 = d_etally(icell,mvv1v1) - 2.0*d_etally(icell,mvv1)*d_etally(icell,mv1)/summass -
+    h = d_etally(icell,mvvv) - static_cast<KK_FLOAT>(3.0)*d_etally(icell,mv)*d_etally(icell,mvv)/summass +
+      static_cast<KK_FLOAT>(2.0)*d_etally(icell,mv)*d_etally(icell,mv)*d_etally(icell,mv)/summass/summass;
+    h1 = d_etally(icell,mvv1v1) - static_cast<KK_FLOAT>(2.0)*d_etally(icell,mvv1)*d_etally(icell,mv1)/summass -
       d_etally(icell,mv)*d_etally(icell,mv1v1)/summass +
-      2.0*d_etally(icell,mv)*d_etally(icell,mv1)*d_etally(icell,mv1)/summass/summass;
-    h2 = d_etally(icell,mvv2v2) - 2.0*d_etally(icell,mvv2)*d_etally(icell,mv2)/summass -
+      static_cast<KK_FLOAT>(2.0)*d_etally(icell,mv)*d_etally(icell,mv1)*d_etally(icell,mv1)/summass/summass;
+    h2 = d_etally(icell,mvv2v2) - static_cast<KK_FLOAT>(2.0)*d_etally(icell,mvv2)*d_etally(icell,mv2)/summass -
       d_etally(icell,mv)*d_etally(icell,mv2v2)/summass +
-      2.0*d_etally(icell,mv)*d_etally(icell,mv2)*d_etally(icell,mv2)/summass/summass;
-    wt = 0.5 * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
+      static_cast<KK_FLOAT>(2.0)*d_etally(icell,mv)*d_etally(icell,mv2)*d_etally(icell,mv2)/summass/summass;
+    wt = static_cast<KK_FLOAT>(0.5) * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     d_vec[icell] = wt/nsample * (h + h1 + h2);
   }
 }

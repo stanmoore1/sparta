@@ -88,12 +88,12 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
 
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  int react_kokkos(Particle::OnePart *&ip, int, const double *,
-                   Particle::OnePart *&jp, int &,
+  int react_kokkos(OnePartKK *&ip, int, const KK_POS_FLOAT *,
+                   OnePartKK *&jp, int &,
                    const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     rand_type rand_gen = rand_pool.get_state();
-    double r = rand_gen.drand();
+    KK_FLOAT r = static_cast<KK_FLOAT>(rand_gen.drand());
 
     // perform destroy reaction
 
@@ -122,7 +122,7 @@ class SurfReactGlobalKokkos : public SurfReactGlobal {
         Kokkos::atomic_inc(&d_nsingle());
         Kokkos::atomic_inc(&d_tally_single(1));
       }
-      double x[3],v[3];
+      KK_POS_FLOAT x[3]; KK_FLOAT v[3];
       int id = MAXSMALLINT*rand_gen.drand();
       memcpy(x,ip->x,3*sizeof(double));
       memcpy(v,ip->v,3*sizeof(double));

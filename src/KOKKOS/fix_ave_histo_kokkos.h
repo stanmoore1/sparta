@@ -147,27 +147,27 @@ public:
 
 protected:
 
-  DAT::tdual_float_1d k_stats;
-  DAT::t_float_1d d_stats;
+  DAT::ttransform_kkacc_1d k_stats;
+  DAT::t_kkacc_1d d_stats;
 
-  DAT::tdual_float_1d k_bin;
-  DAT::t_float_1d d_bin;
+  DAT::ttransform_kkacc_1d k_bin;
+  DAT::t_kkacc_1d d_bin;
 
   t_particle_1d d_particles;
   DAT::t_int_2d d_s2g;
 
-  DAT::tdual_float_1d k_vector;
+  DAT::ttransform_kkacc_1d k_vector;
 
   DAT::tdual_int_1d k_match;
   DAT::t_int_1d d_match;
 
   int index;
   int stride;
-  DAT::t_float_1d_strided d_values;
+  DAT::t_kkacc_1d_strided d_values;
   GridKokkos* grid_kk;
 
   // data used by ave/histo/weight/kk
-  DAT::t_float_1d_strided d_weights;
+  DAT::t_kkacc_1d_strided d_weights;
 
   // methods
   using FixAveHisto::bin_one;
@@ -178,7 +178,7 @@ protected:
   virtual void bin_vector(minmax_type&, int, double *, int);
   virtual void bin_particles(minmax_type&, int, int);
   virtual void bin_particles(minmax_type&, double *, int);
-  virtual void bin_grid_cells(minmax_type&, DAT::t_float_1d_strided);
+  virtual void bin_grid_cells(minmax_type&, DAT::t_kkacc_1d_strided);
 
   virtual void calculate_weights() {}
 
@@ -190,7 +190,7 @@ protected:
      ----------------------------------------------------------------------- */
   KOKKOS_INLINE_FUNCTION
   void
-  bin_one(mm_value_type& mm_v, double value, double weight) const
+  bin_one(mm_value_type& mm_v, KK_FLOAT value, KK_FLOAT weight) const
   {
     auto nbins = d_bin.extent(0);
     if (value < mm_v.min_val) mm_v.min_val = value;
@@ -220,7 +220,7 @@ protected:
 
   KOKKOS_INLINE_FUNCTION
   void
-  bin_one(mm_value_type& mm_v, double value) const
+  bin_one(mm_value_type& mm_v, KK_FLOAT value) const
   {
     // fix ave/histo/weight carries a single scalar weight for scalar-mode
     //   inputs, computed in calculate_weights().  The host injects it by
@@ -229,7 +229,7 @@ protected:
     //   the base class and this overload is not virtual, so read the member
     //   directly.  weightflag is 0 for plain ave/histo, leaving weight 1
 
-    bin_one(mm_v, value, weightflag ? weight : 1.0);
+    bin_one(mm_v, value, weightflag ? weight : static_cast<KK_FLOAT>(1.0));
   }
 
 };

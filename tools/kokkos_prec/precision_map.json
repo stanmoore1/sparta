@@ -1,0 +1,407 @@
+{
+  "_comment": "Single source of truth for the KOKKOS precision conversion scripts. See README.",
+  "structs": {
+    "OnePart": {
+      "header": "src/particle.h",
+      "scope": "Particle",
+      "kk_name": "OnePartKK",
+      "fields": {
+        "x": "pos",
+        "v": "float",
+        "erot": "float",
+        "evib": "float",
+        "dtremain": "pos",
+        "weight": "float"
+      }
+    },
+    "ChildCell": {
+      "header": "src/grid.h",
+      "scope": "Grid",
+      "kk_name": "ChildCellKK",
+      "fields": {
+        "lo": "pos",
+        "hi": "pos"
+      }
+    },
+    "SplitInfo": {
+      "header": "src/grid.h",
+      "scope": "Grid",
+      "kk_name": "SplitInfoKK",
+      "fields": {
+        "xsplit": "pos"
+      }
+    },
+    "ParentCell": {
+      "header": "src/grid.h",
+      "scope": "Grid",
+      "kk_name": "ParentCellKK",
+      "fields": {
+        "lo": "pos",
+        "hi": "pos"
+      }
+    },
+    "Line": {
+      "header": "src/surf.h",
+      "scope": "Surf",
+      "kk_name": "LineKK",
+      "fields": {
+        "p1": "pos",
+        "p2": "pos",
+        "norm": "pos"
+      }
+    },
+    "Tri": {
+      "header": "src/surf.h",
+      "scope": "Surf",
+      "kk_name": "TriKK",
+      "fields": {
+        "p1": "pos",
+        "p2": "pos",
+        "p3": "pos",
+        "norm": "pos"
+      }
+    }
+  },
+  "precision_classes": {
+    "float": "KK_FLOAT",
+    "pos": "KK_POS_FLOAT",
+    "acc": "KK_ACC_FLOAT",
+    "double": "double"
+  },
+  "modes": {
+    "SPARTA_KOKKOS_DOUBLE_DOUBLE": {
+      "float": "double",
+      "pos": "double",
+      "acc": "double"
+    },
+    "SPARTA_KOKKOS_SINGLE_DOUBLE": {
+      "float": "float",
+      "pos": "double",
+      "acc": "double"
+    },
+    "SPARTA_KOKKOS_SINGLE_SINGLE": {
+      "float": "float",
+      "pos": "float",
+      "acc": "float"
+    }
+  },
+  "conversion": {
+    "_comment": "Used by kk_prec_convert.py. Identifier lists choose the precision class of a 'double' declaration in device code by the declared name; anything else becomes KK_FLOAT.",
+    "skip_files": [
+      "kokkos_type.h",
+      "kokkos_structs.h",
+      "math_extra_kokkos.h",
+      "rand_pool_wrap.h",
+      "rand_pool_wrap.cpp",
+      "kissfft_kokkos.h",
+      "fftdata_kokkos.h",
+      "fft2d_kokkos.h",
+      "fft2d_kokkos.cpp",
+      "fft3d_kokkos.h",
+      "fft3d_kokkos.cpp",
+      "remap2d_kokkos.h",
+      "remap2d_kokkos.cpp",
+      "remap3d_kokkos.h",
+      "remap3d_kokkos.cpp",
+      "pack2d_kokkos.h",
+      "pack3d_kokkos.h",
+      "kokkos_base_fft.h"
+    ],
+    "type_renames": [
+      [
+        "\\b(t|tdual)_float_1d_strided",
+        "\\1_kkacc_1d_strided"
+      ],
+      [
+        "\\btdual_float_2d_lr",
+        "ttransform_kkacc_2d_lr"
+      ],
+      [
+        "\\bt_float_2d_lr",
+        "t_kkacc_2d_lr"
+      ],
+      [
+        "\\btdual_float_(1d_3|2d(?!_lr)|3d|scalar|1d(?!_3|_strided))",
+        "ttransform_kkfloat_\\1"
+      ],
+      [
+        "\\bt_float_(1d_3|2d(?!_lr)|3d|scalar|1d(?!_3|_strided))",
+        "t_kkfloat_\\1"
+      ],
+      [
+        "\\bSPARTA_FLOAT\\b",
+        "KK_FLOAT"
+      ],
+      [
+        "\\bF_FLOAT\\b",
+        "KK_ACC_FLOAT"
+      ]
+    ],
+    "struct_renames": [
+      [
+        "\\bParticle::OnePart\\b",
+        "OnePartKK"
+      ],
+      [
+        "(?<![:\\w])OnePart\\b(?!KK|Restart)",
+        "OnePartKK"
+      ],
+      [
+        "\\bGrid::ChildCell\\b",
+        "ChildCellKK"
+      ],
+      [
+        "\\bGrid::SplitInfo\\b",
+        "SplitInfoKK"
+      ],
+      [
+        "\\bGrid::ParentCell\\b",
+        "ParentCellKK"
+      ],
+      [
+        "\\bSurf::Line\\b",
+        "LineKK"
+      ],
+      [
+        "\\bSurf::Tri\\b",
+        "TriKK"
+      ]
+    ],
+    "float_constants": [
+      "MY_PI",
+      "MY_2PI",
+      "MY_3PI",
+      "MY_4PI",
+      "MY_PI2",
+      "MY_PI4",
+      "MY_PIS",
+      "MY_SQRT2",
+      "MY_CUBEROOT2",
+      "THIRD",
+      "BIG",
+      "EPSZERO",
+      "EPSSQ",
+      "EPSSQNEG",
+      "EPSSELF",
+      "EPSTIME",
+      "EPSPARAM",
+      "TEMPLIMIT",
+      "SMALL"
+    ],
+    "pos_identifiers": [
+      "x",
+      "xnew",
+      "xold",
+      "xc",
+      "xhold",
+      "xp",
+      "x_tmp",
+      "y_tmp",
+      "z_tmp",
+      "lo",
+      "hi",
+      "boxlo",
+      "boxhi",
+      "xlo",
+      "xhi",
+      "ylo",
+      "yhi",
+      "zlo",
+      "zhi",
+      "dtremain",
+      "dtsurf",
+      "dt",
+      "dtsq",
+      "frac",
+      "newfrac",
+      "param",
+      "minparam",
+      "p1",
+      "p2",
+      "p3",
+      "p12",
+      "p13",
+      "norm",
+      "point",
+      "pt",
+      "start",
+      "stop",
+      "xsplit",
+      "xin",
+      "xaxi",
+      "xfinal",
+      "xcollide",
+      "xwall",
+      "xorig",
+      "xprime",
+      "plo",
+      "clo",
+      "chi",
+      "oplo",
+      "ophi",
+      "cctr",
+      "minxc",
+      "rnew",
+      "ynew",
+      "znew",
+      "edge1",
+      "edge2",
+      "start2stop",
+      "dotstart",
+      "dotstop",
+      "tdelta",
+      "xnorm",
+      "xprd",
+      "yprd",
+      "zprd",
+      "prd",
+      "xlo_bound",
+      "xhi_bound",
+      "newx",
+      "xpoint"
+    ],
+    "acc_identifiers": [],
+    "keep_double_identifiers": [
+      "attempt",
+      "nattempt",
+      "npairs",
+      "volume",
+      "remain",
+      "mean",
+      "attempt_collision_kokkos",
+      "poisson_kokkos",
+      "dtmin",
+      "dtmax",
+      "dtsum",
+      "lsum",
+      "lmin",
+      "lmax",
+      "fnum",
+      "boltz",
+      "recomb_density",
+      "vibtemp",
+      "vibTemp",
+      "rottemp"
+    ],
+    "file_default_class": {
+      "geometry_kokkos.h": "pos"
+    },
+    "file_identifier_class": {
+      "grid_kokkos.h": {
+        "phi": "pos"
+      },
+      "update_kokkos.cpp": {
+        "tc": "pos",
+        "tmp": "pos"
+      },
+      "update_kokkos.h": {
+        "tc": "pos",
+        "tmp": "pos"
+      },
+      "collide_vss_kokkos.cpp": {
+        "xi": "pos",
+        "xj": "pos",
+        "dx": "pos",
+        "dy": "pos",
+        "dz": "pos",
+        "rsq": "pos",
+        "threshsq": "pos",
+        "minrsq": "pos"
+      },
+      "fix_emit_face_kokkos.cpp": {
+        "lo": "double",
+        "hi": "double",
+        "normal": "double",
+        "vstream": "double"
+      },
+      "fix_emit_face_file_kokkos.cpp": {
+        "lo": "double",
+        "hi": "double",
+        "normal": "double",
+        "vstream": "double"
+      },
+      "fix_emit_surf_kokkos.cpp": {
+        "vstream": "double",
+        "atan": "double",
+        "btan": "double"
+      },
+      "compute_distsurf_grid_kokkos.cpp": {
+        "sctr": "pos"
+      }
+    },
+    "post_substitutions": {},
+    "file_type_renames": {
+      "compute_*": [
+        [
+          "\\btdual_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "ttransform_kkacc_\\1"
+        ],
+        [
+          "\\bt_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "t_kkacc_\\1"
+        ]
+      ],
+      "fix_ave_*": [
+        [
+          "\\btdual_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "ttransform_kkacc_\\1"
+        ],
+        [
+          "\\bt_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "t_kkacc_\\1"
+        ]
+      ],
+      "fix_field_*": [
+        [
+          "\\btdual_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "ttransform_kkacc_\\1"
+        ],
+        [
+          "\\bt_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "t_kkacc_\\1"
+        ]
+      ],
+      "fix_dt_reset_*": [
+        [
+          "\\btdual_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "ttransform_kkacc_\\1"
+        ],
+        [
+          "\\bt_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "t_kkacc_\\1"
+        ]
+      ],
+      "kokkos_base.h": [
+        [
+          "\\btdual_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "ttransform_kkacc_\\1"
+        ],
+        [
+          "\\bt_float_(1d_3|2d(?!_lr)|3d|1d(?!_3|_strided))",
+          "t_kkacc_\\1"
+        ]
+      ],
+      "collide_vss_kokkos.*": [
+        [
+          "\\btdual_float_2d_lr",
+          "ttransform_kkfloat_2d_lr"
+        ],
+        [
+          "\\bt_float_2d_lr",
+          "t_kkfloat_2d_lr"
+        ]
+      ],
+      "fix_ambipolar_kokkos.*": [
+        [
+          "\\btdual_float_2d_lr",
+          "ttransform_kkfloat_2d_lr"
+        ],
+        [
+          "\\bt_float_2d_lr",
+          "t_kkfloat_2d_lr"
+        ]
+      ]
+    },
+    "_comment_file_type_renames": "per-file view type renames, applied before type_renames: per-grid/per-surf compute and fix output is KK_ACC_FLOAT, per-particle custom data KK_FLOAT"
+  }
+}

@@ -96,8 +96,8 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_no_average, 
 
   // loop over grid cells with more than 1 particle
 
-  double totmass,mvx,mvy,mvz,mvsq;
-  double *v;
+  KK_FLOAT totmass,mvx,mvy,mvz,mvsq;
+  KK_FLOAT *v;
 
   const int count = d_cellcount[icell];
   if (count <= 1) return;
@@ -113,7 +113,7 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_no_average, 
     const int ip = d_plist(icell,n);
 
     const int ispecies = d_particles[ip].ispecies;
-    const double mass = d_species[ispecies].mass;
+    const KK_FLOAT mass = d_species[ispecies].mass;
     v = d_particles[ip].v;
 
     totmass += mass;
@@ -125,19 +125,19 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_no_average, 
 
   // COM velocity of particles in grid cell
 
-  const double invtotmass = 1.0/totmass;
-  const double vxcom = mvx * invtotmass;
-  const double vycom = mvy * invtotmass;
-  const double vzcom = mvz * invtotmass;
+  const KK_FLOAT invtotmass = static_cast<KK_FLOAT>(1.0)/totmass;
+  const KK_FLOAT vxcom = mvx * invtotmass;
+  const KK_FLOAT vycom = mvy * invtotmass;
+  const KK_FLOAT vzcom = mvz * invtotmass;
 
   // t_current = thermal T of particles in grid cell
 
-  double t_current = mvsq - (mvx*mvx + mvy*mvy + mvz*mvz)*invtotmass;
+  KK_FLOAT t_current = mvsq - (mvx*mvx + mvy*mvy + mvz*mvz)*invtotmass;
   t_current *= tprefactor/count;
 
   // vscale = scale factor for thermal velocity components
 
-  const double vscale = sqrt(t_target/t_current);
+  const KK_FLOAT vscale = Kokkos::sqrt(t_target/t_current);
 
   // 2nd pass: loop over particles in cell
   // rescale thermal velocity components
@@ -145,7 +145,7 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_no_average, 
   for (int n = 0; n < count; n++) {
     const int ip = d_plist(icell,n);
     const int ispecies = d_particles[ip].ispecies;
-    const double mass = d_species[ispecies].mass;
+    const KK_FLOAT mass = d_species[ispecies].mass;
     v = d_particles[ip].v;
 
     v[0] = vscale*(v[0]-vxcom) + vxcom;
@@ -182,9 +182,9 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
   // resize d_vcom if needed
 
   if (nglocal > maxgrid) {
-    d_vcom = DAT::t_float_1d_3();
+    d_vcom = DAT::t_kkfloat_1d_3();
     maxgrid = nglocal + grid->nghost;
-    d_vcom = DAT::t_float_1d_3("temp/rescale:d_vcom",maxgrid);
+    d_vcom = DAT::t_kkfloat_1d_3("temp/rescale:d_vcom",maxgrid);
   }
 
   // loop over grid cells to compute thermal T of each
@@ -232,9 +232,9 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
 KOKKOS_INLINE_FUNCTION
 void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_average1, const int &icell, REDUCE &current_mine) const {
 
-  double totmass,mvx,mvy,mvz,mvsq;
-  double t_one;
-  double *v;
+  KK_FLOAT totmass,mvx,mvy,mvz,mvsq;
+  KK_FLOAT t_one;
+  KK_FLOAT *v;
 
   if (d_cells[icell].nsplit > 1) return;
 
@@ -249,7 +249,7 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_average1, co
   for (int n = 0; n < count; n++) {
     const int ip = d_plist(icell,n);
     const int ispecies = d_particles[ip].ispecies;
-    const double mass = d_species[ispecies].mass;
+    const KK_FLOAT mass = d_species[ispecies].mass;
     v = d_particles[ip].v;
 
     totmass += mass;
@@ -265,8 +265,8 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_average1, co
   // likewise if t_one = 0.0: set t_one = t_target, d_vcom = zero
   //   corner case when all particles have same velocity
 
-  if (count > 1.0) {
-    const double invtotmass = 1.0/totmass;
+  if (count > static_cast<KK_FLOAT>(1.0)) {
+    const KK_FLOAT invtotmass = static_cast<KK_FLOAT>(1.0)/totmass;
     t_one = mvsq - (mvx*mvx + mvy*mvy + mvz*mvz)*invtotmass;
     t_one *= tprefactor/count;
     d_vcom(icell,0) = mvx * invtotmass;
@@ -278,7 +278,7 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_average1, co
     d_vcom(icell,0) = d_vcom(icell,1) = d_vcom(icell,2) = 0.0;
   }
 
-  if (t_one == 0.0) {
+  if (t_one == static_cast<KK_FLOAT>(0.0)) {
     t_one = t_target;
     d_vcom(icell,0) = d_vcom(icell,1) = d_vcom(icell,2) = 0.0;
   }
@@ -303,8 +303,8 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_average2, co
   for (int n = 0; n < count; n++) {
     const int ip = d_plist(icell,n);
     const int ispecies = d_particles[ip].ispecies;
-    const double mass = d_species[ispecies].mass;
-    double* v = d_particles[ip].v;
+    const KK_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT* v = d_particles[ip].v;
 
     v[0] = vscale*(v[0]-d_vcom(icell,0)) + d_vcom(icell,0);
     v[1] = vscale*(v[1]-d_vcom(icell,1)) + d_vcom(icell,1);

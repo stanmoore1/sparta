@@ -45,7 +45,7 @@ class SurfReactProbKokkos : public SurfReactProb {
   void backup();
   void restore();
 
-  DAT::t_float_2d d_coeffs;
+  DAT::t_kkfloat_2d d_coeffs;
 
  private:
   DAT::t_int_1d d_reactions_n;       // # of reactions in list
@@ -102,8 +102,8 @@ class SurfReactProbKokkos : public SurfReactProb {
 
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  int react_kokkos(Particle::OnePart *&ip, int, const double *,
-                   Particle::OnePart *&jp, int &,
+  int react_kokkos(OnePartKK *&ip, int, const KK_POS_FLOAT *,
+                   OnePartKK *&jp, int &,
                    const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     int n = d_reactions_n[ip->ispecies];
@@ -111,9 +111,9 @@ class SurfReactProbKokkos : public SurfReactProb {
 
     // probablity to compare to reaction probability
 
-    double react_prob = 0.0;
+    KK_FLOAT react_prob = 0.0;
     rand_type rand_gen = rand_pool.get_state();
-    double random_prob = rand_gen.drand();
+    KK_FLOAT random_prob = static_cast<KK_FLOAT>(rand_gen.drand());
 
     // loop over possible reactions for this species
     // if dissociation performs a realloc:
@@ -136,7 +136,7 @@ class SurfReactProbKokkos : public SurfReactProb {
         switch (d_type(j)) {
         case DISSOCIATION:
           {
-            double x[3],v[3];
+            KK_POS_FLOAT x[3]; KK_FLOAT v[3];
             ip->ispecies = d_products(j,0);
             int id = MAXSMALLINT*rand_gen.drand();
             memcpy(x,ip->x,3*sizeof(double));

@@ -72,11 +72,11 @@ void FixFieldParticleKokkos::compute_field()
   //   has to happen either way.  The element-wise loop this replaces was
   //   pure overhead on every step.
 
-  static_assert(std::is_same<F_FLOAT,double>::value,
+  static_assert(std::is_same<KK_ACC_FLOAT,double>::value,
                 "wrapping array_particle (double**) in an F_FLOAT view assumes "
                 "F_FLOAT is double; use a converting deep_copy if that changes");
 
-  Kokkos::View<F_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
+  Kokkos::View<KK_ACC_FLOAT**,Kokkos::LayoutRight,Kokkos::HostSpace,
                Kokkos::MemoryTraits<Kokkos::Unmanaged> >
     h_array_particle(array_particle[0],nlocal,ncols);
 

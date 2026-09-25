@@ -67,7 +67,7 @@ class RegCylinderKokkos : public RegCylinder, public KokkosBase {
   void operator()(TagRegCylinderMatchAll, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  int match_kokkos(double x, double y, double z) const
+  int match_kokkos(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
   {
     return !(k_inside(x,y,z) ^ interior);
   }
@@ -78,27 +78,27 @@ class RegCylinderKokkos : public RegCylinder, public KokkosBase {
   t_particle_1d d_particles;
 
   KOKKOS_INLINE_FUNCTION
-  int k_inside(double x, double y, double z) const
+  int k_inside(KK_POS_FLOAT x, KK_FLOAT y, KK_FLOAT z) const
   {
-    double del1,del2,dist;
+    KK_FLOAT del1,del2,dist;
     int inside;
 
     if (axis == 'x') {
       del1 = y - c1;
       del2 = z - c2;
-      dist = sqrt(del1*del1 + del2*del2);
+      dist = Kokkos::sqrt(del1*del1 + del2*del2);
       if (dist <= radius && x >= lo && x <= hi) inside = 1;
       else inside = 0;
     } else if (axis == 'y') {
       del1 = x - c1;
       del2 = z - c2;
-      dist = sqrt(del1*del1 + del2*del2);
+      dist = Kokkos::sqrt(del1*del1 + del2*del2);
       if (dist <= radius && y >= lo && y <= hi) inside = 1;
       else inside = 0;
     } else {
       del1 = x - c1;
       del2 = y - c2;
-      dist = sqrt(del1*del1 + del2*del2);
+      dist = Kokkos::sqrt(del1*del1 + del2*del2);
       if (dist <= radius && z >= lo && z <= hi) inside = 1;
       else inside = 0;
     }

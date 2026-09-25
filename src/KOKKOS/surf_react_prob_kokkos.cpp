@@ -155,7 +155,7 @@ void SurfReactProbKokkos::init_reactions()
   d_type = DAT::t_int_1d("surf_react_prob:type",maxlist_prob);
   d_reactants = DAT::t_int_2d("surf_react_prob:reactants",maxlist_prob,MAXREACTANT);
   d_products = DAT::t_int_2d("surf_react_prob:products",maxlist_prob,MAXPRODUCT);
-  d_coeffs = DAT::t_float_2d("surf_react_prob:coeffs",maxlist_prob,MAXCOEFF);
+  d_coeffs = DAT::t_kkfloat_2d("surf_react_prob:coeffs",maxlist_prob,MAXCOEFF);
 
   auto h_type = Kokkos::create_mirror_view(d_type);
   auto h_reactants = Kokkos::create_mirror_view(d_reactants);

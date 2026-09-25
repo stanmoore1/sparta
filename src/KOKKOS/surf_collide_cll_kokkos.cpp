@@ -200,7 +200,7 @@ void SurfCollideCLLKokkos::dynamic()
       surf->spread_own2local(1,DOUBLE,t_owned,t_localghost);
       t_persurf = t_localghost;
 
-      auto h_t_persurf = HAT::t_float_1d(t_persurf,n_localghost);
+      auto h_t_persurf = HAT::t_kkfloat_1d(t_persurf,n_localghost);
       d_t_persurf = Kokkos::create_mirror_view_and_copy(SPADeviceType(),h_t_persurf);
     }
 

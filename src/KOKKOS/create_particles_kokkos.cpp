@@ -421,7 +421,7 @@ void CreateParticlesKokkos::create_local(bigint np)
       auto inew = d_cands2new(cand) + nlocal_before;
       auto id = d_id(cand);
       auto ispecies = d_species(d_isp(cand));
-      double x[3],v[3];
+      KK_POS_FLOAT x[3]; KK_FLOAT v[3];
       for (int d = 0; d < 3; ++d) x[d] = d_x(cand, d);
       for (int d = 0; d < 3; ++d) v[d] = d_v(cand, d);
       auto erot = d_erot(cand);

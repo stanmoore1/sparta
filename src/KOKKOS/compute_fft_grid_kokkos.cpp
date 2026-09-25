@@ -183,8 +183,8 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
       }
 
       if (c->post_process_grid_flag) {
-        DAT::t_float_2d_lr d_tmp1;
-        DAT::t_float_1d_strided d_tmp2;
+        DAT::t_kkacc_2d_lr d_tmp1;
+        DAT::t_kkacc_1d_strided d_tmp2;
         cKKBase->post_process_grid_kokkos(aidx,1,d_tmp1,NULL,d_tmp2);
       }
 

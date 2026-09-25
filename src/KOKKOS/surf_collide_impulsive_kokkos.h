@@ -65,7 +65,7 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
 
   RanKnuth* random_backup;
 
-  DAT::t_float_1d d_t_persurf;
+  DAT::t_kkfloat_1d d_t_persurf;
 
   // bigint scalars: mirror SurfCollide::nsingle and Surf::nreact_one,
   //   which can exceed 2^31 in one step at large per-proc particle counts
@@ -125,8 +125,8 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &,
-                                    int isurf, const double *norm, int isr, int &reaction,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, double &,
+                                    int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     if (ATOMIC_REDUCTION == 0)
@@ -138,13 +138,13 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
     // reaction = 1 to N for which reaction took place, 0 for none
     // velreset = 1 if reaction reset post-collision velocity, else 0
 
-    Particle::OnePart iorig;
-    Particle::OnePart *jp = NULL;
+    OnePartKK iorig;
+    OnePartKK *jp = NULL;
     reaction = 0;
     int velreset = 0;
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -170,10 +170,10 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
 
     // set temperature of isurf if VARSURF or CUSTOM
 
-    double tsurf_local = tsurf;
+    KK_FLOAT tsurf_local = tsurf;
     if (persurf_temperature) {
       tsurf_local = d_t_persurf[isurf];
-      if (tsurf_local <= 0.0) Kokkos::abort("Surf_collide tsurf <= 0.0");
+      if (tsurf_local <= static_cast<KK_FLOAT>(0.0)) Kokkos::abort("Surf_collide tsurf <= 0.0");
     }
 
     // impulsive reflection for each particle
@@ -226,27 +226,27 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void impulsive(Particle::OnePart *p, const double *norm, const double twall) const
+  void impulsive(OnePartKK *p, const KK_POS_FLOAT *norm, const KK_FLOAT twall) const
   {
     rand_type rand_gen = rand_pool.get_state();
 
-    double tangent1[3],tangent2[3];
+    KK_FLOAT tangent1[3],tangent2[3];
     int ispecies = p->ispecies;
 
-    double vperp, vtan1, vtan2;
-    double mass = d_species[ispecies].mass;
+    KK_FLOAT vperp, vtan1, vtan2;
+    KK_FLOAT mass = d_species[ispecies].mass;
 
-    double *v = p->v;
-    double dot = MathExtraKokkos::dot3(v,norm);
+    KK_FLOAT *v = p->v;
+    KK_FLOAT dot = MathExtraKokkos::dot3(v,norm);
 
     tangent1[0] = v[0] - dot*norm[0];
     tangent1[1] = v[1] - dot*norm[1];
     tangent1[2] = v[2] - dot*norm[2];
 
-    if (MathExtraKokkos::lensq3(tangent1) == 0.0) {
-      tangent2[0] = rand_gen.drand();
-      tangent2[1] = rand_gen.drand();
-      tangent2[2] = rand_gen.drand();
+    if (MathExtraKokkos::lensq3(tangent1) == static_cast<KK_FLOAT>(0.0)) {
+      tangent2[0] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[1] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[2] = static_cast<KK_FLOAT>(rand_gen.drand());
       MathExtraKokkos::cross3(norm,tangent2,tangent1);
     }
 
@@ -255,32 +255,32 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
 
     // compute final polar (theta) and azimuthal (phi) angles
 
-    double tan1 = MathExtraKokkos::dot3(v,tangent1);
-    double tan2 = MathExtraKokkos::dot3(v,tangent2);
+    KK_FLOAT tan1 = MathExtraKokkos::dot3(v,tangent1);
+    KK_FLOAT tan2 = MathExtraKokkos::dot3(v,tangent2);
 
-    double v_i_mag_sq = MathExtraKokkos::lensq3(v);
-    double E_i = 0.5 * mass * v_i_mag_sq;
-    double theta_i = acos(-dot/sqrt(v_i_mag_sq));
-    double phi_i = atan2(tan2,tan1);
-    double phi_peak = MathConst::MY_2PI - phi_i;
+    KK_FLOAT v_i_mag_sq = MathExtraKokkos::lensq3(v);
+    KK_FLOAT E_i = static_cast<KK_FLOAT>(0.5) * mass * v_i_mag_sq;
+    KK_FLOAT theta_i = Kokkos::acos(-dot/Kokkos::sqrt(v_i_mag_sq));
+    KK_FLOAT phi_i = Kokkos::atan2(tan2,tan1);
+    KK_FLOAT phi_peak = static_cast<KK_FLOAT>(MathConst::MY_2PI) - phi_i;
 
-    double theta_f, phi_f;
-    double P = 0.0;
+    KK_FLOAT theta_f, phi_f;
+    KK_FLOAT P = 0.0;
 
     // theta_f calculation
 
-    while (rand_gen.drand() > P) {
-      theta_f = MathConst::MY_PI2 * rand_gen.drand();
-      P = pow(cos( theta_f - theta_peak ),cos_theta_pow) * sin(theta_f);
+    while (static_cast<KK_FLOAT>(rand_gen.drand()) > P) {
+      theta_f = static_cast<KK_FLOAT>(MathConst::MY_PI2) * static_cast<KK_FLOAT>(rand_gen.drand());
+      P = Kokkos::pow(Kokkos::cos( theta_f - theta_peak ),cos_theta_pow) * Kokkos::sin(theta_f);
       if (double_flag) {
         if (theta_f > theta_peak)
-          P = pow(cos( theta_f - theta_peak ),cos_theta_pow_2) * sin(theta_f);
+          P = Kokkos::pow(Kokkos::cos( theta_f - theta_peak ),cos_theta_pow_2) * Kokkos::sin(theta_f);
       }
 
       if (step_flag) {
-        double func_step = 0.0;
-        double tan_theta = tan(theta_f);
-        double cotangent = 1.0/tan_theta;
+        KK_FLOAT func_step = 0.0;
+        KK_FLOAT tan_theta = Kokkos::tan(theta_f);
+        KK_FLOAT cotangent = static_cast<KK_FLOAT>(1.0)/tan_theta;
         if (cotangent > step_size) func_step = 1 - step_size*tan_theta;
         P *= func_step;
       }
@@ -289,54 +289,54 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
     // phi_f calculations
 
     P = 0.0;
-    while (rand_gen.drand() > P) {
-      phi_f = phi_peak + MathConst::MY_PI * (2*rand_gen.drand() - 1);
-      P = pow(cos( 0.5*(phi_f - phi_peak) ),cos_phi_pow);
+    while (static_cast<KK_FLOAT>(rand_gen.drand()) > P) {
+      phi_f = phi_peak + static_cast<KK_FLOAT>(MathConst::MY_PI) * (2*static_cast<KK_FLOAT>(rand_gen.drand()) - 1);
+      P = Kokkos::pow(Kokkos::cos( static_cast<KK_FLOAT>(0.5)*(phi_f - phi_peak) ),cos_phi_pow);
     }
 
-    if (phi_f > MathConst::MY_PI) phi_f -= MathConst::MY_2PI;
-    else if (phi_f < -MathConst::MY_PI) phi_f += MathConst::MY_2PI;
+    if (phi_f > static_cast<KK_FLOAT>(MathConst::MY_PI)) phi_f -= static_cast<KK_FLOAT>(MathConst::MY_2PI);
+    else if (phi_f < -static_cast<KK_FLOAT>(MathConst::MY_PI)) phi_f += static_cast<KK_FLOAT>(MathConst::MY_2PI);
 
-    double v_f_avg = 0.0;
+    KK_FLOAT v_f_avg = 0.0;
     if (softsphere_flag) {
-      double mu = d_species[ispecies].molwt/eff_mass;
-      double cos_khi = cos(MathConst::MY_PI - theta_i - theta_f);
-      double sin_khi_sq = 1 - cos_khi*cos_khi;
-      double dE, E_f_avg;
+      KK_FLOAT mu = d_species[ispecies].molwt/eff_mass;
+      KK_FLOAT cos_khi = Kokkos::cos(static_cast<KK_FLOAT>(MathConst::MY_PI) - theta_i - theta_f);
+      KK_FLOAT sin_khi_sq = 1 - cos_khi*cos_khi;
+      KK_FLOAT dE, E_f_avg;
 
       dE = 2*mu/((mu+1)*(mu+1)) *
         (1 + mu*sin_khi_sq + eng_ratio*(mu+1)/(2*mu) -
-         cos_khi*sqrt(1 - mu*mu*sin_khi_sq - eng_ratio*(mu + 1)));
+         cos_khi*Kokkos::sqrt(1 - mu*mu*sin_khi_sq - eng_ratio*(mu + 1)));
       E_f_avg = E_i * (1 - dE);
-      v_f_avg = var_alpha_sq * sqrt(mass/(2*E_f_avg)) *
+      v_f_avg = var_alpha_sq * Kokkos::sqrt(mass/(2*E_f_avg)) *
         (2*E_f_avg/(mass*var_alpha_sq) - 1);
     } else {
       v_f_avg = u0_a*twall + u0_b;
     }
 
-    double v_f_max = 0.5 * (v_f_avg + sqrt(v_f_avg*v_f_avg + 6*var_alpha_sq));
-    double f_max = v_f_max*v_f_max*v_f_max *
-      exp(-(v_f_max - v_f_avg) * (v_f_max - v_f_avg)/(var_alpha_sq));
+    KK_FLOAT v_f_max = static_cast<KK_FLOAT>(0.5) * (v_f_avg + Kokkos::sqrt(v_f_avg*v_f_avg + 6*var_alpha_sq));
+    KK_FLOAT f_max = v_f_max*v_f_max*v_f_max *
+      Kokkos::exp(-(v_f_max - v_f_avg) * (v_f_max - v_f_avg)/(var_alpha_sq));
 
-    double v_f_mag;
+    KK_FLOAT v_f_mag;
     P = 0.0;
-    while (rand_gen.drand() > P) {
-      v_f_mag = v_f_max + 3 * var_alpha * ( 2 * rand_gen.drand() - 1 );
+    while (static_cast<KK_FLOAT>(rand_gen.drand()) > P) {
+      v_f_mag = v_f_max + 3 * var_alpha * ( 2 * static_cast<KK_FLOAT>(rand_gen.drand()) - 1 );
       P = v_f_mag*v_f_mag*v_f_mag/(f_max) *
-        exp(-(v_f_mag - v_f_avg)*(v_f_mag - v_f_avg)/(var_alpha_sq));
+        Kokkos::exp(-(v_f_mag - v_f_avg)*(v_f_mag - v_f_avg)/(var_alpha_sq));
     }
 
-    vperp = v_f_mag * cos(theta_f);
-    vtan1 = v_f_mag * sin(theta_f) * cos(phi_f);
-    vtan2 = v_f_mag * sin(theta_f) * sin(phi_f);
+    vperp = v_f_mag * Kokkos::cos(theta_f);
+    vtan1 = v_f_mag * Kokkos::sin(theta_f) * Kokkos::cos(phi_f);
+    vtan2 = v_f_mag * Kokkos::sin(theta_f) * Kokkos::sin(phi_f);
 
     v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
     v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
     v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
 
     if (intenergy_flag) {
-      double E_f = 0.5 * mass * v_f_mag * v_f_mag;
-      double extra_energy = E_i - E_f;
+      KK_FLOAT E_f = static_cast<KK_FLOAT>(0.5) * mass * v_f_mag * v_f_mag;
+      KK_FLOAT extra_energy = E_i - E_f;
 
       // rotational component
 
@@ -350,8 +350,8 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
       if (vibstyle == NONE || vibdof < 2) {
         p->evib = 0.0;
       } else {
-        double *vibtemp = d_species[ispecies].vibtemp;
-        double evib_val = p->evib + vib_frac*extra_energy;
+        double *vibtemp = d_species[ispecies].vibtemp;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+        KK_FLOAT evib_val = p->evib + vib_frac*extra_energy;
 
         if (vibstyle == SMOOTH) {
           p->evib = evib_val;
@@ -363,8 +363,8 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
           // setup time (see Particle::add_species), so nvibmode already counts
           // every oscillator and each has an implicit degeneracy of 1
           int nvibmode = d_species[ispecies].nvibmode;
-          double tot_temp=0.0;
-          double evib_sum = 0.0;
+          KK_FLOAT tot_temp=0.0;
+          KK_FLOAT evib_sum = 0.0;
 
           for (int imode=0; imode<nvibmode; imode++)
             tot_temp += vibtemp[imode];

@@ -158,8 +158,8 @@ class UpdateKokkos : public Update {
 
   t_particle_1d d_particles;
 
-  DAT::t_float_2d_lr d_fieldfix_array_particle;
-  DAT::t_float_2d_lr d_fieldfix_array_grid;
+  DAT::t_kkacc_2d_lr d_fieldfix_array_particle;
+  DAT::t_kkacc_2d_lr d_fieldfix_array_grid;
 
   class KokkosBase* KKBaseFieldFix;
 
@@ -209,9 +209,9 @@ class UpdateKokkos : public Update {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* surf_collide_dispatch(const int n, Particle::OnePart *&ip,
-                                           double &dtremain, const int isurf,
-                                           const double *norm, const int isr,
+  OnePartKK* surf_collide_dispatch(const int n, OnePartKK *&ip,
+                                           KK_POS_FLOAT &dtremain, const int isurf,
+                                           const KK_POS_FLOAT *norm, const int isr,
                                            int &reaction,
                                            const DAT::t_int_scalar &d_retry,
                                            const DAT::t_int_scalar &d_nlocal) const
@@ -395,16 +395,16 @@ class UpdateKokkos : public Update {
   // change vy,vz by rotation into axisymmetric plane
 
   KOKKOS_INLINE_FUNCTION
-  void axi_remap(double *x, double *v) const {
-    double ynew = x[1];
-    double znew = x[2];
-    x[1] = sqrt(ynew*ynew + znew*znew);
+  void axi_remap(KK_POS_FLOAT *x, KK_FLOAT *v) const {
+    KK_POS_FLOAT ynew = x[1];
+    KK_POS_FLOAT znew = x[2];
+    x[1] = Kokkos::sqrt(ynew*ynew + znew*znew);
     x[2] = 0.0;
-    if (x[1] > 0.0) {
-      double rn = ynew / x[1];
-      double wn = znew / x[1];
-      double vy = v[1];
-      double vz = v[2];
+    if (x[1] > static_cast<KK_POS_FLOAT>(0.0)) {
+      KK_FLOAT rn = ynew / x[1];
+      KK_FLOAT wn = znew / x[1];
+      KK_FLOAT vy = v[1];
+      KK_FLOAT vz = v[2];
       v[1] = vy*rn + vz*wn;
       v[2] = -vy*wn + vz*rn;
     }
@@ -421,26 +421,26 @@ class UpdateKokkos : public Update {
   //// adjust end-of-move x,v due to perturbation on straight-line advection
 
   KOKKOS_INLINE_FUNCTION
-  int split3d(int, double*) const;
+  int split3d(int, KK_POS_FLOAT*) const;
 
   KOKKOS_INLINE_FUNCTION
-  int split2d(int, double*) const;
+  int split2d(int, KK_POS_FLOAT*) const;
 
   // the two steps of the optimized move, see their definitions and the OPT
   // block of the move kernel
 
   template < int DIM > KOKKOS_INLINE_FUNCTION
-  int optmove_bc(const double*, double*, int&) const;
+  int optmove_bc(const KK_POS_FLOAT*, KK_POS_FLOAT*, int&) const;
 
   template < int DIM > KOKKOS_INLINE_FUNCTION
-  int optmove_cell(const double*) const;
+  int optmove_cell(const KK_POS_FLOAT*) const;
 
   // variants of moveperturb method
   // adjust end-of-move x,v due to perturbation on straight-line advection
 
   KOKKOS_INLINE_FUNCTION
-  void field2d(double dt, double *x, double *v) const {
-    const double dtsq = 0.5*dt*dt;
+  void field2d(KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const {
+    const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
     x[0] += dtsq*field[0];
     x[1] += dtsq*field[1];
     v[0] += dt*field[0];
@@ -448,8 +448,8 @@ class UpdateKokkos : public Update {
   };
 
   KOKKOS_INLINE_FUNCTION
-  void field3d(double dt, double *x, double *v) const {
-    const double dtsq = 0.5*dt*dt;
+  void field3d(KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const {
+    const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
     x[0] += dtsq*field[0];
     x[1] += dtsq*field[1];
     x[2] += dtsq*field[2];
@@ -465,9 +465,9 @@ class UpdateKokkos : public Update {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void field_per_particle(int i, int icell, double dt, double *x, double *v) const
+  void field_per_particle(int i, int icell, KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const
   {
-    const double dtsq = 0.5*dt*dt;
+    const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
     auto &d_array = d_fieldfix_array_particle;
 
     int icol = 0;
@@ -495,9 +495,9 @@ class UpdateKokkos : public Update {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void field_per_grid(int i, int icell, double dt, double *x, double *v) const
+  void field_per_grid(int i, int icell, KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const
   {
-    const double dtsq = 0.5*dt*dt;
+    const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
     auto &d_array = d_fieldfix_array_grid;
 
     int icol = 0;

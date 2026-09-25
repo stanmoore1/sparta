@@ -126,9 +126,9 @@ void RegUnionKokkos::match_all_kokkos(DAT::tdual_int_1d k_match_in)
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(0,nlocal),
     KOKKOS_LAMBDA(const int &i) {
-      const double x = l_particles[i].x[0];
-      const double y = l_particles[i].x[1];
-      const double z = l_particles[i].x[2];
+      const KK_POS_FLOAT x = l_particles[i].x[0];
+      const KK_FLOAT y = l_particles[i].x[1];
+      const KK_FLOAT z = l_particles[i].x[2];
       l_match[i] = region_match_kk(l_tokens,l_ntoken,x,y,z);
     });
   copymode = 0;

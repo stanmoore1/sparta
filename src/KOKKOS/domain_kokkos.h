@@ -40,7 +40,7 @@ class DomainKokkos : public Domain {
 ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  int collide_kokkos(Particle::OnePart *&ip, int face, double* lo, double* hi, double *xnew,
+  int collide_kokkos(OnePartKK *&ip, int face, KK_POS_FLOAT* lo, KK_POS_FLOAT* hi, KK_POS_FLOAT *xnew,
                      /*double &dtremain,*/ int &reaction) const
   {
     //jp = NULL;
@@ -59,7 +59,7 @@ class DomainKokkos : public Domain {
 
       case PERIODIC:
       {
-        double *x = ip->x;
+        KK_POS_FLOAT *x = ip->x;
 
         switch (face) {
         case XLO:
@@ -96,7 +96,7 @@ class DomainKokkos : public Domain {
 
       case REFLECT:
       {
-        double *v = ip->v;
+        KK_FLOAT *v = ip->v;
         //double *lo = grid->cells[icell].lo;
         //double *hi = grid->cells[icell].hi;
         int dim = face / 2;
@@ -124,7 +124,7 @@ class DomainKokkos : public Domain {
      that contains the remapped coords
 ------------------------------------------------------------------------- */
   KOKKOS_INLINE_FUNCTION
-  void uncollide_kokkos(int face, double *x) const
+  void uncollide_kokkos(int face, KK_POS_FLOAT *x) const
   {
     switch (face) {
     case XLO:

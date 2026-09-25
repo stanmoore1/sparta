@@ -50,10 +50,10 @@ double ComputeTempKokkos::compute_scalar()
 }
 
 KOKKOS_INLINE_FUNCTION
-void ComputeTempKokkos::operator()(const int& i, double& lsum) const {
-  double* v = d_particles[i].v;
+void ComputeTempKokkos::operator()(const int& i, double& lsum) const {  // KK_DOUBLE: reduction value
+  KK_FLOAT* v = d_particles[i].v;
   const int ispecies = d_particles[i].ispecies;
-  const double mass = d_species[ispecies].mass;
+  const KK_FLOAT mass = d_species[ispecies].mass;
   lsum += (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]) * mass;
 }
 

@@ -85,7 +85,7 @@ FixAveHistoKokkos::~FixAveHistoKokkos()
 {
   if (copymode) return;
 
-  k_stats = DAT::tdual_float_1d();
+  k_stats = DAT::ttransform_kkacc_1d();
   memoryKK->destroy_kokkos(k_bin, bin);
 
   memoryKK->destroy_kokkos(k_vector, vector);
@@ -246,8 +246,8 @@ void FixAveHistoKokkos::end_of_step()
         }
 
         if (compute->post_process_grid_flag) {
-          DAT::t_float_2d_lr d_etally;
-          DAT::t_float_1d_strided d_vec;
+          DAT::t_kkacc_2d_lr d_etally;
+          DAT::t_kkacc_1d_strided d_vec;
           computeKKBase->post_process_grid_kokkos(j,1,d_etally,NULL,d_vec);
         }
         else if (compute->post_process_isurf_grid_flag)
@@ -622,7 +622,7 @@ void FixAveHistoKokkos::bin_particles(
 ------------------------------------------------------------------------- */
 void FixAveHistoKokkos::bin_grid_cells(
     minmax_type& reducer,
-    DAT::t_float_1d_strided d_vec)
+    DAT::t_kkacc_1d_strided d_vec)
 {
   minmax_reset();
   using Kokkos::RangePolicy;
