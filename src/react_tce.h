@@ -30,6 +30,7 @@ class ReactTCE : public ReactBird {
  public:
   ReactTCE(class SPARTA *, int, char **);
   void init();
+  void end_of_run();
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double &, int &);
 
@@ -47,7 +48,11 @@ class ReactTCE : public ReactBird {
                  double Evib);
 
  protected:
-  int prob_warn_flag;      // 1 after warning once about an invalid react_prob
+  int prob_neg_flag;       // 1 if a react_prob < 0 occurred on this proc
+                           //   during the current run
+  int prob_big_index;      // rlist index of the first reaction whose summed
+                           //   react_prob exceeded 1 on this proc during
+                           //   the current run, -1 if none
 };
 
 }
