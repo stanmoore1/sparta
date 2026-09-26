@@ -231,15 +231,18 @@ def _copy_full_size_figures(app, exception):
     # Publishing src/JPG as html/JPG fixes all of them at once, and keeps
     # the URLs the txt2html site published -- sparta.github.io/doc/JPG/... --
     # working for links from the web site, papers and search results, the
-    # same reason the page filenames were kept.  The whole directory goes,
-    # thumbnails included, so any /doc/JPG/ URL resolves and not just the
-    # ones a ":target:" happens to name today.
+    # same reason the page filenames were kept.
+    #
+    # The _small thumbnails are left out.  Every one is placed with an
+    # "image" directive, so Sphinx already publishes it in _images/, and a
+    # second copy here would add weight for no page that links to it.
     if exception is not None or app.builder.name != 'html':
         return
     src = pathlib.Path(app.srcdir) / 'JPG'
     if not src.is_dir():
         return
-    shutil.copytree(src, pathlib.Path(app.outdir) / 'JPG', dirs_exist_ok=True)
+    shutil.copytree(src, pathlib.Path(app.outdir) / 'JPG', dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns('*_small.*'))
 
 
 def setup(app):
