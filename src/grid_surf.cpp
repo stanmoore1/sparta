@@ -2100,18 +2100,27 @@ void Grid::move_cell(int src, int dst)
     }
     if (cellbinvalid) rebin_cell(src,dst);
 
+    // the sub cells of a split cell carry copies of its links, so a
+    //   link repaired on a split cell is repaired on its sub cells too,
+    //   else a particle in a sub cell crosses into whatever cell later
+    //   reuses the old slot
+
     cellint *neigh = cells[dst].neigh;
     int nmask = cells[dst].nmask;
     for (i = 0; i < 6; i++) {
       int nflag = neigh_decode(nmask,i);
       if (nflag != NCHILD && nflag != NPBCHILD) continue;
-      if (neigh[i] == src) neigh[i] = dst;
+      if (neigh[i] == src) {
+        neigh[i] = dst;
+        relink_sub_cells(dst,i,src,dst);
+      }
       n = neigh[i];
       j = i ^ 1;
       int jflag = neigh_decode(cells[n].nmask,j);
       if ((jflag == NCHILD || jflag == NPBCHILD) && cells[n].neigh[j] == src) {
         cells[n].neigh[j] = dst;
         if (journalflag) journal_cell(n);
+        relink_sub_cells(n,j,src,dst);
       } else if (!uniform) neighscan = 1;
     }
     if (!uniform) neighscan = 1;
@@ -2135,6 +2144,27 @@ void Grid::move_cell(int src, int dst)
   movedfrom[nmoved] = src;
   movedto[nmoved] = dst;
   nmoved++;
+}
+
+/* ----------------------------------------------------------------------
+   link ilink of each sub cell of split cell icell which points at src
+     is re-pointed at dst, as move_cell() does for the split cell itself
+   a sub cell is a copy of its split cell, links included, so it holds
+     the same stale index when a neighbor of the split cell moves
+------------------------------------------------------------------------- */
+
+void Grid::relink_sub_cells(int icell, int ilink, int src, int dst)
+{
+  int nsplit = cells[icell].nsplit;
+  if (nsplit <= 1) return;
+  int *csubs = sinfo[cells[icell].isplit].csubs;
+  if (!csubs) return;
+  for (int m = 0; m < nsplit; m++) {
+    int isub = csubs[m];
+    if (isub < 0 || cells[isub].neigh[ilink] != src) continue;
+    cells[isub].neigh[ilink] = dst;
+    if (journalflag) journal_cell(isub);
+  }
 }
 
 /* ----------------------------------------------------------------------

@@ -696,6 +696,45 @@ def test_multiremap(exe_cmd):
     return fails
 
 
+def test_sublinks(exe_cmd):
+    """Neighbor links of sub cells after an in-place restructure.
+
+    100 bodies piled against a wall by a fast beam keep creating and
+    removing split cells on both sides of the processor boundaries, so
+    the ghost block moves behind the changing owned block.  A split
+    cell's sub cells copy its neighbor links, and a link to a moved
+    ghost left stale on a sub cell sends a particle crossing that face
+    into whatever cell reuses the old slot.  remap cutcell rebuilds
+    every link, so the remap modes must agree on the particle count and
+    the body positions.  Only several procs have ghost cells to move."""
+    results = {}
+    fails = []
+    for mode in ("cutcell", "incremental"):
+        rc, out = run_deck(exe_cmd, "in.test.sublinks",
+                           extra=["-var", "mode", mode])
+        if rc:
+            fails.append("mode %s: run failed with exit code %d" % (mode, rc))
+            continue
+        rows = parse_stats(out)
+        if len(rows) != 11:
+            fails.append("mode %s: expected 11 stats rows, got %d"
+                         % (mode, len(rows)))
+            continue
+        results[mode] = rows
+    if fails:
+        return fails
+    for rc_row, ri_row in zip(results["cutcell"], results["incremental"]):
+        for key in ("Np", "f_1", "v_sx", "v_sy"):
+            if not approx(ri_row[key], rc_row[key], rel=1e-10, abs_=1e-13):
+                fails.append("step %d %s: incremental %.15g differs from "
+                             "cutcell %.15g" % (rc_row["Step"], key,
+                                                ri_row[key], rc_row[key]))
+                break
+        if fails:
+            break
+    return fails
+
+
 def test_pushpair(exe_cmd):
     # ASYMMETRIC body-body contact: heavy large body overtakes a light
     # small one, corner-vs-face contact. Total momentum of the pair must
@@ -2355,6 +2394,7 @@ TESTS = [
     ("overrun", test_overrun),
     ("remap", test_remap),
     ("multiremap", test_multiremap),
+    ("sublinks", test_sublinks),
     ("transplane", test_transplane),
     ("splitbalance", test_splitbalance),
     ("staticdist", test_staticdist),
@@ -2425,7 +2465,7 @@ TESTS = [
 DIST_TESTS = {"ballistic", "force", "rotation", "bounce", "restitution",
               "momentum",
               "overrun",
-              "remap", "multiremap", "transplane", "staticdist",
+              "remap", "multiremap", "sublinks", "transplane", "staticdist",
               "staticdist3d",
               "splitcell", "gridchange", "exitbox", "twobody", "pushpair",
               "tallyorder", "rotwall", "rotwall3d", "customemit",

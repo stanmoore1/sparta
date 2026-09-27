@@ -377,6 +377,7 @@ class Grid : protected Pointers {
   int restructure_check(int, SplitChange *);
   void restructure_split_cells(int, SplitChange *);
   void move_cell(int, int);
+  void relink_sub_cells(int, int, int, int);
   void move_sinfo(int, int);
   void route_ghost_subcells();
   int neighscan;              // 1 if move_cell() could not repair a link

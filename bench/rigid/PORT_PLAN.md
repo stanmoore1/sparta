@@ -3050,3 +3050,52 @@ Validation:
   collisions fall from 3706 to 1805 at 1 rank: over half the gas
   collisions of the uncapped run were a few particles in slivers
 - rigid suites: Kokkos 1 rank, Kokkos owned 4 ranks, CPU 1 rank pass
+
+## The move-loop hang: stale neighbor links on sub cells (27 Sep 2026)
+
+A 4-rank movie run (1200 bodies, 500 m/s beam, CPU-side Kokkos serial)
+hung at step ~5175: rank 0 spinning in the particle move, the other
+three in the move's Allreduce.  A watchpoint on the particle showed it
+walking cell faces from x = 3.5 to 9.5 along the rank boundary at
+y = L/2 and jumping back, 34k position updates in 15 s, with no surface
+collision.  The grid in the live process: split cell 29890 had its +y
+neighbor at ghost 30352, but both its sub cells still had 30005, an
+owned sub cell of an unrelated split cell 6 cells away, which sent the
+particle round the loop.
+
+Cause: `Grid::move_cell()` (the in-place `restructure_split_cells()`)
+repairs the links of a moved cell's neighbors through the moved cell's
+own links, but a split cell's sub cells are copies of it, links
+included, and were not repaired.  When the owned block grows and a
+ghost moves out of its way, the split cells next to that ghost keep a
+good link and their sub cells a stale one; on a one-level grid
+`neighscan` stays 0, so no scan catches it.  Most crossings of a stale
+face land a particle in the wrong cell and go unnoticed; this one found
+a cycle.  Fix: `relink_sub_cells()` repeats each repair on the sub
+cells (both for the neighbor's link and for a cell which is its own
+periodic neighbor) and journals them for the device copy.
+
+Validation:
+- a temporary check after every restructure that each sub cell's links
+  equal its split cell's: on the movie deck it tripped before step 100
+  without the fix, and never in 2000 steps with it; the CPU build
+  trips too, so this is not Kokkos-specific
+- new suite test `sublinks` (examples/rigid data.many circles, 500 m/s
+  beam, 1000 steps): remap cutcell rebuilds every link, and incremental
+  must agree with it on the particle count and the summed body
+  positions; without the fix the two differ by step 400 (default) or
+  700 (--dist) on 4 ranks, CPU and Kokkos; with it they agree to 15
+  digits in all 8 CPU/Kokkos x 1/4-rank x local/dist configurations
+- bench40.owned at 1 and 4 ranks: bit-identical with and without the
+  fix, so the earlier timings and comparisons are unaffected
+- the existing suites never tripped the check even without the fix,
+  which is why they missed it
+
+Also found on the way (not changed): the push-off dashpot is explicit
+and acts at full strength from first touch on every corner-element pair
+in range, ~50 for two 24-50 segment circles at cutoff 0.2, so
+gamma*N*dt/m_eff above ~2 overshoots and reverses the approach in one
+step.  Two bodies closing at 414 m/s pass through each other with
+pushdamp 1.7e-21 (m 4e-24), and bounce with restitution 0.83 at 1e-22.
+Clamping the dashpot impulse to the normal approach momentum per step
+would make it unconditionally stable.

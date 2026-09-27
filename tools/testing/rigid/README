@@ -30,6 +30,11 @@ remap         cutcell and incremental remap modes produce identical
               deterministic trajectories
 multiremap    two gas-driven bodies give identical trajectories in
               cutcell and incremental modes (multi-body incremental)
+sublinks      100 bodies piled against a wall by a fast beam, with split
+              cells coming and going across the processor boundaries:
+              the remap modes must agree on the particle count and the
+              body positions, which fails if a sub cell keeps a stale
+              link to a moved ghost cell (needs several procs)
 transplane    body sweeping 1.4 cells per step over cells cut only by
               a transparent plane: total flow volume per step identical
               in both remap modes (engulfed and vacated uncut cells)

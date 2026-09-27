@@ -1,0 +1,74 @@
+# TEST: sub cell links after an in-place split cell restructure
+# 100 bodies swept by a fast cold beam into a pile against the left
+# wall, so split cells come and go at every step on both sides of the
+# processor boundaries; the owned cell block grows and shrinks and the
+# ghost block moves behind it, and every neighbor link to a moved ghost
+# must be repaired on the sub cells of a split cell as well as on the
+# split cell itself, else a particle crossing that face lands in
+# whatever cell reuses the old slot
+# remap cutcell rebuilds every link, so the two remap modes must give
+# identical particle counts and body positions
+# run as: -var mode cutcell   (or incremental)
+
+seed	    	    12345
+
+variable            mode index incremental
+variable            dist index 0
+if "${dist} == 1" then "global surfs explicit/distributed"
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    50 50 1
+balance_grid        rcb cell
+
+global		    nrho 0.5 fnum 0.001
+
+species		    air.species N O
+mixture		    air N O vstream -500.0 0 0 temp 1.0
+
+read_surf           data.sublinks.surf type group bodies
+surf_collide	    1 specular
+surf_modify         all collide 1
+
+create_particles    air n 0
+fix		    in emit/face air xhi twopass
+
+timestep 	    0.0001
+
+global              rigid yes
+
+fix	 1 rigid bodies type infile data.sublinks.bodies &
+         push 1.0e-18 0.1 pushbound yes remap ${mode}
+
+# sums of the body center coords, so any body which differs shows
+
+variable            sx0 equal f_1[1][1]+f_1[2][1]+f_1[3][1]+f_1[4][1]+f_1[5][1]+f_1[6][1]+f_1[7][1]+f_1[8][1]+f_1[9][1]+f_1[10][1]
+variable            sx1 equal f_1[11][1]+f_1[12][1]+f_1[13][1]+f_1[14][1]+f_1[15][1]+f_1[16][1]+f_1[17][1]+f_1[18][1]+f_1[19][1]+f_1[20][1]
+variable            sx2 equal f_1[21][1]+f_1[22][1]+f_1[23][1]+f_1[24][1]+f_1[25][1]+f_1[26][1]+f_1[27][1]+f_1[28][1]+f_1[29][1]+f_1[30][1]
+variable            sx3 equal f_1[31][1]+f_1[32][1]+f_1[33][1]+f_1[34][1]+f_1[35][1]+f_1[36][1]+f_1[37][1]+f_1[38][1]+f_1[39][1]+f_1[40][1]
+variable            sx4 equal f_1[41][1]+f_1[42][1]+f_1[43][1]+f_1[44][1]+f_1[45][1]+f_1[46][1]+f_1[47][1]+f_1[48][1]+f_1[49][1]+f_1[50][1]
+variable            sx5 equal f_1[51][1]+f_1[52][1]+f_1[53][1]+f_1[54][1]+f_1[55][1]+f_1[56][1]+f_1[57][1]+f_1[58][1]+f_1[59][1]+f_1[60][1]
+variable            sx6 equal f_1[61][1]+f_1[62][1]+f_1[63][1]+f_1[64][1]+f_1[65][1]+f_1[66][1]+f_1[67][1]+f_1[68][1]+f_1[69][1]+f_1[70][1]
+variable            sx7 equal f_1[71][1]+f_1[72][1]+f_1[73][1]+f_1[74][1]+f_1[75][1]+f_1[76][1]+f_1[77][1]+f_1[78][1]+f_1[79][1]+f_1[80][1]
+variable            sx8 equal f_1[81][1]+f_1[82][1]+f_1[83][1]+f_1[84][1]+f_1[85][1]+f_1[86][1]+f_1[87][1]+f_1[88][1]+f_1[89][1]+f_1[90][1]
+variable            sx9 equal f_1[91][1]+f_1[92][1]+f_1[93][1]+f_1[94][1]+f_1[95][1]+f_1[96][1]+f_1[97][1]+f_1[98][1]+f_1[99][1]+f_1[100][1]
+variable            sx equal v_sx0+v_sx1+v_sx2+v_sx3+v_sx4+v_sx5+v_sx6+v_sx7+v_sx8+v_sx9
+variable            sy0 equal f_1[1][2]+f_1[2][2]+f_1[3][2]+f_1[4][2]+f_1[5][2]+f_1[6][2]+f_1[7][2]+f_1[8][2]+f_1[9][2]+f_1[10][2]
+variable            sy1 equal f_1[11][2]+f_1[12][2]+f_1[13][2]+f_1[14][2]+f_1[15][2]+f_1[16][2]+f_1[17][2]+f_1[18][2]+f_1[19][2]+f_1[20][2]
+variable            sy2 equal f_1[21][2]+f_1[22][2]+f_1[23][2]+f_1[24][2]+f_1[25][2]+f_1[26][2]+f_1[27][2]+f_1[28][2]+f_1[29][2]+f_1[30][2]
+variable            sy3 equal f_1[31][2]+f_1[32][2]+f_1[33][2]+f_1[34][2]+f_1[35][2]+f_1[36][2]+f_1[37][2]+f_1[38][2]+f_1[39][2]+f_1[40][2]
+variable            sy4 equal f_1[41][2]+f_1[42][2]+f_1[43][2]+f_1[44][2]+f_1[45][2]+f_1[46][2]+f_1[47][2]+f_1[48][2]+f_1[49][2]+f_1[50][2]
+variable            sy5 equal f_1[51][2]+f_1[52][2]+f_1[53][2]+f_1[54][2]+f_1[55][2]+f_1[56][2]+f_1[57][2]+f_1[58][2]+f_1[59][2]+f_1[60][2]
+variable            sy6 equal f_1[61][2]+f_1[62][2]+f_1[63][2]+f_1[64][2]+f_1[65][2]+f_1[66][2]+f_1[67][2]+f_1[68][2]+f_1[69][2]+f_1[70][2]
+variable            sy7 equal f_1[71][2]+f_1[72][2]+f_1[73][2]+f_1[74][2]+f_1[75][2]+f_1[76][2]+f_1[77][2]+f_1[78][2]+f_1[79][2]+f_1[80][2]
+variable            sy8 equal f_1[81][2]+f_1[82][2]+f_1[83][2]+f_1[84][2]+f_1[85][2]+f_1[86][2]+f_1[87][2]+f_1[88][2]+f_1[89][2]+f_1[90][2]
+variable            sy9 equal f_1[91][2]+f_1[92][2]+f_1[93][2]+f_1[94][2]+f_1[95][2]+f_1[96][2]+f_1[97][2]+f_1[98][2]+f_1[99][2]+f_1[100][2]
+variable            sy equal v_sy0+v_sy1+v_sy2+v_sy3+v_sy4+v_sy5+v_sy6+v_sy7+v_sy8+v_sy9
+
+stats		    100
+stats_style	    step np f_1 v_sx v_sy
+stats_modify        format float %.15g
+run 		    1000
