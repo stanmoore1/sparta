@@ -2544,6 +2544,12 @@ void Grid::clear_surf_restart()
    combine all particles in sub cells of a split icell to be in split cell
    assumes particles are sorted, returns them sorted in icell
    if relabel = 1, also change icell value for each particle, else do not
+   with relabel, particles already listed in the split cell itself are
+     kept: a particle which migrated in through a ghost sub cell routed to
+     its split cell (route_ghost_subcells()) holds the split cell until its
+     next move resolves it, and overwriting the list would drop it from
+     every list; the sub cells' lists are emptied, since their particles
+     now belong to the split cell, so each particle stays in one list
 ------------------------------------------------------------------------- */
 
 void Grid::combine_split_cell_particles(int icell, int relabel)
@@ -2556,6 +2562,16 @@ void Grid::combine_split_cell_particles(int icell, int relabel)
   int first = -1;
 
   int *next = particle->next;
+
+  if (relabel && cinfo[icell].first >= 0) {
+    count = cinfo[icell].count;
+    first = cinfo[icell].first;
+    ip = first;
+    while (ip >= 0) {
+      iplast = ip;
+      ip = next[ip];
+    }
+  }
 
   for (int i = 0; i < nsplit; i++) {
     jcell = mycsubs[i];
@@ -2578,6 +2594,11 @@ void Grid::combine_split_cell_particles(int icell, int relabel)
   // repoint each particle now in parent split cell to the split cell
 
   if (relabel) {
+    for (int i = 0; i < nsplit; i++) {
+      jcell = mycsubs[i];
+      cinfo[jcell].count = 0;
+      cinfo[jcell].first = -1;
+    }
     Particle::OnePart *particles = particle->particles;
     ip = first;
     while (ip >= 0) {

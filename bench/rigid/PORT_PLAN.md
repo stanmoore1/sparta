@@ -3099,3 +3099,66 @@ step.  Two bodies closing at 414 m/s pass through each other with
 pushdamp 1.7e-21 (m 4e-24), and bounce with restitution 0.83 at 1e-22.
 Clamping the dashpot impulse to the normal approach momentum per step
 would make it unconditionally stable.
+
+## Sort reallocations, and the deletion pass that did not pay (30 Sep 2026)
+
+**Kokkos sort (`97d45d05`).**  A barrier after each timer section showed
+the 4-rank Kokkos `forces: exchange` (0.57 s vs 0.055 s on the CPU) was
+not communication: with barriers it fell to 0.001 s, and every rank
+waited ~0.5 s at the sort boundary instead.  Per-step timing of
+`ParticleKokkos::sort_kokkos()` found spikes of 40-90 ms (6 ms normal) on
+a different rank each step, each on a step where `d_plist` and
+`d_cellcount` had just been reallocated: they were sized to exactly
+`grid->nlocal`, which moves by tens of cells a step with split cells
+coming and going, and the resize pass and CollideVSSKokkos's
+`Kokkos::resize` set the first extent back to that step's count.  The
+binning kernel then first-touched the fresh pages.  The rows now grow
+with 5% headroom and are kept; every row is zeroed each sort, so a spare
+row reads as an empty cell.  Bit-identical at 1 and 4 ranks.
+
+Measured on a slower VM than the numbers above (loop 14.5 -> ~25 s at
+1 rank for the same binary): the reallocation spikes are gone (steady
+steps 15-40: 2.03 -> 1.94 s, worst step 105 -> 89 ms); 4 ranks, waiting
+in the force exchange 1.04 -> 0.83-0.94 s.  What remains is the warm-up:
+`maxcellcount` grows 8 -> 14 over the first 14 steps, and each resize
+pass (a fresh ~70 MB `d_plist`, the binning kernel run twice) costs
+0.2-0.57 s, which dominates a 40-step benchmark but not a long run.
+
+**CPU deletion pass: tried, measured, reverted.**  The idea was to
+replace the classification of all 1.28M cells and the scan of all 1.8M
+particles by a walk of the per-cell particle lists of the cells a
+body's bbox reaches (with the split cells' chains kept across the
+reassignment, and a fallback to the full scan without valid lists or
+with static surfs).  A check mode compared the two every step: the set
+of particles each would test (a body reaches the cell, or it is INSIDE)
+and the delete sets.  It was exact on the benchmark (41K particles a
+step) at 1 and 4 ranks and on the sublinks deck, and it found a real
+bug (below).  But on the benchmark the pass went only 2.26 -> 1.83 s:
+the full pass costs memory traffic (the cell classification reads ~245
+MB of cell records a step, the particle scan ~144 MB, both sequential),
+and the walk turns that into latency-bound random reads (222K cells a
+step from the bin queries, 0.35 s; the cell checks and list walks,
+1.15 s; the particle tests themselves 0.34 s, unchanged).  About 2% of
+the CPU loop, for a pass whose correctness rests on list invariants
+that fail silently, so it is not in.  A cheaper classification needs a
+per-cell class kept current by every writer, as the Kokkos build's cell
+kinds are.
+
+**Particles dropped from every list by `combine_split_cell_particles()`
+(this commit).**  The check mode above found a particle on no list at
+all while `particle->sorted` was set.  `route_ghost_subcells()` routes a
+particle migrating into a ghost sub cell to the owner's split cell, and
+the owner resolves the sub cell at the particle's next move, so a
+particle can legitimately be labelled with a split cell.  The next
+`combine_split_cell_particles()` then set the split cell's list to the
+concatenation of its sub cells' lists, overwriting the split cell's own
+list and dropping such a particle from every list; a later
+`move_cell()`/`remove_marked_cells()` relabels particles through the
+lists, so a dropped particle whose cell moved would keep a stale index.
+With relabel, the split cell's own list is now kept at the head and the
+sub cells' lists are emptied (their particles belong to the split cell
+now, so each particle stays in one list and a second combine cannot
+make a cycle).  Upstream a split cell's own list is always empty, so
+nothing changes there: examples surf (move, rotate, slide, remove,
+add), ablation.2d and adapt.rotate are bit-identical at 1 and 4 ranks,
+as is the benchmark on both builds.
