@@ -1758,7 +1758,7 @@ int FixRigidKokkos::assign_split_kokkos()
     //   its own row, and is added
 
     if (grid->nlocal > maxasgstamp) {
-      maxasgstamp = grid->nlocal;
+      maxasgstamp = grow_extra(grid->nlocal);
       memory->grow(asgstamp,maxasgstamp,"fix_rigid:asgstamp");
       for (int i = 0; i < maxasgstamp; i++) asgstamp[i] = 0;
       asgcur = 0;

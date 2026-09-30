@@ -112,6 +112,20 @@ static int cellcount_target(int need, int nlocal_in, int ngrid_in,
   return want;
 }
 
+/* ----------------------------------------------------------------------
+   rows to allocate for per-cell arrays holding ngrid_in cells
+   the owned cell count moves by a few cells every step when split cells
+     come and go (a moving rigid body): sized exactly, each new high
+     reallocated the arrays, and the binning kernel then first-touched
+     the fresh pages at several times its usual cost, on a different
+     rank each step, which the other ranks then waited out
+------------------------------------------------------------------------- */
+
+static int cellrows_target(int ngrid_in)
+{
+  return ngrid_in + ngrid_in/20 + 16;
+}
+
 /* ---------------------------------------------------------------------- */
 
 ParticleKokkos::ParticleKokkos(SPARTA *sparta) : Particle(sparta)
@@ -348,9 +362,14 @@ void ParticleKokkos::sort_kokkos()
   d_cellcount = grid_kk->d_cellcount;
   d_plist = grid_kk->d_plist;
 
+  // the per-cell arrays keep spare rows and never shrink, see
+  //   cellrows_target(); every row is zeroed below, so a row past ngrid
+  //   reads as an empty cell
+
   if (ngrid > int(d_cellcount.extent(0))) {
     d_cellcount = {};
-    MemKK::realloc_kokkos(grid_kk->d_cellcount,"particle:cellcount",ngrid);
+    MemKK::realloc_kokkos(grid_kk->d_cellcount,"particle:cellcount",
+                          cellrows_target(ngrid));
     d_cellcount = grid_kk->d_cellcount;
   }
 
@@ -378,8 +397,10 @@ void ParticleKokkos::sort_kokkos()
     MAX(maxcellcount,cellcount_target(0,nlocal,ngrid,cell_contiguous));
 
   if (ngrid > int(d_plist.extent(0)) || maxcellcount > int(d_plist.extent(1))) {
+    int nrow = int(d_plist.extent(0));
+    if (ngrid > nrow) nrow = cellrows_target(ngrid);
     d_plist = {};
-    MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
+    MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",nrow,maxcellcount);
     d_plist = grid_kk->d_plist;
   }
 
@@ -429,8 +450,9 @@ void ParticleKokkos::sort_kokkos()
         MAX(cellcount_target(resize,nlocal,ngrid,cell_contiguous),
             static_cast<int> (maxcellcount*CELLCOUNT_GROWTH));
 
+      const int nrow = MAX(ngrid,int(d_plist.extent(0)));
       d_plist = {};
-      MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
+      MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",nrow,maxcellcount);
       d_plist = grid_kk->d_plist;
 
       Kokkos::deep_copy(d_resize,0);

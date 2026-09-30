@@ -826,7 +826,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     int maxcellcount_extra = maxcellcount*extra_factor;
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       if (NEARCP)
         MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount_extra);
@@ -954,7 +954,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
       particle_kk->set_maxcellcount(maxcellcount);
       if (d_plist.extent(1) < maxcellcount) {
         d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount);
         d_plist = grid_kk->d_plist;
       }
 
@@ -1261,7 +1261,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     int maxcellcount_extra = maxcellcount*extra_factor;
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       grow_subcell_views(nglocal,maxcellcount_extra);
     }
@@ -1388,7 +1388,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
       particle_kk->set_maxcellcount(maxcellcount);
       if (d_plist.extent(1) < maxcellcount) {
         d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount);
         d_plist = grid_kk->d_plist;
         grow_subcell_views(nglocal,maxcellcount);
       }
@@ -2005,7 +2005,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
     int maxcellcount_extra = maxcellcount*extra_factor;
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       grow_group_lists();
     }
@@ -2112,7 +2112,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
       particle_kk->set_maxcellcount(maxcellcount);
       if (d_plist.extent(1) < maxcellcount) {
         d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount);
         d_plist = grid_kk->d_plist;
         grow_group_lists();
       }
@@ -2524,7 +2524,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
     int maxcellcount_extra = maxcellcount*extra_factor;
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       grow_group_lists();
     }
@@ -2671,7 +2671,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
       particle_kk->set_maxcellcount(maxcellcount);
       if (d_plist.extent(1) < maxcellcount) {
         d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount);
         d_plist = grid_kk->d_plist;
         grow_group_lists();
       }
@@ -3202,7 +3202,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     int maxcellcount_extra = maxcellcount*extra_factor;
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount_extra);
       d_plist = grid_kk->d_plist;
     }
 
@@ -3351,7 +3351,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       particle_kk->set_maxcellcount(maxcellcount);
       if (d_plist.extent(1) < maxcellcount) {
         d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
+        Kokkos::resize(grid_kk->d_plist,MAX(nglocal,int(grid_kk->d_plist.extent(0))),maxcellcount);
         d_plist = grid_kk->d_plist;
       }
 
