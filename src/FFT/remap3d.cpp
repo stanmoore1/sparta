@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "remap3d.h"
 
 #define PACK_DATA FFT_SCALAR
