@@ -1538,6 +1538,10 @@ int MarchingCubes::interior_ambiguity_verification(int edge)
   double t, At = 0.0, Bt = 0.0, Ct = 0.0, Dt = 0.0, a = 0.0, b = 0.0;
   double verify;
 
+  // no diagonal corner pair matched in interior_ambiguity(): no tunnel
+
+  if (edge < 0) return 0;
+
   switch (edge) {
 
   case 0:
@@ -1934,6 +1938,6 @@ int compare_indices(const void *iptr, const void *jptr)
 void MarchingCubes::print_cube()
 {
   if (screen)
-    fprintf(screen,"\t %g %g %g %g %g %g %g %g\n",
+    fprintf(screen,"\t %d %d %d %d %d %d %d %d\n",
             v000,v001,v011,v010,v100,v101,v111,v110);
 }
