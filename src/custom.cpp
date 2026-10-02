@@ -46,7 +46,11 @@ enum{TEXT,BINARY};
 
 /* ---------------------------------------------------------------------- */
 
-Custom::Custom(SPARTA *sparta) : Pointers(sparta) {}
+Custom::Custom(SPARTA *sparta) : Pointers(sparta)
+{
+  naction = 0;
+  actions = NULL;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -298,7 +302,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       // else: store info in Action list for FixCustom
 
       if (!external)
-        action_set(vstyle,vindex,cindex,ctype,csize,ccol,groupbit,mixture,region);
+        count += action_set(vstyle,vindex,cindex,ctype,csize,ccol,groupbit,mixture,region);
       else {
         actions[naction].action = action;
         actions[naction].vstyle = vstyle;
@@ -425,6 +429,7 @@ bigint Custom::process_actions(int narg, char **arg, int external)
       // # of coarse files and filestyle
 
       int numfile = input->inumeric(FLERR,arg[iarg+1]);
+      if (numfile < 1) error->all(FLERR,"Illegal custom command");
       if (strcmp(arg[iarg+2],"text") == 0) filestyle = TEXT;
       else if (strcmp(arg[iarg+2],"binary") == 0) filestyle = BINARY;
       else error->all(FLERR,"Illegal custom command");
@@ -611,7 +616,7 @@ bigint Custom::process_actions()
     } else if (actions[i].action == FILECOARSE) {
 
       int numfile = actions[i].numfile;
-      int filestyle = actions[i].filestyle;
+      filestyle = actions[i].filestyle;
       char *fname = actions[i].fname;
       int colcount = actions[i].colcount;
       int *cindex = actions[i].cindex_file;
@@ -1360,7 +1365,8 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
     // line: Npoints Nvalues
 
     int npoints,nvalues;
-    sscanf(line,"%d %d",&npoints,&nvalues);
+    if (sscanf(line,"%d %d",&npoints,&nvalues) != 2 || npoints < 0)
+      error->one(FLERR,"Incorrect line format in custom coarse file");
 
     if (nvalues != colcount)
       error->one(FLERR,"Incorrect line format in custom coarse file");
@@ -1424,6 +1430,8 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
   // done once for xyz_coarse, another for values_coarse
 
   MPI_Allreduce(&ncoarse_me,&ncoarse,1,MPI_INT,MPI_SUM,world);
+
+  if (ncoarse == 0) error->all(FLERR,"Custom file/coarse found no coarse points");
 
   if (comm->me == 0 && ncoarse > MAXCOARSE)
     error->warning(FLERR,"Custom coarse grid points > MAXCOARSE");
@@ -1791,6 +1799,11 @@ void KDTree::create_tree(int iparent, int n, int *plist)
   }
 
   double split = 0.5 * (bboxlo[splitdim] + bboxhi[splitdim]);
+
+  // midpoint can round up to bboxhi when lo/hi are adjacent doubles
+  // use lo instead so right list is not empty
+
+  if (split >= bboxhi[splitdim]) split = bboxlo[splitdim];
 
   tree[ntree].splitdim = splitdim;
   tree[ntree].split = split;
