@@ -365,6 +365,10 @@ FixAveHisto::FixAveHisto(SPARTA *spa, int narg, char **arg) :
       if (argindex[i])
         error->all(FLERR,"Fix ave/histo variable cannot have an index");
 
+    } else if (which[i] == VARIABLE && kind == GLOBAL && mode == VECTOR) {
+      error->all(FLERR,"Fix ave/histo equal-style variable "
+                 "cannot be used in vector mode");
+
     } else if (which[i] == VARIABLE && kind == PERPARTICLE) {
       int ivariable = input->variable->find(ids[i]);
       if (argindex[i] == 0 && input->variable->particle_style(ivariable) == 0)
@@ -454,6 +458,10 @@ FixAveHisto::FixAveHisto(SPARTA *spa, int narg, char **arg) :
   iwindow = window_limit = 0;
 
   stats_total[0] = stats_total[1] = stats_total[2] = stats_total[3] = 0.0;
+  if (ave == RUNNING) {
+    stats_total[2] = BIG;
+    stats_total[3] = -BIG;
+  }
   for (int i = 0; i < nbins; i++) bin_total[i] = 0.0;
 
   // nvalid = next step on which end_of_step does something
@@ -650,10 +658,10 @@ void FixAveHisto::end_of_step()
       } else if (kind == GLOBAL && mode == VECTOR) {
         if (j == 0) {
           int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_one(fix->compute_vector(i));
+          for (int k = 0; k < n; k++) bin_one(fix->compute_vector(k));
         } else {
-          int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_one(fix->compute_array(i,j-1));
+          int n = fix->size_array_rows;
+          for (int k = 0; k < n; k++) bin_one(fix->compute_array(k,j-1));
         }
 
       } else if (kind == PERPARTICLE) {
