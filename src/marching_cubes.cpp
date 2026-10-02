@@ -886,7 +886,7 @@ void MarchingCubes::cleanup()
     // else delete now and add 2 tris to delete list
 
     if (nfacetri[icell][iface] == 2) {
-      norm = tris[facetris[icell][iface][0]].norm;
+      norm = surf->tris[facetris[icell][iface][0]].norm;
       idim = iface/2;
       if (iface % 2 && norm[idim] < 0.0) inwardnorm = 1;
       else if (iface % 2 == 0 && norm[idim] > 0.0) inwardnorm = 1;
@@ -937,7 +937,15 @@ void MarchingCubes::cleanup()
   int nslocal = surf->nlocal;
   for (i = 0; i < ndelete; i++) {
     m = dellist[i];
-    if (m != nslocal-1) memcpy(&tris[m],&tris[nslocal-1],sizeof(Surf::Tri));
+
+    // deleted tri is last in list, nothing is moved so no csurfs to repoint
+
+    if (m == nslocal-1) {
+      nslocal--;
+      continue;
+    }
+
+    memcpy(&tris[m],&tris[nslocal-1],sizeof(Surf::Tri));
     nslocal--;
 
     icell = (*grid->hash)[tris[m].id];
@@ -1491,7 +1499,7 @@ bool MarchingCubes::modified_test_interior(int s, int icase)
 
 int MarchingCubes::interior_ambiguity(int amb_face, int s)
 {
-  int edge;
+  int edge = -1;
 
   switch (amb_face) {
   case 1:
@@ -1925,6 +1933,7 @@ int compare_indices(const void *iptr, const void *jptr)
 
 void MarchingCubes::print_cube()
 {
-  fprintf(screen,"\t %d %d %d %d %d %d %d %d\n",
-         v000,v001,v011,v010,v100,v101,v111,v110);
+  if (screen)
+    fprintf(screen,"\t %g %g %g %g %g %g %g %g\n",
+            v000,v001,v011,v010,v100,v101,v111,v110);
 }
