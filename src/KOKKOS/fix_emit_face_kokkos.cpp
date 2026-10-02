@@ -654,8 +654,16 @@ void FixEmitFaceKokkos::subsonic_sort()
   //   is walked in decreasing particle index, while an already-sorted list
   //   is walked in increasing index.
 
+  // like the non-Kokkos subsonic_sort(), which builds private lists and
+  //   leaves Particle::sorted untouched, do not leave sorted_kk set:
+  //   particles this fix then inserts are not in d_plist, so a later
+  //   subsonic fix this step must re-sort (move resets it anyway)
+
   plist_descending = !particle_kk->sorted_kk;
-  if (!particle_kk->sorted_kk) particle_kk->sort_kokkos();
+  if (!particle_kk->sorted_kk) {
+    particle_kk->sort_kokkos();
+    particle_kk->sorted_kk = 0;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -810,7 +818,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
     if (!subsonic_warning && temp_thermal_cell > TEMPLIMIT)
       Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);
 
-    if (np) {
+    if (np && massrho_cell*soundspeed_cell > 0.0) {
       const int ndim = d_tasks(i).ndim;
       const double sign = d_tasks(i).normal[ndim];
       vstream[ndim] += sign *
