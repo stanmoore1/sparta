@@ -211,7 +211,7 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
   // t_current = cellwise averaged thermal T
   // scale all particles in all cells by vscale
 
-  t_current /= n_current;
+  if (n_current) t_current /= n_current;
   if (t_current <= 0.0) vscale = 1.0;
   else vscale = sqrt(t_target/t_current);
 
