@@ -99,6 +99,10 @@ void ReactBirdKokkos::init()
 {
   ReactBird::init();
 
+  // ReactBird::init() only zeroes the host tallies
+
+  Kokkos::deep_copy(d_tally_reactions,0);
+
   deallocate_views_of_views();
 
   // copy data into device views
