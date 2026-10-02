@@ -962,12 +962,7 @@ void ParticleKokkos::wrap_kokkos()
 
   // mixtures
 
-  k_species2group = DAT::tdual_int_2d("particle:species2group",nmixture,nspecies);
-  for (int i = 0; i < nmixture; i++)
-    for (int j = 0; j < nspecies; j++)
-      k_species2group.view_host()(i,j) = mixture[i]->species2group[j];
-  k_species2group.modify_host();
-  k_species2group.sync_device();
+  update_species2group();
 
   //if (mixtures != k_mixtures.view_host().data()) {
   //  memoryKK->wrap_kokkos(k_mixtures,mixture,nmixture,"particle:mixture");
@@ -976,6 +971,21 @@ void ParticleKokkos::wrap_kokkos()
   //  memory->sfree(mixtures);
   //  mixtures = k_mixtures.view_host().data();
   //}
+}
+
+/* ----------------------------------------------------------------------
+   (re)build device copy of mixture species2group
+   must be called every run since mixtures/species can change between runs
+------------------------------------------------------------------------- */
+
+void ParticleKokkos::update_species2group()
+{
+  k_species2group = DAT::tdual_int_2d("particle:species2group",nmixture,nspecies);
+  for (int i = 0; i < nmixture; i++)
+    for (int j = 0; j < nspecies; j++)
+      k_species2group.view_host()(i,j) = mixture[i]->species2group[j];
+  k_species2group.modify_host();
+  k_species2group.sync_device();
 }
 
 /* ---------------------------------------------------------------------- */
