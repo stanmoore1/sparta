@@ -1104,11 +1104,11 @@ void WriteSurf::write_custom_all(int i)
     } else {
       if (size_custom[ic] == 0) {
 	double *dvector = surf->edvec_local[surf->ewhich[index_custom[ic]]];
-	fprintf(fp," %g",dvector[i]);
+	fprintf(fp," %.15g",dvector[i]);
       } else {
 	double **darray = surf->edarray_local[surf->ewhich[index_custom[ic]]];
 	for (int j = 0; j < size_custom[ic]; j++)
-	  fprintf(fp," %g",darray[i][j]);
+	  fprintf(fp," %.15g",darray[i][j]);
       }
     }
   }
@@ -1132,10 +1132,10 @@ void WriteSurf::write_custom_distributed(int i, double **cvalues)
       }
     } else {
       if (size_custom[ic] == 0) {
-	fprintf(fp," %g",cvalues[i][m++]);
+	fprintf(fp," %.15g",cvalues[i][m++]);
       } else {
 	for (int j = 0; j < size_custom[ic]; j++)
-	  fprintf(fp," %g",cvalues[i][m++]);
+	  fprintf(fp," %.15g",cvalues[i][m++]);
       }
     }
   }
