@@ -3,3 +3,5 @@
 - F-G01-2 | src/KOKKOS/collide_vss_kokkos.cpp | set vre_first=1 when vremax/remain reallocated (ngroups != oldgroups) | compile OK | note: CPU collide.cpp ~280 needs same one-liner; not owned
 - F-G01-3 | src/KOKKOS/collide_vss_kokkos.cpp | react-retry path in collisions_one reallocs d_nn_last_partner with d_plist when NEARCP | compile OK
 - F-G01-4 / F-G02-1 | src/KOKKOS/collide_vss_kokkos.cpp | zero-volume cell: set d_error_flag and return at all 5 collision kernels (before rand state acquire) | compile OK
+- F-G00-13 | src/KOKKOS/collide_vss_kokkos.cpp | collisions_one_ambipolar kernel: recomb 3rd body disabled only for np==1 or (np==2 && jpart not electron), matching collide.cpp:1552-1555 (other kernels already match CPU np<=2) | compile OK
+- F-G00-17 | src/KOKKOS/collide_vss_kokkos.cpp | test_collision_kokkos: return 0 if vremax==0 before vre/vremax, matching collide_vss.cpp:228 | compile OK
