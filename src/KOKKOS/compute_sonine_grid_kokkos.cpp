@@ -133,12 +133,11 @@ void ComputeSonineGridKokkos::compute_per_grid_kokkos()
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeSonineGrid_compute_vcom_init_atomic<1> >(0,nlocal),*this);
     else
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeSonineGrid_compute_vcom_init_atomic<0> >(0,nlocal),*this);
+    if (need_dup) {
+      Kokkos::Experimental::contribute(d_vcom, dup_vcom_tally);
+      dup_vcom_tally = {}; // free duplicated memory
+    }
     Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagComputeSonineGrid_normalize_vcom>(0,nglocal),*this);
-  }
-
-  if (need_dup) {
-    Kokkos::Experimental::contribute(d_vcom, dup_vcom_tally);
-    dup_vcom_tally = {}; // free duplicated memory
   }
 
   // tally sonine moments
