@@ -76,3 +76,12 @@
 | F-G00-15 | collide_vss_kokkos / react / CPU collide | 00708c6a |
 | F-G00-17 | collide_vss_kokkos / react / CPU collide | 00708c6a |
 | F-G04-2 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G21-1 | infra | f70f4887 |
+| F-G21-2 | infra | f70f4887 |
+| F-G21-4 | infra | f70f4887 |
+| F-G21-5 | infra | f70f4887 |
+| F-G21-7 | infra | f70f4887 |
+| F-G21-8 | infra | f70f4887 |
+| F-G21-9 | infra | f70f4887 |
+| F-G21-12 | infra | f70f4887 |
+| F-G21-6, F-G21-10 | DEFERRED (see fixes/FX-infra.md) | - |
