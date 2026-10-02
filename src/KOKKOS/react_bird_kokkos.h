@@ -42,10 +42,13 @@ class ReactBirdKokkos : public ReactBird {
   double extract_tally(int);
   void backup();
   void restore();
-  void check_prob_warn();
+  void check_prob_warn(int);
 
   // device flag set by attempt_kk() for an invalid summed react_prob
-  //   1 = negative, 2 = greater than 1, reset in init() to warn once per run
+  //   bit 1 = negative, bit 2 = greater than 1
+  // CollideVSSKokkos::init() aliases it to a slot of its per-pass scalars
+  //   and passes the read-back value to check_prob_warn() each step
+  // prob_warn_flag is reset in init() to warn once per run
 
   DAT::t_int_scalar d_prob_warn;
   int prob_warn_flag;

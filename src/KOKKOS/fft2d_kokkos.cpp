@@ -185,18 +185,19 @@ public:
 
   kiss_fft_functor() = default;
 
-  // ntransform = # of concurrent 1d FFTs (parallel_for range)
-  // each one gets a private scratch slice for kf_bfly_generic
+  // each concurrent 1d FFT (parallel_for index i) gets a private scratch
+  //   slice of nscr entries for kf_bfly_generic, starting at i*nscr
+  // d_scr_ = plan->d_kissscr, sized at plan creation by kiss_scratch_size()
+  //   for the largest stage, so no allocation here
 
-  kiss_fft_functor(typename FFT_AT::t_FFT_DATA_1d &d_data_,typename FFT_AT::t_FFT_DATA_1d &d_tmp_, kiss_fft_state_kokkos<DeviceType> &st_, int length_, int ntransform):
+  kiss_fft_functor(typename FFT_AT::t_FFT_DATA_1d &d_data_,typename FFT_AT::t_FFT_DATA_1d &d_tmp_, kiss_fft_state_kokkos<DeviceType> &st_, int length_, typename FFT_AT::t_FFT_DATA_1d &d_scr_):
     d_data(d_data_),
     d_tmp(d_tmp_),
+    d_scr(d_scr_),
     st(st_)
     {
       length = length_;
       nscr = MAX(1,st.p_max);
-      d_scr = typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft:kissscratch",Kokkos::WithoutInitializing),
-                                             (size_t)MAX(1,ntransform)*nscr);
     }
 
   KOKKOS_INLINE_FUNCTION
@@ -205,6 +206,14 @@ public:
     KissFFTKokkos<DeviceType>::kiss_fft_kokkos(st,d_data,d_tmp,offset,d_scr,i*nscr);
   }
 };
+
+// scratch entries a kiss_fft_functor needs for ntransform concurrent 1d FFTs
+
+template<class DeviceType>
+static size_t kiss_scratch_size(const kiss_fft_state_kokkos<DeviceType> &st, int ntransform)
+{
+  return (size_t)MAX(1,ntransform)*MAX(1,st.p_max);
+}
 #endif
 
 template<class DeviceType>
@@ -260,9 +269,9 @@ void FFT2dKokkos<DeviceType>::fft_2d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
      typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_2d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
     kiss_fft_functor<DeviceType> f;
     if (flag == 1)
-      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_forward,length,total/length);
+      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_forward,length,plan->d_kissscr);
     else
-      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_backward,length,total/length);
+      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_backward,length,plan->d_kissscr);
     Kokkos::parallel_for(total/length,f);
     d_data = d_tmp;
   #endif
@@ -309,9 +318,9 @@ void FFT2dKokkos<DeviceType>::fft_2d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
   #else
     d_tmp = typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_2d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
     if (flag == 1)
-      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_forward,length,total/length);
+      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_forward,length,plan->d_kissscr);
     else
-      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length,total/length);
+      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length,plan->d_kissscr);
     Kokkos::parallel_for(total/length,f);
     d_data = d_tmp;
     // KISS is out-of-place: without a post-remap, result must still land in out
@@ -642,6 +651,20 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
     plan->cfg_slow_backward = KissFFTKokkos<DeviceType>::kiss_fft_alloc_kokkos(nslow,1,nullptr,nullptr);
   }
 
+  // one scratch buffer for kf_bfly_generic shared by all stages and calls,
+  //   stages run one after another; sized for the largest stage
+  // freed with the plan (view member)
+
+  {
+    const int ntrans1 = plan->total1/plan->length1;
+    const int ntrans2 = plan->total2/plan->length2;
+    size_t nkissscr = kiss_scratch_size(plan->cfg_fast_forward,ntrans1);
+    nkissscr = MAX(nkissscr,kiss_scratch_size(plan->cfg_fast_backward,ntrans1));
+    nkissscr = MAX(nkissscr,kiss_scratch_size(plan->cfg_slow_forward,ntrans2));
+    nkissscr = MAX(nkissscr,kiss_scratch_size(plan->cfg_slow_backward,ntrans2));
+    plan->d_kissscr = typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft2d:kissscratch",Kokkos::WithoutInitializing),nkissscr);
+  }
+
 #endif
 
   if (scaled == 0)
@@ -768,16 +791,16 @@ void FFT2dKokkos<DeviceType>::fft_2d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
     typename FFT_AT::t_FFT_DATA_1d d_tmp =
      typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_2d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
   if (flag == 1) {
-    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_forward,length1,total1/length1);
+    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_forward,length1,plan->d_kissscr);
     Kokkos::parallel_for(total1/length1,f);
 
-    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_forward,length2,total2/length2);
+    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_forward,length2,plan->d_kissscr);
     Kokkos::parallel_for(total2/length2,f);
   } else {
-    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_backward,length1,total1/length1);
+    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_fast_backward,length1,plan->d_kissscr);
     Kokkos::parallel_for(total1/length1,f);
 
-    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length2,total2/length2);
+    f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length2,plan->d_kissscr);
     Kokkos::parallel_for(total2/length2,f);
   }
 #endif

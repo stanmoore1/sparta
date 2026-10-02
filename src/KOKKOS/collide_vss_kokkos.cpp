@@ -141,6 +141,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   d_nlocal       = Kokkos::subview(d_scalars,6);
   d_maxelectron  = Kokkos::subview(d_scalars,7);
   d_tally_overflow = Kokkos::subview(d_scalars,8);
+  d_prob_warn    = Kokkos::subview(d_scalars,9);
 
   d_nattempt_one = Kokkos::subview(d_scalars_big,0);
   d_ncollide_one = Kokkos::subview(d_scalars_big,1);
@@ -155,6 +156,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   h_nlocal       = Kokkos::subview(h_scalars,6);
   h_maxelectron  = Kokkos::subview(h_scalars,7);
   h_tally_overflow = Kokkos::subview(h_scalars,8);
+  h_prob_warn    = Kokkos::subview(h_scalars,9);
 
   h_nattempt_one = Kokkos::subview(h_scalars_big,0);
   h_ncollide_one = Kokkos::subview(h_scalars_big,1);
@@ -350,6 +352,12 @@ void CollideVSSKokkos::init()
 
     if (!dynamic_cast<ReactBirdKokkos*>(react))
       error->all(FLERR,"Must use a Kokkos-enabled reaction style with collide vss/kk");
+
+    // TCE kernels write their invalid-probability flag into slot 9 of
+    //   d_scalars, read back with the other scalars after each pass
+
+    ((ReactBirdKokkos*) react)->d_prob_warn = d_prob_warn;
+    h_prob_warn() = 0;
 
     recombflag = react->recombflag;
     recomb_boost_inverse = react->recomb_boost_inverse;
@@ -596,7 +604,13 @@ void CollideVSSKokkos::collisions()
 
   // warn once per run about an invalid TCE reaction probability
 
-  if (react) ((ReactBirdKokkos*) react)->check_prob_warn();
+  // h_prob_warn was read back with h_scalars by the collision pass and is
+  //   pushed to the device again at the start of the next pass, so clear it
+
+  if (react) {
+    ((ReactBirdKokkos*) react)->check_prob_warn(h_prob_warn());
+    h_prob_warn() = 0;
+  }
 
   // remove any particles deleted in chemistry reactions
   // if particles deleted/created by chemistry, particles are no longer sorted

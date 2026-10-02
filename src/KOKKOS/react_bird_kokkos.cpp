@@ -194,24 +194,23 @@ double ReactBirdKokkos::extract_tally(int m)
 
 /* ---------------------------------------------------------------------- */
 
-void ReactBirdKokkos::check_prob_warn()
+void ReactBirdKokkos::check_prob_warn(int flag)
 {
-  if (prob_warn_flag) return;
+  if (prob_warn_flag || !flag) return;
 
-  int flag;
-  Kokkos::deep_copy(flag,d_prob_warn);
-  if (flag == 1) {
-    prob_warn_flag = 1;
+  // negative is reported in preference to > 1 if both occurred,
+  //   one warning per run as in ReactTCE
+
+  prob_warn_flag = 1;
+  if (flag & 1)
     error->warning(FLERR,"Negative TCE reaction probability, "
                    "check reaction file coefficients "
                    "(further warnings suppressed)");
-  } else if (flag == 2) {
-    prob_warn_flag = 1;
+  else
     error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
                    "chemistry may be under-resolved, "
                    "consider reducing timestep or fnum "
                    "(further warnings suppressed)");
-  }
 }
 
 /* ---------------------------------------------------------------------- */

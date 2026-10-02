@@ -275,8 +275,8 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     // sum of reaction probabilities should be < 1 for a valid TCE scheme
     // flag it for a once-per-run host warning, see react_tce.cpp
 
-    if (react_prob < 0.0) d_prob_warn() = 1;
-    else if (react_prob > 1.0) d_prob_warn() = 2;
+    if (react_prob < 0.0) Kokkos::atomic_or(&d_prob_warn(),1);
+    else if (react_prob > 1.0) Kokkos::atomic_or(&d_prob_warn(),2);
 
     // test against random number to see if this reaction occurs
     // if it does, reset species of I,J and optional K to product species
