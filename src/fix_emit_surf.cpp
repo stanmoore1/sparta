@@ -377,6 +377,7 @@ void FixEmitSurf::grid_changed()
                    cummulative_custom[isurf][isp-1] + fractions[isurf][isp];
         else cummulative_custom[isurf][isp] = fractions[isurf][isp];
       }
+      cummulative_custom[isurf][nspecies-1] = 1.0;
     }
   }
 
