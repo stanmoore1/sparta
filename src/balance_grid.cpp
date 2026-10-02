@@ -98,6 +98,8 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     else py = atoi(arg[2]);
     if (strcmp(arg[3],"*") == 0) pz = 0;
     else pz = atoi(arg[3]);
+    if (px < 0 || py < 0 || pz < 0)
+      error->all(FLERR,"Illegal balance_grid command");
     iarg = 4;
 
   } else if (strcmp(arg[0],"random") == 0) {
@@ -118,7 +120,8 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     else if (strcmp(arg[1],"time") == 0) rcbwt = TIME;
     else error->all(FLERR,"Illegal balance_grid command");
     iarg = 2;
-  }
+
+  } else error->all(FLERR,"Illegal balance_grid command");
 
   // optional args
 
@@ -276,7 +279,9 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
 
   } else if (bstyle == PROC) {
     int newproc;
-    RanKnuth *random = new RanKnuth(update->ranmaster->uniform());
+    double seed = update->ranmaster->uniform();
+    RanKnuth *random = new RanKnuth(seed);
+    random->reset(seed,comm->me,100);
     newproc = nprocs * random->uniform();
 
     for (int icell = 0; icell < nglocal; icell++) {

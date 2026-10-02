@@ -239,6 +239,7 @@ void AdaptGrid::process_args(int narg, char **arg)
   } else action2 = NONE;
 
   if (action1 == action2) error->all(FLERR,"Illegal adapt command");
+  if (iarg >= narg) error->all(FLERR,"Illegal adapt command");
 
   // define style
 
@@ -519,12 +520,13 @@ void AdaptGrid::setup(int iter)
   } else random = NULL;
 
   // list of new cell indices for one refined cell
-  // refinement may occur between minlevel and maxlevel-1 inclusive
+  // refinement may occur at any child level between 1 and maxlevel-1 inclusive
+  // minlevel only limits coarsening
 
   Grid::ParentLevel *plevels = grid->plevels;
 
   int nmax = 0;
-  for (int i = minlevel; i < maxlevel; i++)
+  for (int i = 1; i < maxlevel; i++)
     nmax = MAX(nmax,plevels[i].nx * plevels[i].ny * plevels[i].nz);
   childlist = new int[nmax];
 
@@ -1133,13 +1135,13 @@ double AdaptGrid::coarsen_surf_cell(int icell)
 
   for (int i = 0; i < nsurf; i++) {
     if (dim == 2) {
-      if (!(lines[i].mask & sgroupbit)) continue;
+      if (!(lines[csurfs[i]].mask & sgroupbit)) continue;
     } else {
-      if (!(tris[i].mask & sgroupbit)) continue;
+      if (!(tris[csurfs[i]].mask & sgroupbit)) continue;
     }
     if (dim == 2) norm = lines[csurfs[i]].norm;
     else norm = tris[csurfs[i]].norm;
-    if (MathExtra::dot3(norm,sdir) < 0.0) {
+    if (MathExtra::dot3(norm,sdir) <= 0.0) {
       anysurf = 1;
       break;
     }
@@ -1168,6 +1170,8 @@ double AdaptGrid::coarsen_value_cell(int icell)
 
   int jcell;
   double value = 0.0;
+  if (combine == MINIMUM) value = BIG;
+  else if (combine == MAXIMUM) value = -BIG;
 
   for (int i = 0; i < nsplit; i++) {
     jcell = csubs[i];
