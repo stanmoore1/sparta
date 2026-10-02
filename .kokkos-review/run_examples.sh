@@ -9,7 +9,7 @@ for inp in /home/user/sparta/examples/*/in.*; do
   w=$OUT/work/$ex; mkdir -p $w; cp -rn $d/. $w/ 2>/dev/null
   log=$OUT/$ex.$name.log
   (cd $w && timeout 600 $BIN $KARGS -in $name -echo none -screen none -log $log >/dev/null 2>$log.err); rc=$?
-  st=OK
+  st=OK; [ $rc -eq 127 ] && st=NOBIN
   grep -qiE "^ERROR|exception" $log $log.err 2>/dev/null && st=ERROR
   grep -qiE "(^|[ \t])-?nan|[ \t]-?inf([ \t]|$)" $log 2>/dev/null && st="$st,NAN"
   [ $rc -ne 0 ] && st="$st,rc=$rc"
