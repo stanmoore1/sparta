@@ -421,8 +421,14 @@ void ComputeLambdaGridKokkos::reallocate()
   memoryKK->create_kokkos(k_vector_grid,vector_grid,nglocal,"lambda/grid:vector_grid");
   d_vector_grid = k_vector_grid.view_device();
 
-  if (nrho_values > 1)
+  // host arrays are also allocated (freed by ~ComputeLambdaGrid), since the
+  //   host ComputeLambdaGrid::compute_per_grid() runs while prewrap is set
+
+  if (nrho_values > 1) {
     d_array_grid1 = decltype(d_array_grid1)("lambda/grid:array_grid1",nglocal,nrho_values);
+    memory->destroy(array_grid1);
+    memory->create(array_grid1,nglocal,nrho_values,"lambda/grid:array_grid1");
+  }
 
   if (noutputs > 1) {
     memoryKK->destroy_kokkos(k_array_grid,array_grid);
@@ -435,9 +441,19 @@ void ComputeLambdaGridKokkos::reallocate()
   d_tauinv = decltype(d_tauinv)("lambda/grid:tauinv",nglocal,ntotal);
   d_nrho = decltype(d_nrho)("lambda/grid:nrho",nglocal,ntotal);
 
+  memory->destroy(lambda_grid);
+  memory->create(lambda_grid,nglocal,"lambda/grid:lambda_grid");
+  memory->destroy(lambdainv);
+  memory->create(lambdainv,nglocal,ntotal,"lambda/grid:lambdainv");
+  memory->destroy(tauinv);
+  memory->create(tauinv,nglocal,ntotal,"lambda/grid:tauinv");
+
   memory->destroy(nrho);
   memory->create(nrho,nglocal,ntotal,"lambda/grid:nrho");
 
-  if (tempwhich != NONE)
+  if (tempwhich != NONE) {
     d_temp = decltype(d_temp)("lambda/grid:temp",nglocal);
+    memory->destroy(temp);
+    memory->create(temp,nglocal,"lambda/grid:temp");
+  }
 }

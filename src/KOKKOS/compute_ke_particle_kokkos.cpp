@@ -83,11 +83,14 @@ void ComputeKEParticleKokkos::compute_per_particle_kokkos()
   d_particles = particle_kk->k_particles.view_device();
   d_species = particle_kk->k_species.view_device();
   int nlocal = particle->nlocal;
+  mvv2e = update->mvv2e;
 
   // compute kinetic energy for each atom in group
   copymode = 1;
   Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType>(0,nlocal),*this);
   copymode = 0;
+
+  k_vector_particle.modify_device();
 
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
 }
@@ -96,7 +99,6 @@ KOKKOS_INLINE_FUNCTION
 void ComputeKEParticleKokkos::operator()(const int &i) const {
   const int ispecies = d_particles[i].ispecies;
   const double mass = d_species[ispecies].mass;
-  const double mvv2e = update->mvv2e;
   double *v = d_particles[i].v;
   d_vector_particle[i] = 0.5 * mvv2e * mass * (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
