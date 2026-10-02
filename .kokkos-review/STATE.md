@@ -15,3 +15,4 @@
 - Phase 4: run_examples.sh new build t1 -> scratchpad/run_new_t1; baseline (e071055f) build in scratchpad/build_base (git worktree scratchpad/base) for output comparison.
 - Phase 4 results: examples t1 base(e071055f) vs final: 140/141 thermo IDENTICAL; ambi differs (now runs further before pre-existing "Ran out of space" with default react/extra).
   Failures identical in base: ambi (react/extra), cylinder (rc 137 killed), implicit*/jagged.3d* (missing generated data files). Running t4 crash/NaN check -> scratchpad/run_final_t4.
+- t4 run: same outcome set as t1 (no new crashes/NaN). ALL PHASES COMPLETE.
