@@ -85,3 +85,9 @@
 | F-G21-9 | infra | f70f4887 |
 | F-G21-12 | infra | f70f4887 |
 | F-G21-6, F-G21-10 | DEFERRED (see fixes/FX-infra.md) | - |
+| F-G22-1 | grid/surf | 57664eb4 |
+| F-G22-2 | grid/surf | 57664eb4 |
+| F-G22-3 | grid/surf | 57664eb4 |
+| F-G22-4 | grid/surf | 57664eb4 |
+| F-G22-5 | grid/surf | 57664eb4 |
+| F-G18-2-cpu | grid/surf | 57664eb4 |
