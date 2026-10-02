@@ -1,20 +1,3 @@
-diff --git a/cmake/common/set/style_file_glob.cmake b/cmake/common/set/style_file_glob.cmake
-index 5862c096..6e067f25 100644
---- a/cmake/common/set/style_file_glob.cmake
-+++ b/cmake/common/set/style_file_glob.cmake
-@@ -2,10 +2,8 @@ file(GLOB style_files "*.h")
- 
- if (PKG_KOKKOS)
-   if (NOT PKG_FFT)
--    list(FILTER style_files EXCLUDE REGEX ".*fft.*kokkos.*")
--    list(FILTER style_files EXCLUDE REGEX ".*pack.*kokkos.*")
--    list(FILTER style_files EXCLUDE REGEX ".*remap.*kokkos.*")
--    list(REMOVE_ITEM style_files kokkos_base_fft.h)
-+    list(FILTER style_files EXCLUDE REGEX "/[^/]*(fft|pack|remap)[^/]*kokkos[^/]*$")
-+    list(FILTER style_files EXCLUDE REGEX "/kokkos_base_fft\\.h$")
-   endif()
- endif()
- 
 diff --git a/src/FFT/fft2d.cpp b/src/FFT/fft2d.cpp
 index 555f5a42..b1689157 100644
 --- a/src/FFT/fft2d.cpp
@@ -46,95 +29,6 @@ index 555f5a42..b1689157 100644
      if (plan->post_plan == nullptr) return nullptr;
    }
  
-diff --git a/src/KOKKOS/CMakeLists.txt b/src/KOKKOS/CMakeLists.txt
-index 40829532..7c982b1a 100644
---- a/src/KOKKOS/CMakeLists.txt
-+++ b/src/KOKKOS/CMakeLists.txt
-@@ -99,10 +99,8 @@ if(PKG_KOKKOS)
-     CONFIGURE_DEPENDS *.cpp *.hpp *.h)
- 
-   if (NOT PKG_FFT)
--    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*fft.*kokkos.*")
--    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*pack.*kokkos.*")
--    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*remap.*kokkos.*")
--    list(REMOVE_ITEM style_files kokkos_base_fft.h)
-+    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX "/[^/]*(fft|pack|remap)[^/]*kokkos[^/]*$")
-+    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX "/kokkos_base_fft\\.h$")
-   endif()
- 
-   include(${SPARTA_CMAKE_COMMON_DIR}/set/style_file_glob.cmake)
-diff --git a/src/KOKKOS/Install.sh b/src/KOKKOS/Install.sh
-index 3d7c9a7a..a8d40637 100644
---- a/src/KOKKOS/Install.sh
-+++ b/src/KOKKOS/Install.sh
-@@ -27,7 +27,7 @@ if (test $mode = 1) then
-     touch ../accelerator_kokkos.h
-   fi
- elif (test $mode = 0) then
--  if (test $KOKKOS_INSTALLED = 1) then
-+  if (test $KOKKOS_INSTALLED != 0) then
-     touch ../accelerator_kokkos.h
-   fi
- fi
-@@ -237,13 +237,13 @@ if (test $1 = 1 || test $1 = 2) then
- elif (test $1 = 0) then
- 
-   if (test -e ../Makefile.package) then
--    $SED -i -e 's/[^ \t]*kokkos[^ \t]* //g' ../Makefile.package
--    $SED -i -e 's/[^ \t]*KOKKOS[^ \t]* //g' ../Makefile.package
-+    sed -i -e 's/[^ \t]*kokkos[^ \t]* //g' ../Makefile.package
-+    sed -i -e 's/[^ \t]*KOKKOS[^ \t]* //g' ../Makefile.package
-   fi
- 
-   if (test -e ../Makefile.package.settings) then
--    $SED -i -e '/CXX\ =\ \$(CC)/d' ../Makefile.package.settings
--    $SED -i -e '/^include.*kokkos.*$/d' ../Makefile.package.settings
-+    sed -i -e '/CXX\ =\ \$(CC)/d' ../Makefile.package.settings
-+    sed -i -e '/^include.*kokkos.*$/d' ../Makefile.package.settings
-   fi
- 
- fi
-diff --git a/src/KOKKOS/comm_kokkos.cpp b/src/KOKKOS/comm_kokkos.cpp
-index 469ca5c1..2fab19f5 100644
---- a/src/KOKKOS/comm_kokkos.cpp
-+++ b/src/KOKKOS/comm_kokkos.cpp
-@@ -171,8 +171,28 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d
-   nsend = h_nsend();
- 
-   // compress my list of particles
-+  // EXACT build has no ParticleKokkos::compress_migrate() override,
-+  //   so compress on the host, matching Comm::migrate_particles()
-+
-+#ifdef SPARTA_KOKKOS_EXACT
-+  particle_kk->sync(Host,PARTICLE_MASK);
-+  if (ncustom) particle_kk->sync(Host,CUSTOM_MASK);
-+
-+  int ascending = 1;
-+  for (int i = 1; i < nmigrate; i++)
-+    if (plist[i] <= plist[i-1]) {
-+      ascending = 0;
-+      break;
-+    }
-+
-+  if (ascending) particle->compress_migrate(nmigrate,plist);
-+  else particle->compress_reactions(nmigrate,plist);
- 
-+  particle_kk->modify(Host,PARTICLE_MASK);
-+  if (ncustom) particle_kk->modify(Host,CUSTOM_MASK);
-+#else
-   particle->compress_migrate(nmigrate,plist);
-+#endif
-   int ncompress = particle->nlocal;
- 
-   // create or augment irregular communication plan
-@@ -195,6 +215,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d
-   // else receive into rbuf, unpack particles one by one via unpack_custom()
- 
-   particle_kk->sync(Device,PARTICLE_MASK);
-+  if (ncustom) particle_kk->sync(Device,CUSTOM_MASK);
-   d_particles = particle_kk->k_particles.view_device();
- 
-   if (gpu_aware_flag && !ncustom) {
 diff --git a/src/KOKKOS/compute_fft_grid_kokkos.cpp b/src/KOKKOS/compute_fft_grid_kokkos.cpp
 index c2620b76..0aac246d 100644
 --- a/src/KOKKOS/compute_fft_grid_kokkos.cpp
@@ -706,95 +600,6 @@ index 979e833b..e767a6cb 100644
    }
  
  };
-diff --git a/src/KOKKOS/kokkos.cpp b/src/KOKKOS/kokkos.cpp
-index e78dc8b4..c3371cc0 100644
---- a/src/KOKKOS/kokkos.cpp
-+++ b/src/KOKKOS/kokkos.cpp
-@@ -69,6 +69,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
- #endif
-       if (iarg+2 > narg) error->all(FLERR,"Invalid Kokkos command-line args");
-       ngpus = atoi(arg[iarg+1]);
-+      if (ngpus <= 0) error->all(FLERR,"Invalid Kokkos command-line args");
- 
-       int skip_gpu = 9999;
-       if (iarg+2 < narg && isdigit(arg[iarg+2][0])) {
-@@ -122,6 +123,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
- 
-     } else if (strcmp(arg[iarg],"t") == 0 ||
-                strcmp(arg[iarg],"threads") == 0) {
-+      if (iarg+2 > narg) error->all(FLERR,"Invalid Kokkos command-line args");
-       nthreads = atoi(arg[iarg+1]);
-       iarg += 2;
- 
-diff --git a/src/KOKKOS/kokkos_type.h b/src/KOKKOS/kokkos_type.h
-index f4707048..6bb1a8aa 100644
---- a/src/KOKKOS/kokkos_type.h
-+++ b/src/KOKKOS/kokkos_type.h
-@@ -189,12 +189,12 @@ struct ExecutionSpaceFromDevice<Kokkos::Cuda> {
- };
- #elif defined(KOKKOS_ENABLE_HIP)
- template<>
--struct ExecutionSpaceFromDevice<Kokkos::Experimental::HIP> {
-+struct ExecutionSpaceFromDevice<Kokkos::HIP> {
-   static const SPARTA_NS::ExecutionSpace space = SPARTA_NS::Device;
- };
- #elif defined(KOKKOS_ENABLE_SYCL)
- template<>
--struct ExecutionSpaceFromDevice<Kokkos::Experimental::SYCL> {
-+struct ExecutionSpaceFromDevice<Kokkos::SYCL> {
-   static const SPARTA_NS::ExecutionSpace space = SPARTA_NS::Device;
- };
- #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
-@@ -208,9 +208,9 @@ struct ExecutionSpaceFromDevice<Kokkos::Experimental::OpenMPTarget> {
- #if defined(KOKKOS_ENABLE_CUDA)
- typedef Kokkos::CudaHostPinnedSpace SPAPinnedHostType;
- #elif defined(KOKKOS_ENABLE_HIP)
--typedef Kokkos::Experimental::HIPHostPinnedSpace SPAPinnedHostType;
-+typedef Kokkos::HIPHostPinnedSpace SPAPinnedHostType;
- #elif defined(KOKKOS_ENABLE_SYCL)
--typedef Kokkos::Experimental::SYCLHostUSMSpace SPAPinnedHostType;
-+typedef Kokkos::SYCLHostUSMSpace SPAPinnedHostType;
- #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
- typedef Kokkos::Serial SPAPinnedHostType;
- #endif
-@@ -250,22 +250,22 @@ struct AtomicDup<-1,Kokkos::Cuda> {
- };
- #elif defined(KOKKOS_ENABLE_HIP)
- template<>
--struct AtomicDup<1,Kokkos::Experimental::HIP> {
-+struct AtomicDup<1,Kokkos::HIP> {
-   using value = Kokkos::Experimental::ScatterAtomic;
- };
- 
- template<>
--struct AtomicDup<-1,Kokkos::Experimental::HIP> {
-+struct AtomicDup<-1,Kokkos::HIP> {
-   using value = Kokkos::Experimental::ScatterAtomic;
- };
- #elif defined(KOKKOS_ENABLE_SYCL)
- template<>
--struct AtomicDup<1,Kokkos::Experimental::SYCL> {
-+struct AtomicDup<1,Kokkos::SYCL> {
-   using value = Kokkos::Experimental::ScatterAtomic;
- };
- 
- template<>
--struct AtomicDup<-1,Kokkos::Experimental::SYCL> {
-+struct AtomicDup<-1,Kokkos::SYCL> {
-   using value = Kokkos::Experimental::ScatterAtomic;
- };
- #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
-@@ -493,8 +493,8 @@ namespace SPARTA_NS {
- 
-   typedef Kokkos::
-     DualView<Grid::ParentLevel*, DeviceType::array_layout, DeviceType> tdual_plevel_1d;
--  typedef tdual_pcell_1d::t_dev t_plevel_1d;
--  typedef tdual_pcell_1d::t_host t_host_plevel_1d;
-+  typedef tdual_plevel_1d::t_dev t_plevel_1d;
-+  typedef tdual_plevel_1d::t_host t_host_plevel_1d;
- 
-   typedef Kokkos::
-     DualView<Surf::Line*, DeviceType::array_layout, DeviceType> tdual_line_1d;
 diff --git a/src/KOKKOS/pack2d_kokkos.h b/src/KOKKOS/pack2d_kokkos.h
 index 2cc7d598..4f16ddf1 100644
 --- a/src/KOKKOS/pack2d_kokkos.h
@@ -880,6 +685,44 @@ index b076789d..2ed4c3e3 100644
      }
    }
  }
+diff --git a/src/compute_gas_reaction_grid.cpp b/src/compute_gas_reaction_grid.cpp
+index 4ef42414..ca1b2eaa 100644
+--- a/src/compute_gas_reaction_grid.cpp
++++ b/src/compute_gas_reaction_grid.cpp
+@@ -45,6 +45,7 @@ ComputeGasReactionGrid::ComputeGasReactionGrid(SPARTA *sparta, int narg, char **
+ 
+   selectlist = NULL;
+   reaction2col = NULL;
++  nlist_define = react->nlist;
+ 
+   if (strcmp(arg[4],"all") == 0) {
+     if (narg != 5) error->all(FLERR,"Illegal compute gas/reaction/grid command");
+@@ -113,6 +114,13 @@ ComputeGasReactionGrid::~ComputeGasReactionGrid()
+ 
+ void ComputeGasReactionGrid::init()
+ {
++  // ncol and reaction2col were sized from react->nlist at construction,
++  //   a re-issued react command would index them out of bounds
++
++  if (mode != ALL && (react == NULL || react->nlist != nlist_define))
++    error->all(FLERR,"Compute gas/reaction/grid reactions changed "
++               "since compute was defined");
++
+   reallocate();
+ }
+ 
+diff --git a/src/compute_gas_reaction_grid.h b/src/compute_gas_reaction_grid.h
+index 77c8b2bb..16fd36dc 100644
+--- a/src/compute_gas_reaction_grid.h
++++ b/src/compute_gas_reaction_grid.h
+@@ -41,6 +41,7 @@ class ComputeGasReactionGrid : public Compute {
+  protected:
+   int groupbit,imix,mode,ncol;
+   int *selectlist,*reaction2col;
++  int nlist_define;          // react->nlist when compute was defined
+ 
+   int nglocal;
+   Grid::ChildInfo *cinfo;    // local copy
 diff --git a/src/surf_comm.cpp b/src/surf_comm.cpp
 index 5b995327..88222721 100644
 --- a/src/surf_comm.cpp
