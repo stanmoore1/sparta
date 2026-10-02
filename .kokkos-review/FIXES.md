@@ -57,3 +57,11 @@
 | F-G16-7 | computes | cd229e72 |
 | F-G16-8 | computes | cd229e72 |
 | F-G16-9 | computes | cd229e72 |
+| F-G00-3 | fix_ave_*_kokkos | 088431eb |
+| F-G00-4 | fix_ave_*_kokkos | 088431eb |
+| F-G00-12 | fix_ave_*_kokkos | 088431eb |
+| F-G00-20 | fix_ave_*_kokkos | 088431eb |
+| F-G14-1 | fix_ave_*_kokkos | 088431eb |
+| F-G14-5 | fix_ave_*_kokkos | 088431eb |
+| F-G14-6 | fix_ave_*_kokkos | 088431eb |
+| G12x-F-G14-1 | fix_ave_*_kokkos | 088431eb |
