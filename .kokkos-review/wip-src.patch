@@ -1,390 +1,140 @@
-diff --git a/src/KOKKOS/collide_vss_kokkos.cpp b/src/KOKKOS/collide_vss_kokkos.cpp
-index eaa2864e..d4d18d82 100644
---- a/src/KOKKOS/collide_vss_kokkos.cpp
-+++ b/src/KOKKOS/collide_vss_kokkos.cpp
-@@ -319,6 +319,10 @@ void CollideVSSKokkos::init()
-     k_vremax_initial.modify_host();
-     k_vremax_initial.sync_device();
-     d_vremax_initial = k_vremax_initial.view_device();
-+
-+    // new vremax,remain views hold no valid data, force reset_vremax() below
-+
-+    vre_first = 1;
+diff --git a/cmake/common/set/style_file_glob.cmake b/cmake/common/set/style_file_glob.cmake
+index 5862c096..6e067f25 100644
+--- a/cmake/common/set/style_file_glob.cmake
++++ b/cmake/common/set/style_file_glob.cmake
+@@ -2,10 +2,8 @@ file(GLOB style_files "*.h")
+ 
+ if (PKG_KOKKOS)
+   if (NOT PKG_FFT)
+-    list(FILTER style_files EXCLUDE REGEX ".*fft.*kokkos.*")
+-    list(FILTER style_files EXCLUDE REGEX ".*pack.*kokkos.*")
+-    list(FILTER style_files EXCLUDE REGEX ".*remap.*kokkos.*")
+-    list(REMOVE_ITEM style_files kokkos_base_fft.h)
++    list(FILTER style_files EXCLUDE REGEX "/[^/]*(fft|pack|remap)[^/]*kokkos[^/]*$")
++    list(FILTER style_files EXCLUDE REGEX "/kokkos_base_fft\\.h$")
+   endif()
+ endif()
+ 
+diff --git a/src/FFT/fft2d.cpp b/src/FFT/fft2d.cpp
+index 555f5a42..b1689157 100644
+--- a/src/FFT/fft2d.cpp
++++ b/src/FFT/fft2d.cpp
+@@ -244,7 +244,7 @@ struct fft_plan_2d *fft_2d_create_plan(
+     plan->pre_plan =
+       remap_2d_create_plan(comm,in_ilo,in_ihi,in_jlo,in_jhi,
+                            first_ilo,first_ihi,first_jlo,first_jhi,
+-                           FFT_PRECISION,0,0,2);
++                           2,0,0,FFT_PRECISION);
+     if (plan->pre_plan == nullptr) return nullptr;
    }
  
-   // device copy of species-to-group mapping for group collisions
-@@ -376,8 +380,13 @@ void CollideVSSKokkos::init()
+@@ -279,7 +279,7 @@ struct fft_plan_2d *fft_2d_create_plan(
+   plan->mid_plan =
+     remap_2d_create_plan(comm,first_ilo,first_ihi,first_jlo,first_jhi,
+                          second_ilo,second_ihi,second_jlo,second_jhi,
+-                         FFT_PRECISION,1,0,2);
++                         2,1,0,FFT_PRECISION);
+   if (plan->mid_plan == nullptr) return nullptr;
  
-     int ifix;
-     for (ifix = 0; ifix < modify->nfix; ifix++)
--      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
-+      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0 ||
-+          strcmp(modify->fix[ifix]->style,"ambipolar/kk") == 0) break;
-+    if (ifix == modify->nfix)
-+      error->all(FLERR,"Collision ambipolar without fix ambipolar");
-     FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
-+    if (!afix->kokkos_flag)
-+      error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
-     ambispecies = afix->especies;
-     FixAmbipolarKokkos *afix_kk = (FixAmbipolarKokkos *) afix;
-     d_ions = afix_kk->d_ions;
-@@ -585,6 +594,10 @@ void CollideVSSKokkos::collisions()
- 
-   if (ngas_tally) finish_gas_tally();
- 
-+  // warn once per run about an invalid TCE reaction probability
-+
-+  if (react) ((ReactBirdKokkos*) react)->check_prob_warn();
-+
-   // remove any particles deleted in chemistry reactions
-   // if particles deleted/created by chemistry, particles are no longer sorted
- 
-@@ -795,7 +808,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
- 
-   if (react) {
-     double extra_factor = 1.0;
--    if (sparta->kokkos->react_retry_flag)
-+    if (!sparta->kokkos->react_retry_flag)
-       extra_factor = sparta->kokkos->react_extra;
- 
-     // form the product in double and check it before it becomes an int,
-@@ -944,6 +957,8 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
-         d_plist = {};
-         Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-         d_plist = grid_kk->d_plist;
-+        if (NEARCP)
-+          MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount);
-       }
- 
-       auto nlocal_new = h_nlocal();
-@@ -1001,7 +1016,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
+   // 1d FFTs along slow axis
+@@ -303,7 +303,7 @@ struct fft_plan_2d *fft_2d_create_plan(
+     plan->post_plan =
+       remap_2d_create_plan(comm,second_jlo,second_jhi,second_ilo,second_ihi,
+                            out_jlo,out_jhi,out_ilo,out_ihi,
+-                           FFT_PRECISION,(permute+1)%2,0,2);
++                           2,(permute+1)%2,0,FFT_PRECISION);
+     if (plan->post_plan == nullptr) return nullptr;
    }
  
-   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
--  if (volume == 0.0) d_error_flag() = 1;
-+  if (volume == 0.0) {
-+    d_error_flag() = 1;
-+    return;
-+  }
+diff --git a/src/KOKKOS/CMakeLists.txt b/src/KOKKOS/CMakeLists.txt
+index 40829532..7c982b1a 100644
+--- a/src/KOKKOS/CMakeLists.txt
++++ b/src/KOKKOS/CMakeLists.txt
+@@ -99,10 +99,8 @@ if(PKG_KOKKOS)
+     CONFIGURE_DEPENDS *.cpp *.hpp *.h)
  
-   struct State precoln;       // state before collision
-   struct State postcoln;      // state after collision
-@@ -1134,7 +1152,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
-         d_dellist(ndelete) = d_plist(icell,j);
-       } else {
-         d_retry() = 1;
--        d_maxdelete() += DELTADELETE;
-+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-         rand_pool.free_state(rand_gen);
-         return;
-       }
-@@ -1154,7 +1172,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
-         d_plist(icell,np++) = index_kpart;
-       } else {
-         d_retry() = 1;
--        d_maxcellcount() += DELTACELLCOUNT;
-+        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-         rand_pool.free_state(rand_gen);
-         return;
-       }
-@@ -1227,7 +1245,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
+   if (NOT PKG_FFT)
+-    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*fft.*kokkos.*")
+-    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*pack.*kokkos.*")
+-    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX ".*remap.*kokkos.*")
+-    list(REMOVE_ITEM style_files kokkos_base_fft.h)
++    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX "/[^/]*(fft|pack|remap)[^/]*kokkos[^/]*$")
++    list(FILTER SPARTA_PKG_KOKKOS_SRC_FILES EXCLUDE REGEX "/kokkos_base_fft\\.h$")
+   endif()
  
-   if (react) {
-     double extra_factor = 1.0;
--    if (sparta->kokkos->react_retry_flag)
-+    if (!sparta->kokkos->react_retry_flag)
-       extra_factor = sparta->kokkos->react_extra;
+   include(${SPARTA_CMAKE_COMMON_DIR}/set/style_file_glob.cmake)
+diff --git a/src/KOKKOS/Install.sh b/src/KOKKOS/Install.sh
+index 3d7c9a7a..a8d40637 100644
+--- a/src/KOKKOS/Install.sh
++++ b/src/KOKKOS/Install.sh
+@@ -27,7 +27,7 @@ if (test $mode = 1) then
+     touch ../accelerator_kokkos.h
+   fi
+ elif (test $mode = 0) then
+-  if (test $KOKKOS_INSTALLED = 1) then
++  if (test $KOKKOS_INSTALLED != 0) then
+     touch ../accelerator_kokkos.h
+   fi
+ fi
+@@ -237,13 +237,13 @@ if (test $1 = 1 || test $1 = 2) then
+ elif (test $1 = 0) then
  
-     // form the product in double and check it before it becomes an int,
-@@ -1432,7 +1450,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
-     d_nn_last_partner(icell,ii) = 0;
+   if (test -e ../Makefile.package) then
+-    $SED -i -e 's/[^ \t]*kokkos[^ \t]* //g' ../Makefile.package
+-    $SED -i -e 's/[^ \t]*KOKKOS[^ \t]* //g' ../Makefile.package
++    sed -i -e 's/[^ \t]*kokkos[^ \t]* //g' ../Makefile.package
++    sed -i -e 's/[^ \t]*KOKKOS[^ \t]* //g' ../Makefile.package
+   fi
  
-   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
--  if (volume == 0.0) d_error_flag() = 1;
-+  if (volume == 0.0) {
-+    d_error_flag() = 1;
-+    return;
-+  }
+   if (test -e ../Makefile.package.settings) then
+-    $SED -i -e '/CXX\ =\ \$(CC)/d' ../Makefile.package.settings
+-    $SED -i -e '/^include.*kokkos.*$/d' ../Makefile.package.settings
++    sed -i -e '/CXX\ =\ \$(CC)/d' ../Makefile.package.settings
++    sed -i -e '/^include.*kokkos.*$/d' ../Makefile.package.settings
+   fi
  
-   struct State precoln;       // state before collision
-   struct State postcoln;      // state after collision
-@@ -1568,7 +1589,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
-         d_dellist(ndelete) = d_plist(icell,j);
-       } else {
-         d_retry() = 1;
--        d_maxdelete() += DELTADELETE;
-+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-         rand_pool.free_state(rand_gen);
-         return;
-       }
-@@ -1588,7 +1609,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
-         d_plist(icell,np++) = index_kpart;
-       } else {
-         d_retry() = 1;
--        d_maxcellcount() += DELTACELLCOUNT;
-+        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-         rand_pool.free_state(rand_gen);
-         return;
-       }
-@@ -1971,7 +1992,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
+ fi
+diff --git a/src/KOKKOS/comm_kokkos.cpp b/src/KOKKOS/comm_kokkos.cpp
+index 469ca5c1..2fab19f5 100644
+--- a/src/KOKKOS/comm_kokkos.cpp
++++ b/src/KOKKOS/comm_kokkos.cpp
+@@ -171,8 +171,28 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d
+   nsend = h_nsend();
  
-   if (react) {
-     double extra_factor = 1.0;
--    if (sparta->kokkos->react_retry_flag)
-+    if (!sparta->kokkos->react_retry_flag)
-       extra_factor = sparta->kokkos->react_extra;
- 
-     if (maxdelete*extra_factor > MAXSMALLINT)
-@@ -2158,7 +2179,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
-   if (np <= 1) return;
- 
-   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
--  if (volume == 0.0) d_error_flag() = 1;
-+  if (volume == 0.0) {
-+    d_error_flag() = 1;
-+    return;
-+  }
- 
-   // build per-group particle lists for this cell
-   // d_gcount(icell,g) = # of particles in group g
-@@ -2336,7 +2360,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
-             d_dellist(ndelete) = d_plist(icell,jj);
-           } else {
-             d_retry() = 1;
--            d_maxdelete() += DELTADELETE;
-+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-             rand_pool.free_state(rand_gen);
-             return;
-           }
-@@ -2384,7 +2408,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
-             np++;
-           } else {
-             d_retry() = 1;
--            d_maxcellcount() += DELTACELLCOUNT;
-+            Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-             rand_pool.free_state(rand_gen);
-             return;
-           }
-@@ -2476,7 +2500,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
-   //   sizing for reaction-created particles and deletions is react-specific
- 
-   double extra_factor = 1.0;
--  if (react && sparta->kokkos->react_retry_flag)
-+  if (react && !sparta->kokkos->react_retry_flag)
-     extra_factor = sparta->kokkos->react_extra;
- 
-   maxcellcount = particle_kk->get_maxcellcount();
-@@ -2708,7 +2732,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-   if (np <= 1) return;
- 
-   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
--  if (volume == 0.0) d_error_flag() = 1;
-+  if (volume == 0.0) {
-+    d_error_flag() = 1;
-+    return;
-+  }
- 
-   // build the per-group particle lists for this cell and the electron list,
-   //   in one pass over plist, exactly as collide.cpp:1792-1824 does
-@@ -2922,7 +2949,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-               np++;
-             } else {
-               d_retry() = 1;
--              d_maxcellcount() += DELTACELLCOUNT;
-+              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-               rand_pool.free_state(rand_gen);
-               return;
-             }
-@@ -2942,14 +2969,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-                 d_dellist(ndelete) = index_kpart;
-               } else {
-                 d_retry() = 1;
--                d_maxdelete() += DELTADELETE;
-+                Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-                 rand_pool.free_state(rand_gen);
-                 return;
-               }
- #endif
-             } else {
-               d_retry() = 1;
--              d_maxelectron() += DELTACELLCOUNT;
-+              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
-               rand_pool.free_state(rand_gen);
-               return;
-             }
-@@ -2985,7 +3012,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-               jpart = NULL;
-             } else {
-               d_retry() = 1;
--              d_maxelectron() += DELTACELLCOUNT;
-+              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
-               rand_pool.free_state(rand_gen);
-               return;
-             }
-@@ -3020,7 +3047,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-               np++;
-             } else {
-               d_retry() = 1;
--              d_maxcellcount() += DELTACELLCOUNT;
-+              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-               rand_pool.free_state(rand_gen);
-               return;
-             }
-@@ -3047,7 +3074,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY,
-             d_dellist(ndelete) = d_plist(icell,jj);
-           } else {
-             d_retry() = 1;
--            d_maxdelete() += DELTADELETE;
-+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-             rand_pool.free_state(rand_gen);
-             return;
-           }
-@@ -3151,7 +3178,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
-   // sizing for reaction-created particles/deletions is react-specific.
- 
-   double extra_factor = 1.0;
--  if (react && sparta->kokkos->react_retry_flag)
-+  if (react && !sparta->kokkos->react_retry_flag)
-     extra_factor = sparta->kokkos->react_extra;
- 
-   maxcellcount = particle_kk->get_maxcellcount();
-@@ -3380,7 +3407,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-   if (np <= 1) return;
- 
-   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
--  if (volume == 0.0) d_error_flag() = 1;
-+  if (volume == 0.0) {
-+    d_error_flag() = 1;
-+    return;
-+  }
- 
-   struct State precoln;       // state before collision
-   struct State postcoln;      // state after collision
-@@ -3482,9 +3512,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-       if (rand_gen.drand() > recomb_boost_inverse)
-         //react->recomb_species = -1;
-         recomb_species = -1;
--      else if (np <= 2)
-+      else if (np == 1)
-         //react->recomb_species = -1;
-         recomb_species = -1;
-+      else if (np == 2 && jpart->ispecies != ambispecies)
-+        recomb_species = -1;
-       else {
-         int k = np * rand_gen.drand();
-         while (k == i || k == j) k = np * rand_gen.drand();
-@@ -3566,7 +3598,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-           d_plist(icell,np++) = index_kpart;
-         } else {
-           d_retry() = 1;
--          d_maxcellcount() += DELTACELLCOUNT;
-+          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-           rand_pool.free_state(rand_gen);
-           return;
-         }
-@@ -3587,14 +3619,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-             d_dellist(ndelete) = index_kpart;
-           } else {
-             d_retry() = 1;
--            d_maxdelete() += DELTADELETE;
-+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-             rand_pool.free_state(rand_gen);
-             return;
-           }
- #endif
-         } else {
-           d_retry() = 1;
--          d_maxelectron() += DELTACELLCOUNT;
-+          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
-           rand_pool.free_state(rand_gen);
-           return;
-         }
-@@ -3625,7 +3657,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-           jpart = NULL;
-         } else {
-           d_retry() = 1;
--          d_maxelectron() += DELTACELLCOUNT;
-+          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
-           rand_pool.free_state(rand_gen);
-           return;
-         }
-@@ -3653,7 +3685,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-           d_plist(icell,np++) = index;
-         } else {
-           d_retry() = 1;
--          d_maxcellcount() += DELTACELLCOUNT;
-+          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
-           rand_pool.free_state(rand_gen);
-           return;
-         }
-@@ -3672,7 +3704,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
-         d_dellist(ndelete) = d_plist(icell,j);
-       } else {
-         d_retry() = 1;
--        d_maxdelete() += DELTADELETE;
-+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
-         rand_pool.free_state(rand_gen);
-         return;
-       }
-@@ -3840,6 +3872,7 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
- 
-   double vre = vro*d_prefactor(ispecies,jspecies);
-   d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
-+  if (d_vremax(icell,igroup,jgroup) == 0.0) return 0;
-   if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
-   precoln.vr2 = vr2;
-   return 1;
-@@ -5158,6 +5191,16 @@ void CollideVSSKokkos::backup()
-     Kokkos::deep_copy(d_velambi_backup,d_velambi);
-   }
- 
-+  // discrete vib mode levels are rewritten in place by the collision kernel
+   // compress my list of particles
++  // EXACT build has no ParticleKokkos::compress_migrate() override,
++  //   so compress on the host, matching Comm::migrate_particles()
 +
-+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
-+    ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
-+    auto h_ewhich = particle_kk->k_ewhich.view_host();
-+    auto d_vibmode = particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device();
-+    d_vibmode_backup = decltype(d_vibmode_backup)(Kokkos::view_alloc("collide:vibmode_backup",Kokkos::WithoutInitializing),d_vibmode.extent(0),d_vibmode.extent(1));
-+    Kokkos::deep_copy(d_vibmode_backup,d_vibmode);
-+  }
++#ifdef SPARTA_KOKKOS_EXACT
++  particle_kk->sync(Host,PARTICLE_MASK);
++  if (ncustom) particle_kk->sync(Host,CUSTOM_MASK);
 +
-   if (react) {
-     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
-     react_kk->backup();
-@@ -5198,6 +5241,12 @@ void CollideVSSKokkos::restore()
-     d_velambi = k_edarray.view_host()[h_ewhich[index_velambi]].k_view.view_device();
-   }
- 
-+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
-+    auto h_ewhich = particle_kk->k_ewhich.view_host();
-+    Kokkos::deep_copy(particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device(),d_vibmode_backup);
-+    k_eiarray = particle_kk->k_eiarray;
-+  }
++  int ascending = 1;
++  for (int i = 1; i < nmigrate; i++)
++    if (plist[i] <= plist[i-1]) {
++      ascending = 0;
++      break;
++    }
 +
-   if (react) {
-     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
-     react_kk->restore();
-@@ -5226,6 +5275,8 @@ void CollideVSSKokkos::restore()
-     d_ionambi_backup = {};
-     d_velambi_backup = {};
-   }
-+
-+  d_vibmode_backup = {};
- }
++  if (ascending) particle->compress_migrate(nmigrate,plist);
++  else particle->compress_reactions(nmigrate,plist);
  
- /* ----------------------------------------------------------------------
-diff --git a/src/KOKKOS/collide_vss_kokkos.h b/src/KOKKOS/collide_vss_kokkos.h
-index 5cd94fec..d994d9a9 100644
---- a/src/KOKKOS/collide_vss_kokkos.h
-+++ b/src/KOKKOS/collide_vss_kokkos.h
-@@ -465,6 +465,7 @@ class CollideVSSKokkos : public CollideVSS {
-   DAT::t_int_2d d_nn_last_partner_backup;
-   DAT::t_int_1d d_ionambi_backup;
-   DAT::t_float_2d_lr d_velambi_backup;
-+  DAT::t_int_2d_lr d_vibmode_backup;
-   RanKnuth* random_backup;
- };
++  particle_kk->modify(Host,PARTICLE_MASK);
++  if (ncustom) particle_kk->modify(Host,CUSTOM_MASK);
++#else
+   particle->compress_migrate(nmigrate,plist);
++#endif
+   int ncompress = particle->nlocal;
  
+   // create or augment irregular communication plan
+@@ -195,6 +215,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d
+   // else receive into rbuf, unpack particles one by one via unpack_custom()
+ 
+   particle_kk->sync(Device,PARTICLE_MASK);
++  if (ncustom) particle_kk->sync(Device,CUSTOM_MASK);
+   d_particles = particle_kk->k_particles.view_device();
+ 
+   if (gpu_aware_flag && !ncustom) {
 diff --git a/src/KOKKOS/compute_fft_grid_kokkos.cpp b/src/KOKKOS/compute_fft_grid_kokkos.cpp
 index c2620b76..0aac246d 100644
 --- a/src/KOKKOS/compute_fft_grid_kokkos.cpp
@@ -451,7 +201,7 @@ index c2620b76..0aac246d 100644
  
      // ------------------------------
 diff --git a/src/KOKKOS/fft2d_kokkos.cpp b/src/KOKKOS/fft2d_kokkos.cpp
-index 09512785..361e7645 100644
+index 09512785..3dc07447 100644
 --- a/src/KOKKOS/fft2d_kokkos.cpp
 +++ b/src/KOKKOS/fft2d_kokkos.cpp
 @@ -152,9 +152,9 @@ public:
@@ -512,7 +262,7 @@ index 09512785..361e7645 100644
      Kokkos::parallel_for(total/length,f);
      d_data = d_tmp;
    #endif
-@@ -302,9 +309,9 @@ void FFT2dKokkos<DeviceType>::fft_2d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
+@@ -302,11 +309,15 @@ void FFT2dKokkos<DeviceType>::fft_2d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
    #else
      d_tmp = typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_2d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
      if (flag == 1)
@@ -523,8 +273,51 @@ index 09512785..361e7645 100644
 +      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length,total/length);
      Kokkos::parallel_for(total/length,f);
      d_data = d_tmp;
++    // KISS is out-of-place: without a post-remap, result must still land in out
++    if (!plan->post_plan)
++      Kokkos::deep_copy(Kokkos::subview(d_out,std::make_pair(0,total)),
++                        Kokkos::subview(d_tmp,std::make_pair(0,total)));
    #endif
-@@ -752,16 +759,16 @@ void FFT2dKokkos<DeviceType>::fft_2d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
+ 
+   // post-remap to put data in output format if needed
+@@ -437,7 +448,7 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
+   plan->mid_plan =
+     remapKK->remap_2d_create_plan_kokkos(comm,first_ilo,first_ihi,first_jlo,first_jhi,
+                                          second_ilo,second_ihi,second_jlo,second_jhi,
+-                                         FFT_PRECISION,1,0,2,
++                                         2,1,0,FFT_PRECISION,
+                                          usecollective,usegpu_aware);
+   if (plan->mid_plan == nullptr) return nullptr;
+ 
+@@ -460,7 +471,7 @@ struct fft_plan_2d_kokkos<DeviceType>* FFT2dKokkos<DeviceType>::fft_2d_create_pl
+     plan->post_plan =
+       remapKK->remap_2d_create_plan_kokkos(comm,second_jlo,second_jhi,second_ilo,second_ihi,
+                   out_jlo,out_jhi,out_ilo,out_ihi,
+-                  FFT_PRECISION,(permute+1)%2,0,2,
++                  2,(permute+1)%2,0,FFT_PRECISION,
+                   usecollective,usegpu_aware);
+       if (plan->post_plan == nullptr) return nullptr;
+   }
+@@ -667,10 +678,15 @@ void FFT2dKokkos<DeviceType>::fft_2d_destroy_plan_kokkos(struct fft_plan_2d_kokk
+   FFTW_API(destroy_plan)(plan->plan_fast_forward);
+   FFTW_API(destroy_plan)(plan->plan_fast_backward);
+ 
+-#if defined (FFT_KOKKOS_FFTW_THREADS)
+-  FFTW_API(cleanup_threads)();
+-#endif
++  // no FFTW_API(cleanup_threads)() here: it would invalidate the plans of
++  // any other live FFT2dKokkos/FFT3dKokkos object (CPU FFT never calls it)
+ 
++#elif defined(FFT_KOKKOS_CUFFT)
++  cufftDestroy(plan->plan_fast);
++  cufftDestroy(plan->plan_slow);
++#elif defined(FFT_KOKKOS_HIPFFT)
++  hipfftDestroy(plan->plan_fast);
++  hipfftDestroy(plan->plan_slow);
+ #elif defined (FFT_KOKKOS_KISS)
+   delete kissfftKK;
+ #endif
+@@ -752,16 +768,16 @@ void FFT2dKokkos<DeviceType>::fft_2d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
      typename FFT_AT::t_FFT_DATA_1d d_tmp =
       typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_2d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
    if (flag == 1) {
@@ -546,7 +339,7 @@ index 09512785..361e7645 100644
    }
  #endif
 diff --git a/src/KOKKOS/fft3d_kokkos.cpp b/src/KOKKOS/fft3d_kokkos.cpp
-index 6124c22b..775acfc9 100644
+index 6124c22b..b4688c17 100644
 --- a/src/KOKKOS/fft3d_kokkos.cpp
 +++ b/src/KOKKOS/fft3d_kokkos.cpp
 @@ -154,9 +154,9 @@ public:
@@ -619,7 +412,7 @@ index 6124c22b..775acfc9 100644
      Kokkos::parallel_for(total/length,f);
      d_data = d_tmp;
    #endif
-@@ -353,9 +360,9 @@ void FFT3dKokkos<DeviceType>::fft_3d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
+@@ -353,11 +360,15 @@ void FFT3dKokkos<DeviceType>::fft_3d_kokkos(typename FFT_AT::t_FFT_DATA_1d d_in,
    #else
      d_tmp = typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_3d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
      if (flag == 1)
@@ -630,8 +423,35 @@ index 6124c22b..775acfc9 100644
 +      f = kiss_fft_functor<DeviceType>(d_data,d_tmp,plan->cfg_slow_backward,length,total/length);
      Kokkos::parallel_for(total/length,f);
      d_data = d_tmp;
++    // KISS is out-of-place: without a post-remap, result must still land in out
++    if (!plan->post_plan)
++      Kokkos::deep_copy(Kokkos::subview(d_out,std::make_pair(0,total)),
++                        Kokkos::subview(d_tmp,std::make_pair(0,total)));
    #endif
-@@ -961,22 +968,22 @@ void FFT3dKokkos<DeviceType>::fft_3d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
+ 
+   // post-remap to put data in output format if needed
+@@ -844,10 +855,17 @@ void FFT3dKokkos<DeviceType>::fft_3d_destroy_plan_kokkos(struct fft_plan_3d_kokk
+   FFTW_API(destroy_plan)(plan->plan_fast_forward);
+   FFTW_API(destroy_plan)(plan->plan_fast_backward);
+ 
+-#if defined (FFT_KOKKOS_FFTW_THREADS)
+-  FFTW_API(cleanup_threads)();
+-#endif
++  // no FFTW_API(cleanup_threads)() here: it would invalidate the plans of
++  // any other live FFT2dKokkos/FFT3dKokkos object (CPU FFT never calls it)
+ 
++#elif defined(FFT_KOKKOS_CUFFT)
++  cufftDestroy(plan->plan_fast);
++  cufftDestroy(plan->plan_mid);
++  cufftDestroy(plan->plan_slow);
++#elif defined(FFT_KOKKOS_HIPFFT)
++  hipfftDestroy(plan->plan_fast);
++  hipfftDestroy(plan->plan_mid);
++  hipfftDestroy(plan->plan_slow);
+ #elif defined (FFT_KOKKOS_KISS)
+   delete kissfftKK;
+ #endif
+@@ -961,22 +979,22 @@ void FFT3dKokkos<DeviceType>::fft_3d_1d_only_kokkos(typename FFT_AT::t_FFT_DATA_
      typename FFT_AT::t_FFT_DATA_1d d_tmp =
       typename FFT_AT::t_FFT_DATA_1d(Kokkos::view_alloc("fft_3d:tmp",Kokkos::WithoutInitializing),d_data.extent(0));
    if (flag == 1) {
@@ -660,307 +480,119 @@ index 6124c22b..775acfc9 100644
      Kokkos::parallel_for(total3/length3,f);
    }
  #endif
-diff --git a/src/KOKKOS/fix_ave_grid_kokkos.cpp b/src/KOKKOS/fix_ave_grid_kokkos.cpp
-index 7d21a994..02bce453 100644
---- a/src/KOKKOS/fix_ave_grid_kokkos.cpp
-+++ b/src/KOKKOS/fix_ave_grid_kokkos.cpp
-@@ -162,8 +162,19 @@ void FixAveGridKokkos::init()
-     error->all(FLERR,"Variable name for fix ave/grid does not exist");
-       value2index[m] = ivariable;
- 
-+    } else if (which[m] == CUSTOM) {
-+      int icustom = grid->find_custom(ids[m]);
-+      if (icustom < 0)
-+    error->all(FLERR,"Custom attribute for fix ave/grid does not exist");
-+      value2index[m] = icustom;
+diff --git a/src/KOKKOS/fftdata_kokkos.h b/src/KOKKOS/fftdata_kokkos.h
+index f280387d..96becf11 100644
+--- a/src/KOKKOS/fftdata_kokkos.h
++++ b/src/KOKKOS/fftdata_kokkos.h
+@@ -50,6 +50,9 @@
+ # if defined(FFT_KOKKOS_MKL)
+ #  undef FFT_KOKKOS_MKL
+ # endif
++# if defined(FFT_KOKKOS_NVPL)
++#  undef FFT_KOKKOS_NVPL
++# endif
+ # if !defined(FFT_KOKKOS_CUFFT) && !defined(FFT_KOKKOS_KISS)
+ #  define FFT_KOKKOS_KISS
+ # endif
+@@ -79,6 +82,9 @@
+ # if defined(FFT_KOKKOS_MKL)
+ #  undef FFT_KOKKOS_MKL
+ # endif
++# if defined(FFT_KOKKOS_NVPL)
++#  undef FFT_KOKKOS_NVPL
++# endif
+ # if !defined(FFT_KOKKOS_MKL_GPU) && !defined(FFT_KOKKOS_KISS)
+ #  define FFT_KOKKOS_KISS
+ # endif
+diff --git a/src/KOKKOS/fix_grid_check_kokkos.cpp b/src/KOKKOS/fix_grid_check_kokkos.cpp
+index 62514437..05979502 100644
+--- a/src/KOKKOS/fix_grid_check_kokkos.cpp
++++ b/src/KOKKOS/fix_grid_check_kokkos.cpp
+@@ -203,6 +203,8 @@ void FixGridCheckKokkos::end_of_step()
+   if (outflag == ERROR && nflag) {
+     auto h_particle_problems = Kokkos::create_mirror_view(d_particle_problems);
+     Kokkos::deep_copy(h_particle_problems, d_particle_problems);
++    particleKK->sync(Host,PARTICLE_MASK);
++    gridKK->sync(Host,CELL_MASK);
+     auto cells = grid->cells;
+     auto particles = particle->particles;
+     char str[128];
+diff --git a/src/KOKKOS/grid_kokkos.cpp b/src/KOKKOS/grid_kokkos.cpp
+index 39682e09..cde57af5 100644
+--- a/src/KOKKOS/grid_kokkos.cpp
++++ b/src/KOKKOS/grid_kokkos.cpp
+@@ -118,8 +118,7 @@ void GridKokkos::grow_cells(int n, int m)
+         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
+       else {
+         this->sync(Device,CELL_MASK); // force resize on device
+-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+-                       k_cells,maxcell);
++        Kokkos::resize(k_cells,maxcell);
+         this->modify(Device,CELL_MASK); // needed for auto sync
+       }
+       cells = k_cells.view_host().data();
+@@ -133,8 +132,7 @@ void GridKokkos::grow_cells(int n, int m)
+         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
+       else {
+         this->sync(Device,CINFO_MASK); // force resize on device
+-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+-                       k_cinfo,maxlocal);
++        Kokkos::resize(k_cinfo,maxlocal);
+         this->modify(Device,CINFO_MASK); // needed for auto sync
+       }
+       cinfo = k_cinfo.view_host().data();
+@@ -181,8 +179,7 @@ void GridKokkos::grow_sinfo(int n)
+         MemKK::realloc_kokkos(k_sinfo,"grid:sinfo",maxsplit);
+       else {
+         this->sync(Device,SINFO_MASK); // force resize on device
+-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
+-                       k_sinfo,maxsplit);
++        Kokkos::resize(k_sinfo,maxsplit);
+         this->modify(Device,SINFO_MASK); // needed for auto sync
+       }
+       sinfo = k_sinfo.view_host().data();
+diff --git a/src/KOKKOS/grid_kokkos.h b/src/KOKKOS/grid_kokkos.h
+index f3c66c3e..7788c83e 100644
+--- a/src/KOKKOS/grid_kokkos.h
++++ b/src/KOKKOS/grid_kokkos.h
+@@ -120,9 +120,34 @@ class GridKokkos : public Grid {
+       ix = static_cast<int> ((x[0]-lo[0]) * nx/(hi[0]-lo[0]));
+       iy = static_cast<int> ((x[1]-lo[1]) * ny/(hi[1]-lo[1]));
+       iz = static_cast<int> ((x[2]-lo[2]) * nz/(hi[2]-lo[2]));
+-      if (ix == nx) ix--;
+-      if (iy == ny) iy--;
+-      if (iz == nz) iz--;
++      // insure indices match grid cell boundaries in case of round-off error
++      // via master equation id_child_lohi(), same as Grid::id_point_child()
 +
-     } else value2index[m] = -1;
-   }
++      double edge;
 +
-+  // reallocate per-grid data if necessary
++      edge = lo[0] + ix*(hi[0]-lo[0])/nx;
++      if (x[0] < edge) ix--;
++      edge = lo[0] + (ix+1)*(hi[0]-lo[0])/nx;
++      if (x[0] >= edge) ix++;
 +
-+  nglocal = grid->nlocal;
-+  grow_percell(0);
- }
- 
- /* ----------------------------------------------------------------------
-@@ -418,8 +429,8 @@ void FixAveGridKokkos::end_of_step()
-         } else {
-           if (grid->etype[n] == INT) {
-             auto h_ewhich = gridKK->k_ewhich.view_host();
--            auto h_edarray = gridKK->k_edarray.view_host();
--            auto d_custom_array = h_edarray[h_ewhich[n]].k_view.view_device();
-+            auto h_eiarray = gridKK->k_eiarray.view_host();
-+            auto d_custom_array = h_eiarray[h_ewhich[n]].k_view.view_device();
- 
-             Kokkos::parallel_for(nglocal, SPARTA_CLASS_LAMBDA(int i) {
-               d_tally(i,k) += d_custom_array(i,jm1);
-@@ -620,7 +631,7 @@ void FixAveGridKokkos::grow_percell(int nnew)
-   }
- 
-   if (nglocal+nnew < maxgrid) return;
--  maxgrid += DELTAGRID;
-+  while (maxgrid < nglocal+nnew) maxgrid += DELTAGRID;
-   int n = maxgrid;
- 
-   // resize with the device as the source of truth, then refresh the host
-diff --git a/src/KOKKOS/fix_ave_histo_kokkos.cpp b/src/KOKKOS/fix_ave_histo_kokkos.cpp
-index f3ca3fbc..a8a2f38d 100644
---- a/src/KOKKOS/fix_ave_histo_kokkos.cpp
-+++ b/src/KOKKOS/fix_ave_histo_kokkos.cpp
-@@ -52,6 +52,8 @@ enum{IGNORE,END,EXTRA};
- #define INVOKED_PER_PARTICLE 8
- #define INVOKED_PER_GRID 16
- 
-+#define BIG 1.0e20
++      edge = lo[1] + iy*(hi[1]-lo[1])/ny;
++      if (x[1] < edge) iy--;
++      edge = lo[1] + (iy+1)*(hi[1]-lo[1])/ny;
++      if (x[1] >= edge) iy++;
 +
- /* ---------------------------------------------------------------------- */
- 
- FixAveHistoKokkos::FixAveHistoKokkos(SPARTA *spa, int narg, char **arg) :
-@@ -105,6 +107,13 @@ void FixAveHistoKokkos::init()
-         error->all(FLERR,"Compute ID for fix ave/histo/kk does not exist");
-       value2index[i] = icompute;
- 
-+      // per-grid inputs are read through KokkosBase device views;
-+      //   some kokkos_flag computes (e.g. isurf/grid/kk) are not KokkosBase
++      edge = lo[2] + iz*(hi[2]-lo[2])/nz;
++      if (x[2] < edge) iz--;
++      edge = lo[2] + (iz+1)*(hi[2]-lo[2])/nz;
++      if (x[2] >= edge) iz++;
 +
-+      if (kind == PERGRID &&
-+          !dynamic_cast<KokkosBase*>(modify->compute[icompute]))
-+        error->all(FLERR,"Fix ave/histo/kk does not (yet) support this compute");
++      // insure indices range from 0 to Nxyz-1 inclusive
 +
-     } else if (which[i] == FIX) {
-       int ifix = modify->find_fix(ids[i]);
-       if (ifix < 0)
-@@ -164,6 +173,8 @@ void FixAveHistoKokkos::end_of_step()
-     k_bin.sync_device();
++      if (ix < 0) ix = 0;
++      if (ix > nx-1) ix = nx-1;
++      if (iy < 0) iy = 0;
++      if (iy > ny-1) iy = ny-1;
++      if (iz < 0) iz = 0;
++      if (iz > nz-1) iz = nz-1;
  
-     minmax_type(minmax).init(minmax);
-+    minmax.min_val = BIG;
-+    minmax.max_val = -BIG;
-   }
- 
-   minmax_type reducer(mm_scratch);
-@@ -200,14 +211,14 @@ void FixAveHistoKokkos::end_of_step()
-             compute->compute_scalar();
-             compute->invoked_flag |= INVOKED_SCALAR;
-           }
--          bin_one(minmax, compute->scalar);
-+          bin_scalar(reducer, compute->scalar);
-         } else {
-           error->all(FLERR,"Compute kind not compatible with fix ave/histo/kk");
-           if (!(compute->invoked_flag & INVOKED_VECTOR)) {
-             compute->compute_vector();
-             compute->invoked_flag |= INVOKED_VECTOR;
-           }
--          bin_one(minmax, compute->vector[j-1]);
-+          bin_scalar(reducer, compute->vector[j-1]);
-         }
-       } else if (kind == GLOBAL && mode == VECTOR) {
-           error->all(FLERR,"Compute kind not compatible with fix ave/histo/kk");
-@@ -277,20 +288,20 @@ void FixAveHistoKokkos::end_of_step()
- 
-       if (kind == GLOBAL && mode == SCALAR) {
-         if (j == 0) {
--          bin_one(minmax, fix->compute_scalar());
-+          bin_scalar(reducer, fix->compute_scalar());
-         }
-         else {
-           error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
--          bin_one(minmax, fix->compute_vector(j-1));
-+          bin_scalar(reducer, fix->compute_vector(j-1));
-         }
-       } else if (kind == GLOBAL && mode == VECTOR) {
-         error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
-         if (j == 0) {
-           int n = fix->size_vector;
--          for (i = 0; i < n; i++) bin_one(minmax, fix->compute_vector(i));
-+          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_vector(i));
-         } else {
-           int n = fix->size_vector;
--          for (i = 0; i < n; i++) bin_one(minmax, fix->compute_array(i,j-1));
-+          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_array(i,j-1));
-         }
- 
-       } else if (kind == PERPARTICLE) {
-@@ -316,7 +327,7 @@ void FixAveHistoKokkos::end_of_step()
- 
-     } else if (which[i] == VARIABLE) {
-       if (kind == GLOBAL && mode == SCALAR) {
--        bin_one(minmax,input->variable->compute_equal(m));
-+        bin_scalar(reducer,input->variable->compute_equal(m));
- 
-       } else if (which[i] == VARIABLE && kind == PERPARTICLE) {
-         if (particle->maxlocal > maxvector) {
-@@ -617,6 +628,20 @@ void FixAveHistoKokkos::bin_particles(
-   minmax_fold();
- }
- 
-+/* ----------------------------------------------------------------------
-+   bin a single global value
-+   d_bin/d_stats are device views, so bin on the device with a
-+   single-iteration kernel instead of calling bin_one() on the host
-+------------------------------------------------------------------------- */
-+void FixAveHistoKokkos::bin_scalar(minmax_type& reducer, double value)
-+{
-+  minmax_reset();
-+  scalar_value = value;
-+  auto policy = Kokkos::RangePolicy<TagFixAveHisto_BinScalar,DeviceType>(0, 1);
-+  Kokkos::parallel_reduce(policy, *this, reducer);
-+  minmax_fold();
-+}
-+
- /* ----------------------------------------------------------------------
-    bin a per-grid vector of values with stride
- ------------------------------------------------------------------------- */
-@@ -634,6 +659,7 @@ void FixAveHistoKokkos::bin_grid_cells(
-   if (groupflag) {
-     GridKokkos* grid_kk = (GridKokkos*) grid;
-     grid_kk->sync(Device, CINFO_MASK);
-+    d_cinfo = grid_kk->k_cinfo.view_device();
-     auto policy = RangePolicy<TagFixAveHisto_BinGridCells1,DeviceType>(0, n);
-     Kokkos::parallel_reduce(policy, *this, reducer);
-   } else {
-@@ -672,6 +698,15 @@ FixAveHistoKokkos::operator()(TagFixAveHisto_BinVector, const int i,
-   bin_one(lminmax, d_values(i));
- }
- 
-+/* ------------------------------------------------------------------------- */
-+KOKKOS_INLINE_FUNCTION
-+void
-+FixAveHistoKokkos::operator()(TagFixAveHisto_BinScalar, const int,
-+                              minmax_type::value_type& lminmax) const
-+{
-+  bin_one(lminmax, scalar_value);
-+}
-+
- /* ------------------------------------------------------------------------- */
- KOKKOS_INLINE_FUNCTION
- void
-@@ -722,7 +757,7 @@ void
- FixAveHistoKokkos::operator()(TagFixAveHisto_BinGridCells1, const int i,
-                               minmax_type::value_type& lminmax) const
- {
--  if (grid_kk->k_cinfo.view_device()[i].mask & groupbit) {
-+  if (d_cinfo[i].mask & groupbit) {
-     bin_one(lminmax, d_values(i));
-   }
- }
-diff --git a/src/KOKKOS/fix_ave_histo_kokkos.h b/src/KOKKOS/fix_ave_histo_kokkos.h
-index b116a02c..aba919de 100644
---- a/src/KOKKOS/fix_ave_histo_kokkos.h
-+++ b/src/KOKKOS/fix_ave_histo_kokkos.h
-@@ -29,6 +29,7 @@ namespace SPARTA_NS
- {
- 
- struct TagFixAveHisto_BinVector {};
-+struct TagFixAveHisto_BinScalar {};
- struct TagFixAveHisto_BinParticles1 {};
- struct TagFixAveHisto_BinParticles2 {};
- struct TagFixAveHisto_BinParticles3 {};
-@@ -103,6 +104,9 @@ public:
-   KOKKOS_INLINE_FUNCTION void
-   operator()(TagFixAveHisto_BinVector, const int, minmax_type::value_type&) const;
- 
-+  KOKKOS_INLINE_FUNCTION void
-+  operator()(TagFixAveHisto_BinScalar, const int, minmax_type::value_type&) const;
-+
-   KOKKOS_INLINE_FUNCTION void
-   operator()(TagFixAveHisto_BinParticles1, const int, minmax_type::value_type&) const;
- 
-@@ -164,7 +168,10 @@ protected:
-   int index;
-   int stride;
-   DAT::t_float_1d_strided d_values;
--  GridKokkos* grid_kk;
-+  t_cinfo_1d d_cinfo;
-+
-+  // single global value binned on the device by bin_scalar()
-+  double scalar_value;
- 
-   // data used by ave/histo/weight/kk
-   DAT::t_float_1d_strided d_weights;
-@@ -175,6 +182,7 @@ protected:
-   using FixAveHisto::bin_particles;
-   using FixAveHisto::bin_grid_cells;
- 
-+  void bin_scalar(minmax_type&, double);
-   virtual void bin_vector(minmax_type&, int, double *, int);
-   virtual void bin_particles(minmax_type&, int, int);
-   virtual void bin_particles(minmax_type&, double *, int);
-diff --git a/src/KOKKOS/fix_ave_histo_weight_kokkos.cpp b/src/KOKKOS/fix_ave_histo_weight_kokkos.cpp
-index 41a60c53..d395ce2d 100644
---- a/src/KOKKOS/fix_ave_histo_weight_kokkos.cpp
-+++ b/src/KOKKOS/fix_ave_histo_weight_kokkos.cpp
-@@ -417,11 +417,11 @@ void FixAveHistoWeightKokkos::bin_particles(
-   }
- 
-   if (regionflag && mixflag) {
--    //auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles1,DeviceType>(0, n);
--    //Kokkos::parallel_reduce(policy, *this, reducer);
-+    auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles1,DeviceType>(0, n);
-+    Kokkos::parallel_reduce(policy, *this, reducer);
-   } else if (regionflag) {
--    //auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles2,DeviceType>(0, n);
--    //Kokkos::parallel_reduce(policy, *this, reducer);
-+    auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles2,DeviceType>(0, n);
-+    Kokkos::parallel_reduce(policy, *this, reducer);
-   } else if (mixflag) {
-     auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles3,DeviceType>(0, n);
-     Kokkos::parallel_reduce(policy, *this, reducer);
-@@ -450,6 +450,7 @@ void FixAveHistoWeightKokkos::bin_grid_cells(
-   if (groupflag) {
-     GridKokkos* grid_kk = (GridKokkos*) grid;
-     grid_kk->sync(Device, CINFO_MASK);
-+    d_cinfo = grid_kk->k_cinfo.view_device();
-     auto policy = RangePolicy<TagFixAveHistoWeight_BinGridCells1,DeviceType>(0, n);
-     Kokkos::parallel_reduce(policy, *this, reducer);
-   } else {
-@@ -474,17 +475,10 @@ void
- FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinParticles1, const int i,
-                                     minmax_type::value_type& lminmax) const
- {
--  /*
--   * region is not Kokkos compatible
--   * If a Kokkos compatible region becomes available,
--   * this code can be recommissioned.
--   *
-   const int ispecies = d_particles(i).ispecies;
--  if (region_kk->match(d_particles(i).x) && d_s2g(imix, ispecies) >= 0)
--  {
-+  if (d_match(i) && d_s2g(imix, ispecies) >= 0) {
-     bin_one(lminmax, d_values(i), d_weights(i));
-   }
--  */
- }
- 
- /* ------------------------------------------------------------------------- */
-@@ -493,16 +487,9 @@ void
- FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinParticles2, const int i,
-                                     minmax_type::value_type& lminmax) const
- {
--  /*
--   * region is not Kokkos compatible.
--   * If a Kokkos compatible region becomes available,
--   * this code can be recommissioned.
--   *
--  if (region_kk->match(d_particles(i).x))
--  {
-+  if (d_match(i)) {
-     bin_one(lminmax, d_values(i), d_weights(i));
-   }
--  */
- }
- 
- /* ------------------------------------------------------------------------- */
-@@ -533,7 +520,7 @@ void
- FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinGridCells1, const int i,
-                                     minmax_type::value_type& lminmax) const
- {
--  if (grid_kk->k_cinfo.view_device()[i].mask & groupbit)
-+  if (d_cinfo[i].mask & groupbit)
-   {
-     bin_one(lminmax, d_values(i), d_weights(i));
-   }
+       ichild = (cellint) iz*nx*ny + (cellint) iy*nx + ix + 1;
+       childID = (ichild << k_plevels.view_device()[level].nbits) | id;
 diff --git a/src/KOKKOS/kissfft_kokkos.h b/src/KOKKOS/kissfft_kokkos.h
 index 979e833b..e767a6cb 100644
 --- a/src/KOKKOS/kissfft_kokkos.h
@@ -1198,103 +830,108 @@ index 5708ab92..a914490f 100644
      int out = out_orig + nqty*mid*nfast + nqty*fast;
      for (int iqty = 0; iqty < nqty; iqty++) d_data[data_offset + in++] = d_buf[buf_offset + out++];
    }
-diff --git a/src/KOKKOS/react_bird_kokkos.cpp b/src/KOKKOS/react_bird_kokkos.cpp
-index 2db82d8e..077296c1 100644
---- a/src/KOKKOS/react_bird_kokkos.cpp
-+++ b/src/KOKKOS/react_bird_kokkos.cpp
-@@ -55,6 +55,9 @@ ReactBirdKokkos::ReactBirdKokkos(SPARTA *sparta, int narg, char **arg) :
-   memoryKK->create_kokkos(k_tally_reactions_all,tally_reactions_all,nlist,"react_bird:tally_reactions_all");
-   d_tally_reactions = k_tally_reactions.view_device();
+diff --git a/src/KOKKOS/remap3d_kokkos.cpp b/src/KOKKOS/remap3d_kokkos.cpp
+index eabffe36..fc02411d 100644
+--- a/src/KOKKOS/remap3d_kokkos.cpp
++++ b/src/KOKKOS/remap3d_kokkos.cpp
+@@ -292,7 +292,7 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
  
-+  d_prob_warn = DAT::t_int_scalar("react_bird:prob_warn");
-+  prob_warn_flag = 0;
-+
-   random_backup = NULL;
- }
+   // allocate memory for plan data struct
  
-@@ -103,6 +106,11 @@ void ReactBirdKokkos::init()
- 
-   Kokkos::deep_copy(d_tally_reactions,0);
- 
-+  // warn once per run about an invalid reaction probability
-+
-+  Kokkos::deep_copy(d_prob_warn,0);
-+  prob_warn_flag = 0;
-+
-   deallocate_views_of_views();
- 
-   // copy data into device views
-@@ -186,6 +194,28 @@ double ReactBirdKokkos::extract_tally(int m)
- 
- /* ---------------------------------------------------------------------- */
- 
-+void ReactBirdKokkos::check_prob_warn()
-+{
-+  if (prob_warn_flag) return;
-+
-+  int flag;
-+  Kokkos::deep_copy(flag,d_prob_warn);
-+  if (flag == 1) {
-+    prob_warn_flag = 1;
-+    error->warning(FLERR,"Negative TCE reaction probability, "
-+                   "check reaction file coefficients "
-+                   "(further warnings suppressed)");
-+  } else if (flag == 2) {
-+    prob_warn_flag = 1;
-+    error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
-+                   "chemistry may be under-resolved, "
-+                   "consider reducing timestep or fnum "
-+                   "(further warnings suppressed)");
-+  }
-+}
-+
-+/* ---------------------------------------------------------------------- */
-+
- void ReactBirdKokkos::backup()
- {
-   d_tally_reactions_backup = decltype(d_tally_reactions)(Kokkos::view_alloc("react_bird:tally_reactions_backup",Kokkos::WithoutInitializing),d_tally_reactions.extent(0));
-diff --git a/src/KOKKOS/react_bird_kokkos.h b/src/KOKKOS/react_bird_kokkos.h
-index 71ad428f..bb02137e 100644
---- a/src/KOKKOS/react_bird_kokkos.h
-+++ b/src/KOKKOS/react_bird_kokkos.h
-@@ -42,6 +42,13 @@ class ReactBirdKokkos : public ReactBird {
-   double extract_tally(int);
-   void backup();
-   void restore();
-+  void check_prob_warn();
-+
-+  // device flag set by attempt_kk() for an invalid summed react_prob
-+  //   1 = negative, 2 = greater than 1, reset in init() to warn once per run
-+
-+  DAT::t_int_scalar d_prob_warn;
-+  int prob_warn_flag;
- 
-   // tallies for reactions
- 
-diff --git a/src/KOKKOS/react_tce_kokkos.h b/src/KOKKOS/react_tce_kokkos.h
-index c57bc7e0..4150a189 100644
---- a/src/KOKKOS/react_tce_kokkos.h
-+++ b/src/KOKKOS/react_tce_kokkos.h
-@@ -265,9 +265,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
-         break;
-       }
- 
--      //if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
--      //else if (react_prob > 1) error->warning(FLERR,"Reaction probability greater than 1");
--
-     default:
-       //error->one(FLERR,"Unknown outcome in reaction");
-       //d_error_flag() = 1;
-@@ -275,6 +272,12 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
-       break;
+-  plan = new struct remap_plan_3d_kokkos<DeviceType>;
++  plan = new struct remap_plan_3d_kokkos<DeviceType>();
+   if (plan == nullptr) return nullptr;
+   plan->usecollective = usecollective;
+   plan->usegpu_aware = usegpu_aware;
+@@ -833,13 +833,12 @@ void RemapKokkos3d<DeviceType>::remap_3d_destroy_plan_kokkos(struct remap_plan_3
+       free(plan->rdispls);
      }
  
-+    // sum of reaction probabilities should be < 1 for a valid TCE scheme
-+    // flag it for a once-per-run host warning, see react_tce.cpp
+-    if (plan->nsend) {
++    // send and recv arrays are allocated together if (nsend || nrecv)
 +
-+    if (react_prob < 0.0) d_prob_warn() = 1;
-+    else if (react_prob > 1.0) d_prob_warn() = 2;
-+
-     // test against random number to see if this reaction occurs
-     // if it does, reset species of I,J and optional K to product species
-     // J particle can be destroyed in recombination reaction, set species = -1
++    if (plan->nsend || plan->nrecv) {
+       free(plan->send_offset);
+       free(plan->send_size);
+       free(plan->packplan);
+-    }
+-
+-    if (plan->nrecv) {
+       free(plan->recv_offset);
+       free(plan->recv_size);
+       free(plan->unpackplan);
+diff --git a/src/KOKKOS/surf_kokkos.cpp b/src/KOKKOS/surf_kokkos.cpp
+index b076789d..2ed4c3e3 100644
+--- a/src/KOKKOS/surf_kokkos.cpp
++++ b/src/KOKKOS/surf_kokkos.cpp
+@@ -179,6 +179,7 @@ void SurfKokkos::grow(int old)
+         surf_kk->k_lines.resize(nmax);
+       }
+       lines = surf_kk->k_lines.view_host().data();
++      if (nmax > old) memset(&lines[old],0,(nmax-old)*sizeof(Line));
+     } else {
+       if (tris == NULL)
+           surf_kk->k_tris = tdual_tri_1d("surf:tris",nmax);
+@@ -188,6 +189,7 @@ void SurfKokkos::grow(int old)
+         surf_kk->k_tris.resize(nmax);
+       }
+       tris = surf_kk->k_tris.view_host().data();
++      if (nmax > old) memset(&tris[old],0,(nmax-old)*sizeof(Tri));
+     }
+   }
+ }
+diff --git a/src/surf_comm.cpp b/src/surf_comm.cpp
+index 5b995327..88222721 100644
+--- a/src/surf_comm.cpp
++++ b/src/surf_comm.cpp
+@@ -1020,7 +1020,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
+       if (n == 1)
+ 	ibuf[k++] = iinput[isurf];
+       else {
+-	idata = index * n;
++	idata = isurf * n;
+ 	for (j = 0; j < n; j++)
+ 	  ibuf[k++] = iinput[idata++];
+       }
+@@ -1029,7 +1029,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
+       if (n == 1)
+ 	dbuf[k++] = dinput[isurf];
+       else {
+-	idata = index * n;
++	idata = isurf * n;
+ 	for (j = 0; j < n; j++)
+ 	  dbuf[k++] = dinput[idata++];
+       }
+diff --git a/src/surf_custom.cpp b/src/surf_custom.cpp
+index 2e2c30ae..85b65f97 100644
+--- a/src/surf_custom.cpp
++++ b/src/surf_custom.cpp
+@@ -378,9 +378,9 @@ void Surf::spread_inverse_custom(int index)
+ 
+     } else if (esize[index]) {
+       int *in,*out;
+-      if (nown == 0) in = NULL;
++      if (size_custom_local[index] == 0) in = NULL;
+       else in = &eiarray_local[ewhich[index]][0][0];
+-      if (size_custom_local[index] == 0) out = NULL;
++      if (nown == 0) out = NULL;
+       else out = &eiarray[ewhich[index]][0][0];
+       spread_local2own(esize[index],INT,in,out);
+     }
+@@ -388,13 +388,13 @@ void Surf::spread_inverse_custom(int index)
+   } else if (etype[index] == DOUBLE) {
+     if (esize[index] == 0) {
+       spread_local2own(1,DOUBLE,edvec_local[ewhich[index]],
+-                       &edvec[ewhich[index]]);
++                       edvec[ewhich[index]]);
+ 
+     } else if (esize[index]) {
+       double *in,*out;
+-      if (nown == 0) in = NULL;
++      if (size_custom_local[index] == 0) in = NULL;
+       else in = &edarray_local[ewhich[index]][0][0];
+-      if (size_custom_local[index] == 0) out = NULL;
++      if (nown == 0) out = NULL;
+       else out = &edarray[ewhich[index]][0][0];
+       spread_local2own(esize[index],DOUBLE,in,out);
+     }
