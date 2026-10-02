@@ -179,6 +179,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 
   void init_reactions_gs_kokkos();
   void init_cmodels_kokkos();
+  void alloc_state_kokkos(int);
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;
@@ -534,7 +535,9 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
   {
     if (cmodel == SRA_KK::NOMODEL) return;
     if (cmodel == SRA_KK::SPECULAR) {       // SurfCollideSpecular::wrapper
-      MathExtraKokkos::reflect3(p->v,norm);
+      const int noslip_flag = useJp ? d_cmjp_flags(j,0) : d_cmip_flags(j,0);
+      if (noslip_flag) MathExtraKokkos::negate3(p->v);
+      else MathExtraKokkos::reflect3(p->v,norm);
       return;
     }
 
