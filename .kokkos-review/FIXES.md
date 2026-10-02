@@ -111,3 +111,4 @@
 | F-G20-5 | fft | bdbc461a |
 | F-G20-4 (rest) | DEFERRED (unreachable collective path; see fixes/FX-fft.md) | - |
 | R-A-4 | update_kokkos.cpp, surf_collide_piston_kokkos.h | 08c0ccac |
+| R-A-1, R-A-2, R-C-3 | perf follow-ups | 5631c169 |
