@@ -13,3 +13,5 @@
   unallocated before first run), G12x-F-G16-4 (= F-G00-14), G12x-F-G05-1 (= F-G05-1), G12x-F-G22-3 (SurfKokkos::grow no memset).
 - Phase 4: full rebuild running (scratchpad/build make2.log); then run examples with -k on t 2 -sf kk. Phase 5: fix-diff reviewers A/B/C launched (fixreview/).
 - Phase 4: run_examples.sh new build t1 -> scratchpad/run_new_t1; baseline (e071055f) build in scratchpad/build_base (git worktree scratchpad/base) for output comparison.
+- Phase 4 results: examples t1 base(e071055f) vs final: 140/141 thermo IDENTICAL; ambi differs (now runs further before pre-existing "Ran out of space" with default react/extra).
+  Failures identical in base: ambi (react/extra), cylinder (rc 137 killed), implicit*/jagged.3d* (missing generated data files). Running t4 crash/NaN check -> scratchpad/run_final_t4.
