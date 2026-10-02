@@ -81,3 +81,14 @@ the Edit tool on your own group file, re-reading it first.
   `- <ID> | DEFERRED | <reason + proposed patch>`.
 - Do NOT run git (the orchestrator commits). Do not touch files outside your list.
 - When done append `## STATUS: COMPLETE`.
+
+## Fix-diff reviewers (phase 5)
+- Review `git diff e071055f..HEAD -- <your files>` (the fixes). For each hunk, check it is correct,
+  minimal, does what FIXES.md/fixes/*.md say, introduces no new bug (wrong sync direction, host
+  access to device memory, lifetime, missing modify, behavior change vs CPU, compile issue in
+  CUDA/HIP-only branches, KOKKOS_INLINE_FUNCTION calling host-only code, captured `this` in device
+  lambdas, etc.).
+- Checkpoint: fixreview/<R>.md, `DONE <file>` after each file + issues as
+  `- [R-<R>-n] file:line | severity | problem | proposed fix`.
+- Do not edit source; do not run git except read-only diff/log/show.
+- End with `## STATUS: COMPLETE`.
