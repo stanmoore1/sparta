@@ -50,3 +50,20 @@ each finding in the group file (or in verify/<GROUP>.md).
 ## Fix phase (phase 3)
 Only CONFIRMED findings are fixed, minimal change, matching CPU code style.
 Fixed findings get `FIXED in <commit>`.
+
+## Verifier agents (phase 2) — detailed
+- Input: groups/<G>.md findings. Output/checkpoint: verify/<G>.md.
+- On start, read verify/<G>.md if it exists; skip findings already having a VERDICT.
+- For each finding: read the cited code (and surrounding context, callers, CPU reference),
+  and try hard to DISPROVE it (is the path reachable? is there a sync/guard elsewhere?
+  does the CPU code behave the same? is the "fix" already present?). Then write immediately:
+  `### <ID>` / `VERDICT: CONFIRMED|REFUTED|PLAUSIBLE` / `reason: ...` / `fix: <precise minimal
+  fix description, file:line, matching CPU code where applicable>`.
+  If the same bug is already in the CPU code (not Kokkos-specific), note `cpu-also: yes`.
+- Do not edit source files; do not run git.
+- When all done append `## STATUS: COMPLETE`.
+
+## IMPORTANT (added after collision incident)
+Do NOT write helper scripts into the shared scratchpad (ck.py etc.) — several agents
+overwrote each other's scripts and checkpoint entries. Update your checkpoint ONLY with
+the Edit tool on your own group file, re-reading it first.
