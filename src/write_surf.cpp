@@ -64,7 +64,7 @@ void WriteSurf::command(int narg, char **arg)
 
   // check for multiproc output
 
-  if (strchr(arg[0],'%')) multiproc = nprocs;
+  if (strchr(file,'%')) multiproc = nprocs;
   else multiproc = 0;
 
   // optional args
@@ -810,6 +810,12 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
   if (surf->implicit) {
     MPI_Scan(&bnsurf,&offset,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
     offset -= bnsurf;
+    if (dim == 2)
+      for (int i = 0; i < nmine; i++)
+        lines[i].id = static_cast<surfint> (offset + i + 1);
+    else
+      for (int i = 0; i < nmine; i++)
+        tris[i].id = static_cast<surfint> (offset + i + 1);
   }
 
   // pack my custom data into cvalues
@@ -858,8 +864,6 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
 	if (typeflag)
 	  for (int i = 0; i < ncount; i++) {
             surfint id = lines[i].id;
-            if (surf->implicit)
-              id = static_cast<surfint> (offset + i + 1);
 	    fprintf(fp,SURFINT_FORMAT " %d %20.15g %20.15g %20.15g %20.15g",
 		    id,lines[i].type,
 		    lines[i].p1[0],lines[i].p1[1],
@@ -870,8 +874,6 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
 	else
 	  for (int i = 0; i < ncount; i++) {
             surfint id = lines[i].id;
-            if (surf->implicit)
-              id = static_cast<surfint> (offset + i + 1);
 	    fprintf(fp,SURFINT_FORMAT " %20.15g %20.15g %20.15g %20.15g",
 		    id,
 		    lines[i].p1[0],lines[i].p1[1],
@@ -886,8 +888,6 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
 	if (typeflag)
 	  for (int i = 0; i < ncount; i++) {
             surfint id = tris[i].id;
-            if (surf->implicit)
-              id = static_cast<surfint> (offset + i + 1);
 	    fprintf(fp,SURFINT_FORMAT " %d %20.15g %20.15g %20.15g "
 		    "%20.15g %20.15g %20.15g %20.15g %20.15g %20.15g",
 		    id,tris[i].type,
@@ -900,8 +900,6 @@ void WriteSurf::write_file_distributed_nopoints(char *file)
 	else
 	  for (int i = 0; i < ncount; i++) {
             surfint id = tris[i].id;
-            if (surf->implicit)
-              id = static_cast<surfint> (offset + i + 1);
 	    fprintf(fp,SURFINT_FORMAT " %20.15g %20.15g %20.15g "
 		    "%20.15g %20.15g %20.15g %20.15g %20.15g %20.15g",
 		    id,

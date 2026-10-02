@@ -1250,6 +1250,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
                 jpart->dtremain = dtremain;
                 jpart->weight = particles[i].weight;
                 pstop++;
+                if (pstop-pstart > maxmigrate) {
+                  maxmigrate = particle->maxlocal;
+                  memory->grow(mlist,maxmigrate,"particle:mlist");
+                }
               }
 
               if (nsurf_tally)
@@ -1505,6 +1509,10 @@ template < int DIM, int SURF, int OPT > void Update::move()
               jpart->dtremain = dtremain;
               jpart->weight = particles[i].weight;
               pstop++;
+              if (pstop-pstart > maxmigrate) {
+                maxmigrate = particle->maxlocal;
+                memory->grow(mlist,maxmigrate,"particle:mlist");
+              }
             }
             nboundary_one++;
             ntouch_one--;    // decrement here since will increment below
@@ -2169,6 +2177,7 @@ void Update::global(int narg, char **arg)
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
     } else if (strcmp(arg[iarg],"particle/reorder") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       reorder_period = input->inumeric(FLERR,arg[iarg+1]);
       if (reorder_period < 0) error->all(FLERR,"Illegal global command");
       iarg += 2;
