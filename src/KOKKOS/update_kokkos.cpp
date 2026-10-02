@@ -1241,6 +1241,22 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     if (niterate > 1) return;
   }
 
+  // a reaction product discarded during a surface collision earlier in
+  //   this move (e.g. by fix ambipolar or piston) is not moved, but it must
+  //   go on the migrate list, since migration is what deletes it
+
+  if (pflag == PDISCARD) {
+    int indx;
+    if (ATOMIC_REDUCTION == 0) {
+      indx = d_nmigrate();
+      d_nmigrate()++;
+    } else {
+      indx = Kokkos::atomic_fetch_add(&d_nmigrate(),1);
+    }
+    k_mlist.view_device()[indx] = i;
+    return;
+  }
+
   x = particle_i.x;
   v = particle_i.v;
   exclude = -1;

@@ -207,7 +207,7 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
         if (xprime <= xwall) {
           ip = NULL;
           if (jp) {
-            d_particles[jp - d_particles.data()].flag = PDISCARD;
+            jp->flag = PDISCARD;
             jp = NULL;
           }
           return NULL;
@@ -218,7 +218,7 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
         if (xprime >= xwall) {
           ip = NULL;
           if (jp) {
-            d_particles[jp - d_particles.data()].flag = PDISCARD;
+            jp->flag = PDISCARD;
             jp = NULL;
           }
           return NULL;
