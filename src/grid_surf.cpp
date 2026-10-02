@@ -2194,6 +2194,8 @@ void Grid::allocate_surf_arrays()
   csurfs = new MyPage<surfint>(maxsurfpercell,MAX(100*maxsurfpercell,1024));
   csplits = new MyPage<int>(maxsurfpercell,MAX(100*maxsurfpercell,1024));
   csubs = new MyPage<int>(maxsplitpercell,MAX(100*maxsplitpercell,128));
+  if (csurfs->errorflag || csplits->errorflag || csubs->errorflag)
+    error->one(FLERR,"Invalid or too large global surfmax or splitmax");
 }
 
 /* ----------------------------------------------------------------------

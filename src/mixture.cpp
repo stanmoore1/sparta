@@ -124,6 +124,12 @@ void Mixture::copy(Mixture *old)
   temp_thermal = old->temp_thermal;
   temp_thermal_flag = old->temp_thermal_flag;
   temp_thermal_user = old->temp_thermal_user;
+  temp_rot = old->temp_rot;
+  temp_rot_flag = old->temp_rot_flag;
+  temp_rot_user = old->temp_rot_user;
+  temp_vib = old->temp_vib;
+  temp_vib_flag = old->temp_vib_flag;
+  temp_vib_user = old->temp_vib_user;
 
   nspecies = maxspecies = old->nspecies;
   allocate();
@@ -330,8 +336,9 @@ void Mixture::add_species(int narg, char **arg)
     if (index < 0) error->all(FLERR,"Mixture species is not defined");
     for (j = 0; j < nspecies; j++)
       if (species[j] == index) break;
-    if (j < nspecies) active[j] = 1;
-    else {
+    if (j < nspecies) {
+      if (active[j] == 0) active[j] = 1;
+    } else {
       if (all_default || species_default)
         error->all(FLERR,"Cannot add new species to mixture all or species");
       if (nspecies == maxspecies) allocate();
@@ -477,8 +484,14 @@ void Mixture::params(int narg, char **arg)
     for (int i = 0; i < nspecies_original; i++) {
       species[m] = species[i];
       mix2group[m] = mix2group[i];
+      fraction_flag[m] = fraction_flag[i];
+      fraction_user[m] = fraction_user[i];
       if (active[i]) nspecies--;
       else m++;
+    }
+    for (int i = nspecies; i < nspecies_original; i++) {
+      fraction_flag[i] = 0;
+      fraction_user[i] = 0.0;
     }
   }
 
