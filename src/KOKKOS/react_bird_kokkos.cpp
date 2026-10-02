@@ -55,6 +55,9 @@ ReactBirdKokkos::ReactBirdKokkos(SPARTA *sparta, int narg, char **arg) :
   memoryKK->create_kokkos(k_tally_reactions_all,tally_reactions_all,nlist,"react_bird:tally_reactions_all");
   d_tally_reactions = k_tally_reactions.view_device();
 
+  d_prob_warn = DAT::t_int_scalar("react_bird:prob_warn");
+  prob_warn_flag = 0;
+
   random_backup = NULL;
 }
 
@@ -102,6 +105,11 @@ void ReactBirdKokkos::init()
   // ReactBird::init() only zeroes the host tallies
 
   Kokkos::deep_copy(d_tally_reactions,0);
+
+  // warn once per run about an invalid reaction probability
+
+  Kokkos::deep_copy(d_prob_warn,0);
+  prob_warn_flag = 0;
 
   deallocate_views_of_views();
 
@@ -183,6 +191,28 @@ double ReactBirdKokkos::extract_tally(int m)
 
   return 1.0*tally_reactions_all[m];
 };
+
+/* ---------------------------------------------------------------------- */
+
+void ReactBirdKokkos::check_prob_warn()
+{
+  if (prob_warn_flag) return;
+
+  int flag;
+  Kokkos::deep_copy(flag,d_prob_warn);
+  if (flag == 1) {
+    prob_warn_flag = 1;
+    error->warning(FLERR,"Negative TCE reaction probability, "
+                   "check reaction file coefficients "
+                   "(further warnings suppressed)");
+  } else if (flag == 2) {
+    prob_warn_flag = 1;
+    error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
+                   "chemistry may be under-resolved, "
+                   "consider reducing timestep or fnum "
+                   "(further warnings suppressed)");
+  }
+}
 
 /* ---------------------------------------------------------------------- */
 

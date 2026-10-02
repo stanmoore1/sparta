@@ -319,6 +319,10 @@ void CollideVSSKokkos::init()
     k_vremax_initial.modify_host();
     k_vremax_initial.sync_device();
     d_vremax_initial = k_vremax_initial.view_device();
+
+    // new vremax,remain views hold no valid data, force reset_vremax() below
+
+    vre_first = 1;
   }
 
   // device copy of species-to-group mapping for group collisions
@@ -376,8 +380,13 @@ void CollideVSSKokkos::init()
 
     int ifix;
     for (ifix = 0; ifix < modify->nfix; ifix++)
-      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
+      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0 ||
+          strcmp(modify->fix[ifix]->style,"ambipolar/kk") == 0) break;
+    if (ifix == modify->nfix)
+      error->all(FLERR,"Collision ambipolar without fix ambipolar");
     FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
+    if (!afix->kokkos_flag)
+      error->all(FLERR,"Must use fix ambipolar/kk when Kokkos is enabled");
     ambispecies = afix->especies;
     FixAmbipolarKokkos *afix_kk = (FixAmbipolarKokkos *) afix;
     d_ions = afix_kk->d_ions;
@@ -584,6 +593,10 @@ void CollideVSSKokkos::collisions()
   // finalize active gas/gas tally computes: contribute and sync to host
 
   if (ngas_tally) finish_gas_tally();
+
+  // warn once per run about an invalid TCE reaction probability
+
+  if (react) ((ReactBirdKokkos*) react)->check_prob_warn();
 
   // remove any particles deleted in chemistry reactions
   // if particles deleted/created by chemistry, particles are no longer sorted
@@ -795,7 +808,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     // form the product in double and check it before it becomes an int,
@@ -944,6 +957,8 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
         d_plist = {};
         Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
         d_plist = grid_kk->d_plist;
+        if (NEARCP)
+          MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount);
       }
 
       auto nlocal_new = h_nlocal();
@@ -1001,7 +1016,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
   }
 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
-  if (volume == 0.0) d_error_flag() = 1;
+  if (volume == 0.0) {
+    d_error_flag() = 1;
+    return;
+  }
 
   struct State precoln;       // state before collision
   struct State postcoln;      // state after collision
@@ -1134,7 +1152,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        d_maxdelete() += DELTADELETE;
+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1154,7 +1172,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        d_maxcellcount() += DELTACELLCOUNT;
+        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1227,7 +1245,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     // form the product in double and check it before it becomes an int,
@@ -1432,7 +1450,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
     d_nn_last_partner(icell,ii) = 0;
 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
-  if (volume == 0.0) d_error_flag() = 1;
+  if (volume == 0.0) {
+    d_error_flag() = 1;
+    return;
+  }
 
   struct State precoln;       // state before collision
   struct State postcoln;      // state after collision
@@ -1568,7 +1589,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        d_maxdelete() += DELTADELETE;
+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1588,7 +1609,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        d_maxcellcount() += DELTACELLCOUNT;
+        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1971,7 +1992,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     if (maxdelete*extra_factor > MAXSMALLINT)
@@ -2158,7 +2179,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
   if (np <= 1) return;
 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
-  if (volume == 0.0) d_error_flag() = 1;
+  if (volume == 0.0) {
+    d_error_flag() = 1;
+    return;
+  }
 
   // build per-group particle lists for this cell
   // d_gcount(icell,g) = # of particles in group g
@@ -2336,7 +2360,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             d_dellist(ndelete) = d_plist(icell,jj);
           } else {
             d_retry() = 1;
-            d_maxdelete() += DELTADELETE;
+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -2384,7 +2408,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             np++;
           } else {
             d_retry() = 1;
-            d_maxcellcount() += DELTACELLCOUNT;
+            Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -2476,7 +2500,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   //   sizing for reaction-created particles and deletions is react-specific
 
   double extra_factor = 1.0;
-  if (react && sparta->kokkos->react_retry_flag)
+  if (react && !sparta->kokkos->react_retry_flag)
     extra_factor = sparta->kokkos->react_extra;
 
   maxcellcount = particle_kk->get_maxcellcount();
@@ -2708,7 +2732,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
   if (np <= 1) return;
 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
-  if (volume == 0.0) d_error_flag() = 1;
+  if (volume == 0.0) {
+    d_error_flag() = 1;
+    return;
+  }
 
   // build the per-group particle lists for this cell and the electron list,
   //   in one pass over plist, exactly as collide.cpp:1792-1824 does
@@ -2922,7 +2949,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               np++;
             } else {
               d_retry() = 1;
-              d_maxcellcount() += DELTACELLCOUNT;
+              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -2942,14 +2969,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
                 d_dellist(ndelete) = index_kpart;
               } else {
                 d_retry() = 1;
-                d_maxdelete() += DELTADELETE;
+                Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
                 rand_pool.free_state(rand_gen);
                 return;
               }
 #endif
             } else {
               d_retry() = 1;
-              d_maxelectron() += DELTACELLCOUNT;
+              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -2985,7 +3012,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               jpart = NULL;
             } else {
               d_retry() = 1;
-              d_maxelectron() += DELTACELLCOUNT;
+              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3020,7 +3047,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               np++;
             } else {
               d_retry() = 1;
-              d_maxcellcount() += DELTACELLCOUNT;
+              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3047,7 +3074,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             d_dellist(ndelete) = d_plist(icell,jj);
           } else {
             d_retry() = 1;
-            d_maxdelete() += DELTADELETE;
+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -3151,7 +3178,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   // sizing for reaction-created particles/deletions is react-specific.
 
   double extra_factor = 1.0;
-  if (react && sparta->kokkos->react_retry_flag)
+  if (react && !sparta->kokkos->react_retry_flag)
     extra_factor = sparta->kokkos->react_extra;
 
   maxcellcount = particle_kk->get_maxcellcount();
@@ -3380,7 +3407,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
   if (np <= 1) return;
 
   const double volume = grid_kk_copy.obj.k_cinfo.view_device()[icell].volume / grid_kk_copy.obj.k_cinfo.view_device()[icell].weight;
-  if (volume == 0.0) d_error_flag() = 1;
+  if (volume == 0.0) {
+    d_error_flag() = 1;
+    return;
+  }
 
   struct State precoln;       // state before collision
   struct State postcoln;      // state after collision
@@ -3482,8 +3512,10 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
       if (rand_gen.drand() > recomb_boost_inverse)
         //react->recomb_species = -1;
         recomb_species = -1;
-      else if (np <= 2)
+      else if (np == 1)
         //react->recomb_species = -1;
+        recomb_species = -1;
+      else if (np == 2 && jpart->ispecies != ambispecies)
         recomb_species = -1;
       else {
         int k = np * rand_gen.drand();
@@ -3566,7 +3598,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           d_plist(icell,np++) = index_kpart;
         } else {
           d_retry() = 1;
-          d_maxcellcount() += DELTACELLCOUNT;
+          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3587,14 +3619,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
             d_dellist(ndelete) = index_kpart;
           } else {
             d_retry() = 1;
-            d_maxdelete() += DELTADELETE;
+            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
             rand_pool.free_state(rand_gen);
             return;
           }
 #endif
         } else {
           d_retry() = 1;
-          d_maxelectron() += DELTACELLCOUNT;
+          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3625,7 +3657,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           jpart = NULL;
         } else {
           d_retry() = 1;
-          d_maxelectron() += DELTACELLCOUNT;
+          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3653,7 +3685,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           d_plist(icell,np++) = index;
         } else {
           d_retry() = 1;
-          d_maxcellcount() += DELTACELLCOUNT;
+          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3672,7 +3704,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        d_maxdelete() += DELTADELETE;
+        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -3840,6 +3872,7 @@ int CollideVSSKokkos::test_collision_kokkos(int icell, int igroup, int jgroup,
 
   double vre = vro*d_prefactor(ispecies,jspecies);
   d_vremax(icell,igroup,jgroup) = MAX(vre,d_vremax(icell,igroup,jgroup));
+  if (d_vremax(icell,igroup,jgroup) == 0.0) return 0;
   if (vre/d_vremax(icell,igroup,jgroup) < rand_gen.drand()) return 0;
   precoln.vr2 = vr2;
   return 1;
@@ -5158,6 +5191,16 @@ void CollideVSSKokkos::backup()
     Kokkos::deep_copy(d_velambi_backup,d_velambi);
   }
 
+  // discrete vib mode levels are rewritten in place by the collision kernel
+
+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
+    ParticleKokkos* particle_kk = (ParticleKokkos*) particle;
+    auto h_ewhich = particle_kk->k_ewhich.view_host();
+    auto d_vibmode = particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device();
+    d_vibmode_backup = decltype(d_vibmode_backup)(Kokkos::view_alloc("collide:vibmode_backup",Kokkos::WithoutInitializing),d_vibmode.extent(0),d_vibmode.extent(1));
+    Kokkos::deep_copy(d_vibmode_backup,d_vibmode);
+  }
+
   if (react) {
     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
     react_kk->backup();
@@ -5198,6 +5241,12 @@ void CollideVSSKokkos::restore()
     d_velambi = k_edarray.view_host()[h_ewhich[index_velambi]].k_view.view_device();
   }
 
+  if (vibstyle == DISCRETE && index_vibmode >= 0) {
+    auto h_ewhich = particle_kk->k_ewhich.view_host();
+    Kokkos::deep_copy(particle_kk->k_eiarray.view_host()[h_ewhich[index_vibmode]].k_view.view_device(),d_vibmode_backup);
+    k_eiarray = particle_kk->k_eiarray;
+  }
+
   if (react) {
     ReactBirdKokkos* react_kk = (ReactBirdKokkos*) react;
     react_kk->restore();
@@ -5226,6 +5275,8 @@ void CollideVSSKokkos::restore()
     d_ionambi_backup = {};
     d_velambi_backup = {};
   }
+
+  d_vibmode_backup = {};
 }
 
 /* ----------------------------------------------------------------------
