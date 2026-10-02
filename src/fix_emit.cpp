@@ -131,14 +131,14 @@ void FixEmit::create_tasks()
     if (cells[icell].nsplit <= 0) continue;
     if (cinfo[icell].type == INSIDE) continue;
     if (region && region->bboxflag) {
-      rflag = 1;
-      if (cells[icell].hi[0] > region->extent_xlo &&
-          cells[icell].lo[0] < region->extent_xhi) rflag = 0;
-      if (cells[icell].hi[1] > region->extent_ylo &&
-          cells[icell].lo[1] < region->extent_yhi) rflag = 0;
+      rflag = 0;
+      if (cells[icell].hi[0] <= region->extent_xlo ||
+          cells[icell].lo[0] >= region->extent_xhi) rflag = 1;
+      if (cells[icell].hi[1] <= region->extent_ylo ||
+          cells[icell].lo[1] >= region->extent_yhi) rflag = 1;
       if (dimension == 3) {
-        if (cells[icell].hi[2] > region->extent_zlo &&
-            cells[icell].lo[2] < region->extent_zhi) rflag = 0;
+        if (cells[icell].hi[2] <= region->extent_zlo ||
+            cells[icell].lo[2] >= region->extent_zhi) rflag = 1;
       }
       if (rflag) continue;
     }

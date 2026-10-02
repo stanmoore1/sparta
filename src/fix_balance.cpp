@@ -57,6 +57,8 @@ FixBalance::FixBalance(SPARTA *sparta, int narg, char **arg) :
   nevery = atoi(arg[2]);
   thresh = atof(arg[3]);
 
+  rcbwt = CELL;
+
   int iarg;
   if (strcmp(arg[4],"random") == 0) {
     bstyle = RANDOM;
@@ -107,7 +109,7 @@ FixBalance::FixBalance(SPARTA *sparta, int narg, char **arg) :
 
   // error check
 
-  if (nevery < 0 || thresh < 1.0)
+  if (nevery <= 0 || thresh < 1.0)
     error->all(FLERR,"Illegal fix balance command");
 
   me = comm->me;
