@@ -49,3 +49,11 @@
 | F-G18-2 | surf tally computes / temp_rescale | 605d2aee |
 | F-G00-16 | surf tally computes / temp_rescale | 605d2aee |
 | F-G18-3 | surf tally computes / temp_rescale | 605d2aee |
+| F-G00-16-note (n_current==0) | fix_temp_rescale(_kokkos).cpp | 826bf094 |
+| F-G16-1 | computes | cd229e72 |
+| F-G16-4 | computes | cd229e72 |
+| F-G16-5 | computes | cd229e72 |
+| F-G16-6 | computes | cd229e72 |
+| F-G16-7 | computes | cd229e72 |
+| F-G16-8 | computes | cd229e72 |
+| F-G16-9 | computes | cd229e72 |
