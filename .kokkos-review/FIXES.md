@@ -10,3 +10,10 @@
 | F-G11-3 | fix_emit_surf(_kokkos).cpp | 708ad790 |
 | F-G11-4 | fix_emit_surf(_kokkos).cpp | 708ad790 |
 | F-G11-5 | DEFERRED (maintainer decision; patch in fixes/FX-emitsurf.md) | - |
+| F-G10-1 | surf_react_*_kokkos | 780d12b2 |
+| F-G10-2 | surf_react_*_kokkos | 780d12b2 |
+| F-G10-3 | surf_react_*_kokkos | 780d12b2 |
+| F-G10-4 | surf_react_*_kokkos | 780d12b2 |
+| F-G10-5 | surf_react_*_kokkos | 780d12b2 |
+| F-G10-6 | surf_react_*_kokkos | 780d12b2 |
+| F-G00-18 | surf_react_*_kokkos | 780d12b2 |
