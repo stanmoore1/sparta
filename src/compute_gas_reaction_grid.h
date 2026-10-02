@@ -40,6 +40,7 @@ class ComputeGasReactionGrid : public Compute {
 
  protected:
   int groupbit,imix,mode,ncol;
+  int nlist_react;            // # of reactions when compute was defined
   int *selectlist,*reaction2col;
 
   int nglocal;

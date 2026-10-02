@@ -45,6 +45,7 @@ ComputeGasReactionGrid::ComputeGasReactionGrid(SPARTA *sparta, int narg, char **
 
   selectlist = NULL;
   reaction2col = NULL;
+  nlist_react = react->nlist;
 
   if (strcmp(arg[4],"all") == 0) {
     if (narg != 5) error->all(FLERR,"Illegal compute gas/reaction/grid command");
@@ -113,6 +114,10 @@ ComputeGasReactionGrid::~ComputeGasReactionGrid()
 
 void ComputeGasReactionGrid::init()
 {
+  if (react && react->nlist != nlist_react)
+    error->all(FLERR,"Number of reactions for compute gas/reaction/grid "
+               "has changed");
+
   reallocate();
 }
 
