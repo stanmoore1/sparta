@@ -39,3 +39,13 @@
 | F-G09-4b | update/particle_kokkos | cf4db893 |
 | F-G06-1 | update/particle_kokkos | cf4db893 |
 | F-G00-11a | DEFERRED (tally rollback on retry; plan in fixes/FX-update.md) | - |
+| F-G17-1 | surf tally computes / temp_rescale | 605d2aee |
+| F-G17-2 | surf tally computes / temp_rescale | 605d2aee |
+| F-G17-3 | surf tally computes / temp_rescale | 605d2aee |
+| F-G17-4 | surf tally computes / temp_rescale | 605d2aee |
+| F-G17-5 | surf tally computes / temp_rescale | 605d2aee |
+| F-G17-6 | surf tally computes / temp_rescale | 605d2aee |
+| F-G00-19 | surf tally computes / temp_rescale | 605d2aee |
+| F-G18-2 | surf tally computes / temp_rescale | 605d2aee |
+| F-G00-16 | surf tally computes / temp_rescale | 605d2aee |
+| F-G18-3 | surf tally computes / temp_rescale | 605d2aee |
