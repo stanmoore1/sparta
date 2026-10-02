@@ -223,8 +223,13 @@ void FixEmitFaceFile::init()
 
   // reallocate fraction and cummulative for each task
   // b/c nspecies count of mixture may have changed
+  // Kokkos subclass aliases these vectors to DualView rows, reallocates
+  //   them itself and sets ntask = 0 before calling this init(),
+  //   so only loop over ntask in that case
 
-  for (int i = 0; i < ntaskmax; i++) {
+  int nrealloc = kokkos_flag ? ntask : ntaskmax;
+
+  for (int i = 0; i < nrealloc; i++) {
     delete [] tasks[i].fraction;
     delete [] tasks[i].cummulative;
     delete [] tasks[i].vscale;
@@ -237,7 +242,7 @@ void FixEmitFaceFile::init()
   // b/c nspecies count of mixture may have changed
 
   if (perspecies) {
-    for (int i = 0; i < ntaskmax; i++) {
+    for (int i = 0; i < nrealloc; i++) {
       delete [] tasks[i].ntargetsp;
       tasks[i].ntargetsp = new double[nspecies];
     }
