@@ -1026,7 +1026,7 @@ rendezvous_all2all(int n, char *inbuf, int insize, int inorder, int *procs,
   // means that individual sdispls or rdispls values overflow
 
   overflow = 0;
-  if ((bigint) nrvous*outsize > MAXSMALLINT) overflow = 1;
+  if ((bigint) nrvous_out*outsize > MAXSMALLINT) overflow = 1;
   if ((bigint) nout*outsize > MAXSMALLINT) overflow = 1;
   MPI_Allreduce(&overflow,&overflowall,1,MPI_INT,MPI_MAX,world);
   if (overflowall) error->all(FLERR,"Overflow output in rendezvous_a2a");
@@ -1109,7 +1109,7 @@ void Comm::rendezvous_stats(int n, int insize, int nout, int outsize,
   MPI_Allreduce(&size,&size_inrvous_max,1,MPI_SPARTA_BIGINT,MPI_MAX,world);
   MPI_Allreduce(&size,&size_inrvous_min,1,MPI_SPARTA_BIGINT,MPI_MIN,world);
 
-  size = (bigint) nrvous_out*insize;
+  size = (bigint) nrvous_out*outsize;
   MPI_Allreduce(&size,&size_outrvous_all,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
   MPI_Allreduce(&size,&size_outrvous_max,1,MPI_SPARTA_BIGINT,MPI_MAX,world);
   MPI_Allreduce(&size,&size_outrvous_min,1,MPI_SPARTA_BIGINT,MPI_MIN,world);

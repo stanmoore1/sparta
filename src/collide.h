@@ -98,6 +98,7 @@ class Collide : protected Pointers {
   int max_nn;             // allocated size of nn_last_partner
   int *nn_last_partner;   // plist index+1 of last collision partner for each particle
                           // 0 = no collision yet (on this step)
+  int max_nn_group;              // allocated size of nn_last_partner_igroup/jgroup
   int *nn_last_partner_igroup;   // ditto for two groups of particles
   int *nn_last_partner_jgroup;
 

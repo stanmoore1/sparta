@@ -383,7 +383,10 @@ int CollideVSS::perform_collision(Particle::OnePart *&ip,
     setup_collision(ip,p3);
     postcoln.etotal += partial_energy;
 
+    // if no internal DOF, all of the total energy goes to translation
+
     if (precoln.ave_dof > 0.0) EEXCHANGE_ReactingEDisposal(ip,p3,jp);
+    else postcoln.etrans = postcoln.etotal;
     SCATTER_TwoBodyScattering(ip,p3);
 
   } else {
