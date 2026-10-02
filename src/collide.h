@@ -114,6 +114,7 @@ class Collide : protected Pointers {
   int vre_every;      // reset vre params every this many steps
   bigint vre_next;    // next timestep to reset vre params on
   int remainflag;     // 1 if remain defined, else use random fraction
+  int remainflag_last;  // remainflag setting during previous init()
 
   double ***vremax;   // max relative velocity, per cell, per group pair
   double ***remain;   // collision number remainder, per cell, per group pair

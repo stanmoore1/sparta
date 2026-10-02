@@ -85,6 +85,7 @@ Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   vre_start = 1;
   vre_every = 0;
   remainflag = 1;
+  remainflag_last = 1;
   vremax = NULL;
   vremax_initial = NULL;
   remain = NULL;
@@ -307,14 +308,18 @@ void Collide::init()
   // allocate remain if remainflag was enabled after a previous run without it
   // remain is kept sized to nglocalmax whenever allocated, see grow_percell()
   // (if nglocalmax = 0, remain stays NULL and is grown later via remainflag)
+  // also zero it if remainflag was off for the previous run, since
+  //   pack/unpack/copy_grid_one() only migrate remain when remainflag is set
 
-  if (remainflag && !remain) {
-    memory->create(remain,nglocalmax,ngroups,ngroups,"collide:remain");
+  if (remainflag && (!remain || !remainflag_last)) {
+    if (!remain)
+      memory->create(remain,nglocalmax,ngroups,ngroups,"collide:remain");
     for (int icell = 0; icell < nglocalmax; icell++)
       for (int igroup = 0; igroup < ngroups; igroup++)
         for (int jgroup = 0; jgroup < ngroups; jgroup++)
           remain[icell][igroup][jgroup] = 0.0;
   }
+  remainflag_last = remainflag;
 
   // if recombination reactions exist, set flags per species pair
 
