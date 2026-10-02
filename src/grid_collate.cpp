@@ -54,8 +54,14 @@ void Grid::collate_vector_implicit(int n, cellint *ids,
   // if I own grid cell, sum in value to out values directly
   // else nsend = # of tallies to contribute to irregular
 
+  // use find() so an unknown cell ID errors instead of being inserted
+  //   into the hash and mapped to cell 0; later lookups of the same IDs
+  //   are then guaranteed to succeed
+
   int nsend = 0;
   for (i = 0; i < n; i++) {
+    if (hash->find(ids[i]) == hash->end())
+      error->one(FLERR,"Implicit surf tally cell ID is not owned or a ghost");
     icell = (*hash)[ids[i]];
     if (icell >= nlocal) nsend++;
     else out[icell] += in[i];
@@ -152,8 +158,13 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
   // if I own grid cell, sum in values to out values directly
   // else nsend = # of tallies to contribute to rendezvous
 
+  // use find() so an unknown cell ID errors instead of being inserted
+  //   into the hash and mapped to cell 0
+
   int nsend = 0;
   for (i = 0; i < nrow; i++) {
+    if (hash->find(ids[i]) == hash->end())
+      error->one(FLERR,"Implicit surf tally cell ID is not owned or a ghost");
     icell = (*hash)[ids[i]];
     if (icell >= nlocal) nsend++;
     else {

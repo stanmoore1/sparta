@@ -63,6 +63,7 @@ FixEmit::~FixEmit()
   if (copymode) return;
 
   delete random;
+  delete [] idregion;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -80,6 +81,14 @@ void FixEmit::init()
 {
   particle->exist = 1;
   ntotal = 0;
+
+  // re-resolve region, since region delete can free or move regions
+
+  if (idregion) {
+    int iregion = domain->find_region(idregion);
+    if (iregion < 0) error->all(FLERR,"Fix emit region does not exist");
+    region = domain->regions[iregion];
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -207,6 +216,7 @@ void FixEmit::options(int narg, char **arg)
   nevery = 1;
   perspecies = 1;
   region = NULL;
+  idregion = NULL;
 
   int iarg = 0;
   while (iarg < narg) {
@@ -227,6 +237,9 @@ void FixEmit::options(int narg, char **arg)
       if (iregion < 0)
         error->all(FLERR,"Fix emit region does not exist");
       region = domain->regions[iregion];
+      delete [] idregion;
+      idregion = new char[strlen(arg[iarg+1])+1];
+      strcpy(idregion,arg[iarg+1]);
       iarg += 2;
 
     } else iarg += option(narg-iarg,&arg[iarg]);

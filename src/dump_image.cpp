@@ -196,6 +196,7 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
           if (suffix[strlen(suffix)-1] != ']')
             error->all(FLERR,"Illegal fix ave/grid command");
           gridcol = atoi(ptr+1);
+          if (gridcol <= 0) error->all(FLERR,"Illegal dump image command");
           *ptr = '\0';
         } else gridcol = 0;
         n = strlen(suffix) + 1;
@@ -228,6 +229,7 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
           if (suffix[strlen(suffix)-1] != ']')
             error->all(FLERR,"Illegal fix ave/grid command");
           gridxcol = atoi(ptr+1);
+          if (gridxcol <= 0) error->all(FLERR,"Illegal dump image command");
           *ptr = '\0';
         } else gridxcol = 0;
         n = strlen(suffix) + 1;
@@ -260,6 +262,7 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
           if (suffix[strlen(suffix)-1] != ']')
             error->all(FLERR,"Illegal fix ave/grid command");
           gridycol = atoi(ptr+1);
+          if (gridycol <= 0) error->all(FLERR,"Illegal dump image command");
           *ptr = '\0';
         } else gridycol = 0;
         n = strlen(suffix) + 1;
@@ -292,6 +295,7 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
           if (suffix[strlen(suffix)-1] != ']')
             error->all(FLERR,"Illegal fix ave/grid command");
           gridzcol = atoi(ptr+1);
+          if (gridzcol <= 0) error->all(FLERR,"Illegal dump image command");
           *ptr = '\0';
         } else gridzcol = 0;
         n = strlen(suffix) + 1;
@@ -327,6 +331,7 @@ DumpImage::DumpImage(SPARTA *sparta, int narg, char **arg) :
           if (suffix[strlen(suffix)-1] != ']')
             error->all(FLERR,"Illegal fix ave/grid command");
           surfcol = atoi(ptr+1);
+          if (surfcol <= 0) error->all(FLERR,"Illegal dump image command");
           *ptr = '\0';
         } else surfcol = 0;
         n = strlen(suffix) + 1;

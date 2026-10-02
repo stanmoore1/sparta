@@ -120,6 +120,7 @@ DumpParticle::DumpParticle(SPARTA *sparta, int narg, char **arg) :
   // options
 
   iregion = -1;
+  idregion = NULL;
   nthresh = 0;
   thresh_array = NULL;
   thresh_op = NULL;
@@ -176,6 +177,7 @@ DumpParticle::DumpParticle(SPARTA *sparta, int narg, char **arg) :
 
 DumpParticle::~DumpParticle()
 {
+  delete [] idregion;
   delete [] pack_choice;
   delete [] vtype;
   memory->destroy(field2index);
@@ -217,6 +219,14 @@ DumpParticle::~DumpParticle()
 
 void DumpParticle::init_style()
 {
+  // re-resolve region, since region delete can free or move regions
+
+  if (idregion) {
+    iregion = domain->find_region(idregion);
+    if (iregion == -1)
+      error->all(FLERR,"Dump_modify region ID does not exist");
+  }
+
   // setup function ptrs
 
   if (binary) header_choice = &DumpParticle::header_binary;
@@ -982,11 +992,15 @@ int DumpParticle::modify_param(int narg, char **arg)
 {
   if (strcmp(arg[0],"region") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal dump_modify command");
+    delete [] idregion;
+    idregion = NULL;
     if (strcmp(arg[1],"none") == 0) iregion = -1;
     else {
       iregion = domain->find_region(arg[1]);
       if (iregion == -1)
         error->all(FLERR,"Dump_modify region ID does not exist");
+      idregion = new char[strlen(arg[1])+1];
+      strcpy(idregion,arg[1]);
     }
     return 2;
   }

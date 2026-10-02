@@ -180,6 +180,10 @@ void ComputeBoundary::boundary_tally(double dtremain,
                                      Particle::OnePart *ip,
                                      Particle::OnePart *jp)
 {
+  // skip if no original particle, e.g. on-surf reaction by SurfReactAdsorb
+
+  if (!iorig) return;
+
   // skip if species not in mixture group
 
   int origspecies = iorig->ispecies;

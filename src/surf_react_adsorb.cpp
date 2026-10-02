@@ -3112,9 +3112,17 @@ void SurfReactAdsorb::PS_react(int isurf, int isc, double *norm)
         nsingle++;
         ireaction = nlist_gs + reactions_ps_list[i];
         tally_single[ireaction]++;
-        if (ncompute_tally)
-          for (m = 0; m < ncompute_tally; m++)
-            clist_active[m]->surf_tally(0.0,isurf,-1,ireaction+1,NULL,NULL,NULL);
+        // for box faces, isurf = face index and computes are boundary computes
+
+        if (ncompute_tally) {
+          if (mode == FACE)
+            for (m = 0; m < ncompute_tally; m++)
+              clist_active[m]->boundary_tally(0.0,isurf,domain->bflag[isurf],
+                                              ireaction+1,NULL,NULL,NULL);
+          else
+            for (m = 0; m < ncompute_tally; m++)
+              clist_active[m]->surf_tally(0.0,isurf,-1,ireaction+1,NULL,NULL,NULL);
+        }
 
         // update tau
 

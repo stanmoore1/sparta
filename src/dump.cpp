@@ -459,8 +459,12 @@ void Dump::openfile()
 
 int Dump::convert_string(int n, double *mybuf)
 {
-  int i,j;
+  int i,j,k,avail,rowstart,mrow,overflow;
   char str[128];
+
+  // each field is written with snprintf() bounded by space left in sbuf
+  // ONEFIELD per field is only an estimate, a user format can be wider
+  // if a row does not fit, grow sbuf and rewrite the row
 
   int offset = 0;
   int m = 0;
@@ -471,39 +475,62 @@ int Dump::convert_string(int n, double *mybuf)
       memory->grow(sbuf,maxsbuf,"dump:sbuf");
     }
 
-    for (j = 0; j < size_one; j++) {
-      if (vtype[j] == DOUBLE)
-        offset += sprintf(&sbuf[offset],vformat[j],mybuf[m]);
-      else if (vtype[j] == INT)
-        offset += sprintf(&sbuf[offset],vformat[j],
-                          static_cast<int> (ubuf(mybuf[m]).i));
-      else if (vtype[j] == BIGINT)
-        offset += sprintf(&sbuf[offset],vformat[j],
-                          static_cast<bigint> (ubuf(mybuf[m]).i));
-      else if (vtype[j] == UINT)
-        offset += sprintf(&sbuf[offset],vformat[j],
-                          static_cast<uint32_t> (ubuf(mybuf[m]).i));
-      else if (vtype[j] == BIGUINT)
-        offset += sprintf(&sbuf[offset],vformat[j],
-                          static_cast<uint64_t> (ubuf(mybuf[m]).i));
-      else if (vtype[j] == STRING) {
-        // NOTE: this is a kludge
-        // assumes any STRING field from dump particle/grid/surf
-        // is a grid cell ID
-        // if not, might have to move this method into child classes
-        // and tailor it for each dump style
-        // decode cell ID via ubuf, as write_text() does:
-        //   value is a bit-punned cellint, which is 64-bit under BIGBIG,
-        //   so a numeric read + int cast truncates IDs above 2^31
-        if (sizeof(cellint) == sizeof(smallint))
-          grid->id_num2str((uint32_t) ubuf(mybuf[m]).i,str);
-        else
-          grid->id_num2str((uint64_t) ubuf(mybuf[m]).i,str);
-        offset += sprintf(&sbuf[offset],vformat[j],str);
+    rowstart = offset;
+    mrow = m;
+
+    while (1) {
+      overflow = 0;
+      offset = rowstart;
+      m = mrow;
+
+      for (j = 0; j <= size_one; j++) {
+        avail = maxsbuf - offset;
+        if (j == size_one)
+          k = snprintf(&sbuf[offset],avail,"\n");
+        else if (vtype[j] == DOUBLE)
+          k = snprintf(&sbuf[offset],avail,vformat[j],mybuf[m]);
+        else if (vtype[j] == INT)
+          k = snprintf(&sbuf[offset],avail,vformat[j],
+                       static_cast<int> (ubuf(mybuf[m]).i));
+        else if (vtype[j] == BIGINT)
+          k = snprintf(&sbuf[offset],avail,vformat[j],
+                       static_cast<bigint> (ubuf(mybuf[m]).i));
+        else if (vtype[j] == UINT)
+          k = snprintf(&sbuf[offset],avail,vformat[j],
+                       static_cast<uint32_t> (ubuf(mybuf[m]).i));
+        else if (vtype[j] == BIGUINT)
+          k = snprintf(&sbuf[offset],avail,vformat[j],
+                       static_cast<uint64_t> (ubuf(mybuf[m]).i));
+        else if (vtype[j] == STRING) {
+          // NOTE: this is a kludge
+          // assumes any STRING field from dump particle/grid/surf
+          // is a grid cell ID
+          // if not, might have to move this method into child classes
+          // and tailor it for each dump style
+          // decode cell ID via ubuf, as write_text() does:
+          //   value is a bit-punned cellint, which is 64-bit under BIGBIG,
+          //   so a numeric read + int cast truncates IDs above 2^31
+          if (sizeof(cellint) == sizeof(smallint))
+            grid->id_num2str((uint32_t) ubuf(mybuf[m]).i,str);
+          else
+            grid->id_num2str((uint64_t) ubuf(mybuf[m]).i,str);
+          k = snprintf(&sbuf[offset],avail,vformat[j],str);
+        } else k = 0;
+
+        if (k < 0) return -1;
+        if (k >= avail) {
+          overflow = 1;
+          break;
+        }
+        offset += k;
+        if (j < size_one) m++;
       }
-      m++;
+
+      if (!overflow) break;
+      if ((bigint) maxsbuf + DELTA > MAXSMALLINT) return -1;
+      maxsbuf += DELTA;
+      memory->grow(sbuf,maxsbuf,"dump:sbuf");
     }
-    offset += sprintf(&sbuf[offset],"\n");
   }
 
   return offset;

@@ -479,6 +479,7 @@ FixAveHisto::~FixAveHisto()
 {
   if (copymode) return;
 
+  delete [] idregion;
   delete [] which;
   delete [] argindex;
   delete [] value2index;
@@ -509,6 +510,14 @@ int FixAveHisto::setmask()
 
 void FixAveHisto::init()
 {
+  // re-resolve region, since region delete can free or move regions
+
+  if (regionflag) {
+    iregion = domain->find_region(idregion);
+    if (iregion == -1)
+      error->all(FLERR,"Fix ave/histo region ID does not exist");
+  }
+
   // set current indices for all computes,fixes,variables
 
   for (int i = 0; i < nvalues; i++) {
@@ -1010,6 +1019,7 @@ void FixAveHisto::options(int iarg, int narg, char **arg)
   beyond = IGNORE;
   overwrite = 0;
   regionflag = 0;
+  idregion = NULL;
   mixflag = 0;
   groupflag = 0;
   title1 = NULL;
@@ -1070,6 +1080,9 @@ void FixAveHisto::options(int iarg, int narg, char **arg)
       iregion = domain->find_region(arg[iarg+1]);
       if (iregion == -1)
         error->all(FLERR,"Fix ave/histo region ID does not exist");
+      delete [] idregion;
+      idregion = new char[strlen(arg[iarg+1])+1];
+      strcpy(idregion,arg[iarg+1]);
       iarg += 2;
     } else if (strcmp(arg[iarg],"mix") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal fix ave/histo command");
