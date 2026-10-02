@@ -851,7 +851,7 @@ void Particle::add_species(int narg, char **arg)
 
   for (i = 0; i < newspecies; i++) {
     n = strlen(names[i]);
-    for (j = 0; j < n-1; j++)
+    for (j = 0; j < n; j++)
       if (!isalnum(names[i][j]) && names[i][j] != '_' &&
           names[i][j] != '+' && names[i][j] != '-')
         error->all(FLERR,"Invalid character in species ID");
@@ -1248,10 +1248,10 @@ void Particle::read_species_file()
     // error checks
 
     if (fsp->rotdof != 0 && fsp->rotdof != 2 && fsp->rotdof != 3)
-      error->all(FLERR,"Invalid rotational DOF in species file");
+      error->one(FLERR,"Invalid rotational DOF in species file");
 
     if (fsp->vibdof < 0 || fsp->vibdof > 2*MAXVIBMODE || fsp->vibdof % 2)
-      error->all(FLERR,"Invalid vibrational DOF in species file");
+      error->one(FLERR,"Invalid vibrational DOF in species file");
 
     // initialize additional rotation/vibration fields
     // may be overwritten by rotfile or vibfile
@@ -1657,7 +1657,7 @@ int Particle::unpack_restart(char *buf)
                     "particle:particle_restart");
 
   memcpy(particle_restart,ptr,(bigint) nlocal_restart*nbytes);
-  ptr += (bigint) nlocal_restart * sizeof(OnePartRestart);
+  ptr += (bigint) nlocal_restart * nbytes;
   ptr = ROUNDUP(ptr);
 
   return ptr - buf;
