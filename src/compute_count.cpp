@@ -184,7 +184,7 @@ void ComputeCount::compute_vector()
 {
   int i,m;
 
-  invoked_scalar = update->ntimestep;
+  invoked_vector = update->ntimestep;
 
   per_species_tally();
 

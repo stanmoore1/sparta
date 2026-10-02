@@ -63,6 +63,7 @@ void ComputeKEParticleKokkos::compute_per_particle()
     ComputeKEParticle::compute_per_particle();
   }  else {
     compute_per_particle_kokkos();
+    k_vector_particle.sync_host();
   }
 }
 
@@ -70,9 +71,14 @@ void ComputeKEParticleKokkos::compute_per_particle()
 
 void ComputeKEParticleKokkos::compute_per_particle_kokkos()
 {
+  invoked_per_particle = update->ntimestep;
+
   // grow ke array (d_vector_particle) if necessary
-  if (particle->nlocal > nmax) {
+  // also when a prewrap host invocation allocated only the host ke
+  if (particle->nlocal > nmax ||
+      (int) k_vector_particle.extent(0) < particle->nlocal) {
     memoryKK->destroy_kokkos(k_vector_particle,vector_particle);
+    ke = NULL;
     nmax = particle->maxlocal;
     memoryKK->create_kokkos(k_vector_particle,vector_particle,nmax,"ke/particle:vector_particle");
     d_vector_particle = k_vector_particle.view_device();

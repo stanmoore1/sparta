@@ -105,6 +105,8 @@ void ComputePropertyGridKokkos::compute_per_grid()
 /* ---------------------------------------------------------------------- */
 void ComputePropertyGridKokkos::compute_per_grid_kokkos()
 {
+  invoked_per_grid = update->ntimestep;
+
   GridKokkos* grid_kk = ((GridKokkos*)grid);
   d_cells = grid_kk->k_cells.view_device();
   d_cinfo = grid_kk->k_cinfo.view_device();

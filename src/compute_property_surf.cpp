@@ -555,7 +555,7 @@ void ComputePropertySurf::pack_area(int n)
       m = cglobal[i];
       if (tris[m].mask & groupbit) {
 	MathExtra::sub3(tris[m].p2,tris[m].p1,p12);
-	MathExtra::sub3(tris[m].p3,tris[m].p2,p12);
+	MathExtra::sub3(tris[m].p3,tris[m].p2,p23);
 	MathExtra::cross3(p12,p23,cross);
 	buf[n] = 0.5 * MathExtra::len3(cross);
       } else buf[n] = 0.0;
