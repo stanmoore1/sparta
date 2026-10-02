@@ -5,3 +5,4 @@
 - F-G01-4 / F-G02-1 | src/KOKKOS/collide_vss_kokkos.cpp | zero-volume cell: set d_error_flag and return at all 5 collision kernels (before rand state acquire) | compile OK
 - F-G00-13 | src/KOKKOS/collide_vss_kokkos.cpp | collisions_one_ambipolar kernel: recomb 3rd body disabled only for np==1 or (np==2 && jpart not electron), matching collide.cpp:1552-1555 (other kernels already match CPU np<=2) | compile OK
 - F-G00-17 | src/KOKKOS/collide_vss_kokkos.cpp | test_collision_kokkos: return 0 if vremax==0 before vre/vremax, matching collide_vss.cpp:228 | compile OK
+- F-G02-2 | src/KOKKOS/collide_vss_kokkos.cpp | 18 racy d_max{delete,cellcount,electron}() += DELTA replaced by Kokkos::atomic_max(..., ndelete+DELTADELETE / d_plist.extent(1)+DELTACELLCOUNT / d_elist.extent(1)+DELTACELLCOUNT) | compile OK

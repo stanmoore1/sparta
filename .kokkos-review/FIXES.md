@@ -20,3 +20,9 @@
 | F-G00-5 | compute_*grid_kokkos | 4812d512 |
 | F-G00-6 | compute_*grid_kokkos | 4812d512 |
 | F-G00-7 | compute_*grid_kokkos | 4812d512 |
+| F-G00-2 | computes | 997fb193 |
+| F-G00-9 | computes | 997fb193 |
+| F-G00-14 | computes | 997fb193 |
+| G12x-F-G16-2 | computes | 997fb193 |
+| F-G12-1 | fix_emit_*_kokkos | cf193cd2 |
+| F-G12-2 | fix_emit_*_kokkos | cf193cd2 |
