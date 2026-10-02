@@ -67,3 +67,17 @@ Fixed findings get `FIXED in <commit>`.
 Do NOT write helper scripts into the shared scratchpad (ck.py etc.) — several agents
 overwrote each other's scripts and checkpoint entries. Update your checkpoint ONLY with
 the Edit tool on your own group file, re-reading it first.
+
+## Fixer agents (phase 3) — detailed
+- Each fixer owns a disjoint set of SOURCE FILES (listed in its prompt). Edit only those files.
+- Input: all findings in verify/*.md with VERDICT CONFIRMED (or PLAUSIBLE with a clear, safe fix)
+  whose fix lands in your files. Skip REFUTED. Skip findings marked FIXED in FIXES.md.
+- Checkpoint: fixes/<FIXER>.md. On start read it; skip findings already listed there.
+- For each finding: make the minimal fix (match CPU code style and surrounding idiom; no
+  refactors), then run `.kokkos-review/compile_one.sh <each .cpp you touched or that includes
+  the header you touched>` from /home/user/sparta; it must print OK. Then IMMEDIATELY append to
+  fixes/<FIXER>.md: `- <ID> | <files> | <one-line description of change> | compile OK`.
+  If a fix is too large/risky (multi-file API change, design question), do NOT do it; append
+  `- <ID> | DEFERRED | <reason + proposed patch>`.
+- Do NOT run git (the orchestrator commits). Do not touch files outside your list.
+- When done append `## STATUS: COMPLETE`.

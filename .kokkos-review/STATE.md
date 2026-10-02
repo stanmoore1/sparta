@@ -3,3 +3,5 @@
   To resume: for each group in GROUPS.md without `## STATUS: COMPLETE` in groups/<G>.md, relaunch a reviewer with the same prompt (protocol handles resume).
 - Phase 2 (verify): per-group verifiers launched as groups complete; output in verify/<G>.md
 - Phase 3 (fix): not started
+- Phase 3 (fix): fixer agents own disjoint file sets; checkpoints in fixes/<FX>.md; orchestrator commits source changes per fixer. compile_one.sh = syntax check vs OpenMP build.
+  Launched: FX-surfreact (surf_react_*). Fixed directly by orchestrator: F-G15-1, F-G04-1 (see FIXES.md).
