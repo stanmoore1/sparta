@@ -37,6 +37,23 @@ DumpMovie::DumpMovie(SPARTA *sparta, int narg, char **arg) :
   fp = NULL;
 }
 
+/* ----------------------------------------------------------------------
+   close the FFmpeg pipe with pclose() so FFmpeg finishes the movie file
+   set fp = NULL so ~Dump() does not fclose() the popen() stream
+------------------------------------------------------------------------- */
+
+DumpMovie::~DumpMovie()
+{
+  if ((comm->me == 0) && (fp != NULL)) {
+#if defined(_WIN32)
+    _pclose(fp);
+#else
+    pclose(fp);
+#endif
+  }
+  fp = NULL;
+}
+
 /* ---------------------------------------------------------------------- */
 
 void DumpMovie::openfile()

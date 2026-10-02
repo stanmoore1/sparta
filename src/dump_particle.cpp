@@ -26,6 +26,7 @@
 #include "compute.h"
 #include "fix.h"
 #include "input.h"
+#include "output.h"
 #include "variable.h"
 #include "memory.h"
 #include "error.h"
@@ -74,8 +75,8 @@ DumpParticle::DumpParticle(SPARTA *sparta, int narg, char **arg) :
 
   pack_choice = new FnPtrPack[nfield];
   vtype = new int[nfield];
-  field2index = new int[nfield];
-  argindex = new int[nfield];
+  memory->create(field2index,nfield,"dump:field2index");
+  memory->create(argindex,nfield,"dump:argindex");
 
   // custom props, computes, fixes, variables which the dump accesses
 
@@ -135,7 +136,7 @@ DumpParticle::DumpParticle(SPARTA *sparta, int narg, char **arg) :
 
   vformat = new char*[size_one];
 
-  format_default = new char[3*size_one+1];
+  format_default = new char[8*size_one+1];
   format_default[0] = '\0';
 
   for (int i = 0; i < size_one; i++) {
@@ -177,8 +178,8 @@ DumpParticle::~DumpParticle()
 {
   delete [] pack_choice;
   delete [] vtype;
-  delete [] field2index;
-  delete [] argindex;
+  memory->destroy(field2index);
+  memory->destroy(argindex);
 
   memory->destroy(thresh_array);
   memory->destroy(thresh_op);
@@ -245,6 +246,15 @@ void DumpParticle::init_style()
       error->all(FLERR,"Could not find dump particle compute ID");
     compute[i] = modify->compute[icompute];
   }
+
+  // dump_modify every may have changed the dump frequency stored by Output
+  // refresh nevery so the fix compatibility check uses the current value
+
+  for (int idump = 0; idump < output->ndump; idump++)
+    if (strcmp(id,output->dump[idump]->id) == 0) {
+      if (output->every_dump[idump] > 0) nevery = output->every_dump[idump];
+      break;
+    }
 
   int ifix;
   for (int i = 0; i < nfix; i++) {
@@ -375,8 +385,9 @@ int DumpParticle::count()
   }
 
   // un-choose if any threshhold criterion isn't met
+  // skip if no particles, since per-particle arrays may not be allocated
 
-  if (nthresh) {
+  if (nthresh && particle->nlocal) {
     int ptrstyle,nstride;
     int *iptr;
     double *ptr;
@@ -482,22 +493,22 @@ int DumpParticle::count()
         int index = custom[field2index[i]];
         if (particle->etype[index] == INT) {
           ptrstyle = INT;
-          if (particle->etype[index] == 0) {
+          if (particle->esize[index] == 0) {
             iptr = particle->eivec[particle->ewhich[index]];
             nstride = 1;
           } else {
             int **iptrtmp = particle->eiarray[particle->ewhich[index]];
-            if (iptrtmp) iptr = &iptrtmp[0][0];
+            if (iptrtmp) iptr = &iptrtmp[0][argindex[i]-1];
             else iptr = NULL;
             nstride = particle->esize[index];
           }
         } else {
-          if (particle->etype[index] == 0) {
+          if (particle->esize[index] == 0) {
             ptr = particle->edvec[particle->ewhich[index]];
             nstride = 1;
           } else {
             double **ptrtmp = particle->edarray[particle->ewhich[index]];
-            if (ptrtmp) ptr = &ptrtmp[0][0];
+            if (ptrtmp) ptr = &ptrtmp[0][argindex[i]-1];
             else ptr = NULL;
             nstride = particle->esize[index];
           }
@@ -718,6 +729,8 @@ int DumpParticle::parse_fields(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump particle command");
         argindex[i] = atoi(ptr+1);
+        if (argindex[i] <= 0)
+          error->all(FLERR,"Invalid attribute in dump particle command");
         *ptr = '\0';
       } else argindex[i] = 0;
 
@@ -757,6 +770,8 @@ int DumpParticle::parse_fields(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump particle command");
         argindex[i] = atoi(ptr+1);
+        if (argindex[i] <= 0)
+          error->all(FLERR,"Invalid attribute in dump particle command");
         *ptr = '\0';
       } else argindex[i] = 0;
 
@@ -799,6 +814,8 @@ int DumpParticle::parse_fields(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump particle command");
         argindex[i] = atoi(ptr+1);
+        if (argindex[i] <= 0)
+          error->all(FLERR,"Invalid attribute in dump particle command");
         *ptr = '\0';
       } else argindex[i] = 0;
 
@@ -940,9 +957,17 @@ int DumpParticle::add_variable(char *id)
                      "dump:id_variable");
   delete [] variable;
   variable = new int[nvariable+1];
+
+  // keep existing per-variable buffers, since count() only reallocates
+  //   them when nlocal > maxlocal
+  // allocate the new buffer now if count() already set maxlocal
+
+  double **vbufnew = new double*[nvariable+1];
+  for (int i = 0; i < nvariable; i++) vbufnew[i] = vbuf[i];
+  vbufnew[nvariable] = NULL;
+  if (maxlocal > 0) memory->create(vbufnew[nvariable],maxlocal,"dump:vbuf");
   delete [] vbuf;
-  vbuf = new double*[nvariable+1];
-  for (int i = 0; i <= nvariable; i++) vbuf[i] = NULL;
+  vbuf = vbufnew;
 
   int n = strlen(id) + 1;
   id_variable[nvariable] = new char[n];
@@ -1029,6 +1054,8 @@ int DumpParticle::modify_param(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump modify command");
         argindex[nfield+nthresh] = atoi(ptr+1);
+        if (argindex[nfield+nthresh] <= 0)
+          error->all(FLERR,"Invalid attribute in dump modify command");
         *ptr = '\0';
       } else argindex[nfield+nthresh] = 0;
 
@@ -1069,6 +1096,8 @@ int DumpParticle::modify_param(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump modify command");
         argindex[nfield+nthresh] = atoi(ptr+1);
+        if (argindex[nfield+nthresh] <= 0)
+          error->all(FLERR,"Invalid attribute in dump modify command");
         *ptr = '\0';
       } else argindex[nfield+nthresh] = 0;
 
@@ -1112,6 +1141,8 @@ int DumpParticle::modify_param(int narg, char **arg)
         if (suffix[strlen(suffix)-1] != ']')
           error->all(FLERR,"Invalid attribute in dump modify command");
         argindex[nfield+nthresh] = atoi(ptr+1);
+        if (argindex[nfield+nthresh] <= 0)
+          error->all(FLERR,"Invalid attribute in dump modify command");
         *ptr = '\0';
       } else argindex[nfield+nthresh] = 0;
 
