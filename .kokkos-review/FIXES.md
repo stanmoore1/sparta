@@ -26,3 +26,16 @@
 | G12x-F-G16-2 | computes | 997fb193 |
 | F-G12-1 | fix_emit_*_kokkos | cf193cd2 |
 | F-G12-2 | fix_emit_*_kokkos | cf193cd2 |
+| F-G00-10 | surf_collide_* | 7af97cde |
+| F-G09-1 | surf_collide_* | 7af97cde |
+| F-G08-1 | surf_collide_* | 7af97cde |
+| F-G08-2 | surf_collide_* | 7af97cde |
+| F-G08-3 | surf_collide_* | 7af97cde |
+| F-G09-3 | surf_collide_* | 7af97cde |
+| F-G09-4a | surf_collide_* | 7af97cde |
+| F-G18-1 | update/particle_kokkos | cf4db893 |
+| F-G05-1 | update/particle_kokkos | cf4db893 |
+| F-G00-11b | update/particle_kokkos | cf4db893 |
+| F-G09-4b | update/particle_kokkos | cf4db893 |
+| F-G06-1 | update/particle_kokkos | cf4db893 |
+| F-G00-11a | DEFERRED (tally rollback on retry; plan in fixes/FX-update.md) | - |
