@@ -103,7 +103,8 @@ void Domain::init()
   // then its collision model must allow reactions
 
   for (int i = 0; i < 2*dimension; i++)
-    if (surf_react[i] >= 0 && surf->sc[surf_collide[i]]->allowreact == 0)
+    if (surf_react[i] >= 0 && surf_collide[i] >= 0 &&
+        surf->sc[surf_collide[i]]->allowreact == 0)
       error->all(FLERR,"Box face with reaction model, "
                  "but collision model does not allow reactions");
 
@@ -217,7 +218,7 @@ void Domain::boundary_modify(int narg, char **arg)
   int nface = 0;
 
   int iarg = 0;
-  while (iarg < 6) {
+  while (iarg < narg && iarg < 6) {
     if (strcmp(arg[iarg],"xlo") == 0) faces[nface++] = XLO;
     else if (strcmp(arg[iarg],"xhi") == 0) faces[nface++] = XHI;
     else if (strcmp(arg[iarg],"ylo") == 0) faces[nface++] = YLO;

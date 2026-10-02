@@ -399,7 +399,7 @@ void Dump::openfile()
 
   if (multifile) {
     char *filestar = filecurrent;
-    filecurrent = new char[strlen(filestar) + 16];
+    filecurrent = new char[strlen(filestar) + 24 + padflag];
     char *ptr = strchr(filestar,'*');
     *ptr = '\0';
     if (padflag == 0)
@@ -419,13 +419,14 @@ void Dump::openfile()
   if (filewriter) {
     if (compressed) {
 #ifdef SPARTA_GZIP
-      char gzip[128];
-      snprintf(gzip,sizeof(gzip),"gzip -6 > %s",filecurrent);
+      char *gzip = new char[strlen(filecurrent) + 16];
+      sprintf(gzip,"gzip -6 > %s",filecurrent);
 #ifdef _WIN32
       fp = _popen(gzip,"wb");
 #else
       fp = popen(gzip,"w");
 #endif
+      delete [] gzip;
 #else
       error->one(FLERR,"Cannot open gzipped file");
 #endif
@@ -628,7 +629,6 @@ void Dump::modify_params(int narg, char **arg)
         int n = strlen(arg[iarg+2]) + 1;
         format_line_user = new char[n];
         strcpy(format_line_user,arg[iarg+2]);
-        iarg += 3;
       } else if (strcmp(arg[iarg+1],"int") == 0) {
         delete [] format_int_user;
         int n = strlen(arg[iarg+2]) + 1;
