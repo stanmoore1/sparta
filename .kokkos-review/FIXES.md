@@ -91,3 +91,22 @@
 | F-G22-4 | grid/surf | 57664eb4 |
 | F-G22-5 | grid/surf | 57664eb4 |
 | F-G18-2-cpu | grid/surf | 57664eb4 |
+| F-G20-9 | fft | bdbc461a |
+| F-G00-8 | fft | bdbc461a |
+| F-G19-2 | fft | bdbc461a |
+| F-G19-1 | fft | bdbc461a |
+| F-G19-3 | fft | bdbc461a |
+| F-G19-9 | fft | bdbc461a |
+| F-G20-6 | fft | bdbc461a |
+| F-G20-7 | fft | bdbc461a |
+| F-G00-21 | fft | bdbc461a |
+| F-G20-1 | fft | bdbc461a |
+| F-G19-4 | fft | bdbc461a |
+| F-G19-5 | fft | bdbc461a |
+| F-G20-2 | fft | bdbc461a |
+| F-G19-6 | fft | bdbc461a |
+| F-G20-3 | fft | bdbc461a |
+| F-G19-7 | fft | bdbc461a |
+| F-G20-8 | fft | bdbc461a |
+| F-G20-5 | fft | bdbc461a |
+| F-G20-4 (rest) | DEFERRED (unreachable collective path; see fixes/FX-fft.md) | - |
