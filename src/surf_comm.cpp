@@ -195,8 +195,9 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
 
   int nvalues_custom = 0;
   for (int ic = 0; ic < nc; ic++) {
-    if (esize[ic] == 0) nvalues_custom++;
-    else nvalues_custom += esize[ic];
+    int index = index_custom[ic];
+    if (esize[index] == 0) nvalues_custom++;
+    else nvalues_custom += esize[index];
   }
 
   // perform rendezvous operation
@@ -297,7 +298,6 @@ int Surf::rendezvous_redistribute_custom(int n, char *inbuf, int &flag,
   // generic Surf class variables
 
   int nprocs = sptr->nprocs;
-  int ncustom = sptr->ncustom;
   int *etype = sptr->etype;
   int *esize = sptr->esize;
   int *ewhich = sptr->ewhich;
@@ -323,7 +323,11 @@ int Surf::rendezvous_redistribute_custom(int n, char *inbuf, int &flag,
   int skip = 1 + nvalues_custom;
   int offset = 1;
 
-  for (int ic = 0; ic < ncustom; ic++) {
+  // index_custom only has entries for the nc new custom attributes,
+  //   not for all ncustom Surf attributes
+  // each attribute uses >= 1 value, so loop until all values consumed
+
+  for (int ic = 0; offset < skip; ic++) {
     index = index_custom[ic];
     type = etype[index];
     size = esize[index];
@@ -970,8 +974,11 @@ int Surf::rendezvous_unique(int n, char *inbuf,
   // flag = 2: new outbuf
 
   flag = 2;
+  // only k entries of proclist/ownflags were filled
+  //   owned surfs with no requests are not returned
+
   outbuf = (char *) ownflags;
-  return nown;
+  return k;
 }
 
 /* ----------------------------------------------------------------------
@@ -1020,7 +1027,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
       if (n == 1)
 	ibuf[k++] = iinput[isurf];
       else {
-	idata = index * n;
+	idata = isurf * n;
 	for (j = 0; j < n; j++)
 	  ibuf[k++] = iinput[idata++];
       }
@@ -1029,7 +1036,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
       if (n == 1)
 	dbuf[k++] = dinput[isurf];
       else {
-	idata = index * n;
+	idata = isurf * n;
 	for (j = 0; j < n; j++)
 	  dbuf[k++] = dinput[idata++];
       }

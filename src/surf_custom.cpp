@@ -378,9 +378,9 @@ void Surf::spread_inverse_custom(int index)
 
     } else if (esize[index]) {
       int *in,*out;
-      if (nown == 0) in = NULL;
+      if (size_custom_local[index] == 0) in = NULL;
       else in = &eiarray_local[ewhich[index]][0][0];
-      if (size_custom_local[index] == 0) out = NULL;
+      if (nown == 0) out = NULL;
       else out = &eiarray[ewhich[index]][0][0];
       spread_local2own(esize[index],INT,in,out);
     }
@@ -388,13 +388,13 @@ void Surf::spread_inverse_custom(int index)
   } else if (etype[index] == DOUBLE) {
     if (esize[index] == 0) {
       spread_local2own(1,DOUBLE,edvec_local[ewhich[index]],
-                       &edvec[ewhich[index]]);
+                       edvec[ewhich[index]]);
 
     } else if (esize[index]) {
       double *in,*out;
-      if (nown == 0) in = NULL;
+      if (size_custom_local[index] == 0) in = NULL;
       else in = &edarray_local[ewhich[index]][0][0];
-      if (size_custom_local[index] == 0) out = NULL;
+      if (nown == 0) out = NULL;
       else out = &edarray[ewhich[index]][0][0];
       spread_local2own(esize[index],DOUBLE,in,out);
     }
@@ -442,14 +442,14 @@ int Surf::extract_custom(double **&cvalues)
       if (esize[ic] == 0) {
         int *ivector = eivec[ewhich[ic]];
         for (i = 0; i < nown; i++)
-          cvalues[i][m] = ubuf(ivector[i]).d;
+          cvalues[i][m] = ivector[i];
         m++;
       } else {
         int **iarray = eiarray[ewhich[ic]];
         int n = esize[ic];
         for (i = 0; i < nown; i++)
           for (j = 0; j < n; j++)
-            cvalues[i][m+j] = ubuf(iarray[i][j]).d;
+            cvalues[i][m+j] = iarray[i][j];
         m += esize[ic];
       }
 
