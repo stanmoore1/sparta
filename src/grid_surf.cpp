@@ -171,6 +171,10 @@ void Grid::surf2grid_one(int flag, int icell, int iparent, int nsurf_caller,
       cinfo[icell].volume = vols[0];
 
   } else {
+    if (nsplitone > maxsplitpercell)
+      error->one(FLERR,"Too many split cells in a single cell - "
+                 "set global splitmax");
+
     c->nsplit = nsplitone;
     nunsplitlocal--;
 
@@ -188,13 +192,13 @@ void Grid::surf2grid_one(int flag, int icell, int iparent, int nsurf_caller,
     iptr = s->csubs = csubs->vget();
 
     // add nsplitone sub cells
-    // collide and fixes also need to add cells
+    // collide also needs to add cells
+    // per-grid fixes are updated for new sub cells by callers in grid_adapt
 
     for (int i = 0; i < nsplitone; i++) {
       isub = nlocal;
       add_sub_cell(icell,1);
       if (collide) collide->add_grid_one();
-      if (modify->n_pergrid) modify->add_grid_one();
       cells[isub].nsplit = -i;
       cinfo[isub].volume = vols[i];
       iptr[i] = isub;
@@ -1031,6 +1035,9 @@ void Grid::surf2grid_split(int subflag, int outflag)
                                vols,surfmap,cinfo[icell].corner,xsub,xsplit);
 
     if (nsplitone == 1) {
+      if (!subflag && cells[icell].nsplit != nsplitone)
+        error->one(FLERR,
+                   "Inconsistent surface to grid mapping in read_restart");
       cinfo[icell].volume = vols[0];
 
     } else if (subflag) {
@@ -1395,19 +1402,19 @@ void Grid::partition_grid(int proclower, int procupper,
   int zrange = zhi-zlo + 1;
 
   if (xrange >= yrange && xrange >= zrange) {
-    int mid = xlo + static_cast<int> ((0.5*nplower/npupper) * xrange);
+    int mid = xlo + static_cast<int> (((double) nplower/(nplower+npupper)) * xrange);
     gtree[procmid].dim = 0;
     gtree[procmid].cut = mid;
     partition_grid(proclower,procmid-1,xlo,mid-1,ylo,yhi,zlo,zhi,gtree);
     partition_grid(procmid,procupper,mid,xhi,ylo,yhi,zlo,zhi,gtree);
   } else if (yrange >= zrange) {
-    int mid = ylo + static_cast<int> ((0.5*nplower/npupper) * yrange);
+    int mid = ylo + static_cast<int> (((double) nplower/(nplower+npupper)) * yrange);
     gtree[procmid].dim = 1;
     gtree[procmid].cut = mid;
     partition_grid(proclower,procmid-1,xlo,xhi,ylo,mid-1,zlo,zhi,gtree);
     partition_grid(procmid,procupper,xlo,xhi,mid,yhi,zlo,zhi,gtree);
   } else {
-    int mid = zlo + static_cast<int> ((0.5*nplower/npupper) * zrange);
+    int mid = zlo + static_cast<int> (((double) nplower/(nplower+npupper)) * zrange);
     gtree[procmid].dim = 2;
     gtree[procmid].cut = mid;
     partition_grid(proclower,procmid-1,xlo,xhi,ylo,yhi,zlo,mid-1,gtree);
