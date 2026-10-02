@@ -44,6 +44,7 @@ enum{INT,DOUBLE};                                        // several files
 
 #define DELTATASK 256
 #define TEMPLIMIT 1.0e5
+#define SMALL 1.0e-6
 
 /* ---------------------------------------------------------------------- */
 
@@ -305,6 +306,10 @@ void FixEmitSurf::init()
     int isp,nunset;
     double sum,newfrac;
 
+    // use a small tolerance on sum to allow for floating-point roundoff
+    // flag errors locally so that error->all() is invoked by all procs
+
+    int flag = 0;
     int nsown = surf->nown;
     for (int i = 0; i < nsown; i++) {
       nunset = 0;
@@ -315,14 +320,19 @@ void FixEmitSurf::init()
       }
 
       if (nunset == 0) {
-        if (sum != 1.0) error->all(FLERR,"Fix emit/surf custom fractions do not sum to 1.0");
+        if (fabs(sum-1.0) > SMALL) flag = 1;
       } else {
-        newfrac = (1.0 - sum) / nunset;
+        if (sum > 1.0 + SMALL) flag = 1;
+        newfrac = MAX(1.0 - sum,0.0) / nunset;
         for (isp = 0; isp < nspecies; isp++) {
           if (fractions[i][isp] < 0.0) fractions[i][isp] = newfrac;
         }
       }
     }
+
+    int flagall;
+    MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_MAX,world);
+    if (flagall) error->all(FLERR,"Fix emit/surf custom fractions do not sum to 1.0");
   }
 
   // create tasks for all grid cells
@@ -377,6 +387,7 @@ void FixEmitSurf::grid_changed()
                    cummulative_custom[isurf][isp-1] + fractions[isurf][isp];
         else cummulative_custom[isurf][isp] = fractions[isurf][isp];
       }
+      if (nspecies) cummulative_custom[isurf][nspecies-1] = 1.0;
     }
   }
 
@@ -1497,8 +1508,8 @@ void FixEmitSurf::subsonic_grid()
       temp_thermal_cell = tsubsonic;
 
     } else {
-      nrho_cell = np * fnum / cinfo[icell].volume;
-      massrho_cell = masstot * fnum / cinfo[icell].volume;
+      nrho_cell = np * fnum * cinfo[icell].weight / cinfo[icell].volume;
+      massrho_cell = masstot * fnum * cinfo[icell].weight / cinfo[icell].volume;
       if (np > 1) {
         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
         temp_thermal_cell = tprefactor * ke;
@@ -1735,13 +1746,13 @@ void FixEmitSurf::grow_task()
 void FixEmitSurf::realloc_nspecies()
 {
   if (perspecies) {
-    for (int i = 0; i < ntask; i++) {
+    for (int i = 0; i < ntaskmax; i++) {
       delete [] tasks[i].ntargetsp;
       tasks[i].ntargetsp = new double[nspecies];
     }
   }
   if (subsonic_style == PONLY || subsonic_style == MFLOW || temp_custom_flag) {
-    for (int i = 0; i < ntask; i++) {
+    for (int i = 0; i < ntaskmax; i++) {
       delete [] tasks[i].vscale;
       tasks[i].vscale = new double[nspecies];
     }
@@ -1774,6 +1785,7 @@ int FixEmitSurf::option(int narg, char **arg)
     if (strstr(arg[1],"v_") == arg[1]) {
       npmode = VARIABLE;
       int n = strlen(&arg[1][2]) + 1;
+      delete [] npstr;
       npstr = new char[n];
       strcpy(npstr,&arg[1][2]);
     } else {
