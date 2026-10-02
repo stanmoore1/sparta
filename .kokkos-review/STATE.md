@@ -4,4 +4,4 @@
 - Phase 2 (verify): per-group verifiers launched as groups complete; output in verify/<G>.md
 - Phase 3 (fix): not started
 - Phase 3 (fix): fixer agents own disjoint file sets; checkpoints in fixes/<FX>.md; orchestrator commits source changes per fixer. compile_one.sh = syntax check vs OpenMP build.
-  Launched: FX-surfreact (surf_react_*). Fixed directly by orchestrator: F-G15-1, F-G04-1 (see FIXES.md).
+  Launched: FX-surfreact, FX-collide, FX-surfcollide, FX-computegrid, FX-emitsurf, FX-update, FX-surftally. Pending: FX-fixave (G00-3,4,12,20,G14), FX-fft (G00-8,21,G19,G20), FX-computes (G00-2,9,14,G16), FX-emitface (G12), FX-infra (G21), G22 fixes.
