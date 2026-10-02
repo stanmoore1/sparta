@@ -118,8 +118,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
       else {
         this->sync(Device,CELL_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
-                       k_cells,maxcell);
+        Kokkos::resize(k_cells,maxcell);
         this->modify(Device,CELL_MASK); // needed for auto sync
       }
       cells = k_cells.view_host().data();
@@ -133,8 +132,7 @@ void GridKokkos::grow_cells(int n, int m)
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
       else {
         this->sync(Device,CINFO_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
-                       k_cinfo,maxlocal);
+        Kokkos::resize(k_cinfo,maxlocal);
         this->modify(Device,CINFO_MASK); // needed for auto sync
       }
       cinfo = k_cinfo.view_host().data();
@@ -181,8 +179,7 @@ void GridKokkos::grow_sinfo(int n)
         MemKK::realloc_kokkos(k_sinfo,"grid:sinfo",maxsplit);
       else {
         this->sync(Device,SINFO_MASK); // force resize on device
-        Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
-                       k_sinfo,maxsplit);
+        Kokkos::resize(k_sinfo,maxsplit);
         this->modify(Device,SINFO_MASK); // needed for auto sync
       }
       sinfo = k_sinfo.view_host().data();

@@ -1020,7 +1020,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
       if (n == 1)
 	ibuf[k++] = iinput[isurf];
       else {
-	idata = index * n;
+	idata = isurf * n;
 	for (j = 0; j < n; j++)
 	  ibuf[k++] = iinput[idata++];
       }
@@ -1029,7 +1029,7 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
       if (n == 1)
 	dbuf[k++] = dinput[isurf];
       else {
-	idata = index * n;
+	idata = isurf * n;
 	for (j = 0; j < n; j++)
 	  dbuf[k++] = dinput[idata++];
       }
