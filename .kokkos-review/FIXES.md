@@ -17,3 +17,6 @@
 | F-G10-5 | surf_react_*_kokkos | 780d12b2 |
 | F-G10-6 | surf_react_*_kokkos | 780d12b2 |
 | F-G00-18 | surf_react_*_kokkos | 780d12b2 |
+| F-G00-5 | compute_*grid_kokkos | 4812d512 |
+| F-G00-6 | compute_*grid_kokkos | 4812d512 |
+| F-G00-7 | compute_*grid_kokkos | 4812d512 |
