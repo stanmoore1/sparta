@@ -417,11 +417,11 @@ void FixAveHistoWeightKokkos::bin_particles(
   }
 
   if (regionflag && mixflag) {
-    //auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles1,DeviceType>(0, n);
-    //Kokkos::parallel_reduce(policy, *this, reducer);
+    auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles1,DeviceType>(0, n);
+    Kokkos::parallel_reduce(policy, *this, reducer);
   } else if (regionflag) {
-    //auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles2,DeviceType>(0, n);
-    //Kokkos::parallel_reduce(policy, *this, reducer);
+    auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles2,DeviceType>(0, n);
+    Kokkos::parallel_reduce(policy, *this, reducer);
   } else if (mixflag) {
     auto policy = RangePolicy<TagFixAveHistoWeight_BinParticles3,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
@@ -450,6 +450,7 @@ void FixAveHistoWeightKokkos::bin_grid_cells(
   if (groupflag) {
     GridKokkos* grid_kk = (GridKokkos*) grid;
     grid_kk->sync(Device, CINFO_MASK);
+    d_cinfo = grid_kk->k_cinfo.view_device();
     auto policy = RangePolicy<TagFixAveHistoWeight_BinGridCells1,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   } else {
@@ -474,17 +475,10 @@ void
 FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinParticles1, const int i,
                                     minmax_type::value_type& lminmax) const
 {
-  /*
-   * region is not Kokkos compatible
-   * If a Kokkos compatible region becomes available,
-   * this code can be recommissioned.
-   *
   const int ispecies = d_particles(i).ispecies;
-  if (region_kk->match(d_particles(i).x) && d_s2g(imix, ispecies) >= 0)
-  {
+  if (d_match(i) && d_s2g(imix, ispecies) >= 0) {
     bin_one(lminmax, d_values(i), d_weights(i));
   }
-  */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -493,16 +487,9 @@ void
 FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinParticles2, const int i,
                                     minmax_type::value_type& lminmax) const
 {
-  /*
-   * region is not Kokkos compatible.
-   * If a Kokkos compatible region becomes available,
-   * this code can be recommissioned.
-   *
-  if (region_kk->match(d_particles(i).x))
-  {
+  if (d_match(i)) {
     bin_one(lminmax, d_values(i), d_weights(i));
   }
-  */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -533,7 +520,7 @@ void
 FixAveHistoWeightKokkos::operator()(TagFixAveHistoWeight_BinGridCells1, const int i,
                                     minmax_type::value_type& lminmax) const
 {
-  if (grid_kk->k_cinfo.view_device()[i].mask & groupbit)
+  if (d_cinfo[i].mask & groupbit)
   {
     bin_one(lminmax, d_values(i), d_weights(i));
   }
