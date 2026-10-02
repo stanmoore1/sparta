@@ -253,6 +253,8 @@ void Grid::remove()
   cells = NULL;
   cinfo = NULL;
   sinfo = NULL;
+  pcells = NULL;
+  nparent = maxparent = 0;
 
   csurfs = NULL; csplits = NULL; csubs = NULL;
   allocate_surf_arrays();
@@ -2180,7 +2182,7 @@ void Grid::type_check(int outflag)
   }
   int volzeroall;
   MPI_Allreduce(&volzero,&volzeroall,1,MPI_INT,MPI_SUM,world);
-  if (outsideall) {
+  if (volzeroall) {
     char str[128];
     snprintf(str,sizeof(str),"Grid cells marked outside, but with zero volume = %d",
             volzeroall);
@@ -2557,7 +2559,8 @@ void Grid::group(int narg, char **arg)
     int inversebits = inversemask[igroup];
 
     for (i = 0; i < nlocal; i++) cinfo[i].mask &= inversebits;
-  }
+
+  } else error->all(FLERR,"Illegal group command");
 
   // print final count for group
 
@@ -2745,11 +2748,11 @@ void Grid::read_restart(FILE *fp)
 
   // read level info
 
-  if (me == 0) {
-    tmp = fread(&maxlevel,sizeof(int),1,fp);
-    tmp = fread(plevels,sizeof(ParentLevel),maxlevel,fp);
-  }
+  if (me == 0) tmp = fread(&maxlevel,sizeof(int),1,fp);
   MPI_Bcast(&maxlevel,1,MPI_INT,0,world);
+  if (maxlevel < 0 || maxlevel > MAXLEVEL)
+    error->all(FLERR,"Invalid grid level count in restart file");
+  if (me == 0) tmp = fread(plevels,sizeof(ParentLevel),maxlevel,fp);
   MPI_Bcast(plevels,maxlevel*sizeof(ParentLevel),MPI_CHAR,0,world);
 
   // if any exist, clear existing group names, before reading new ones
@@ -2758,6 +2761,8 @@ void Grid::read_restart(FILE *fp)
 
   if (me == 0) tmp = fread(&ngroup,sizeof(int),1,fp);
   MPI_Bcast(&ngroup,1,MPI_INT,0,world);
+  if (ngroup < 0 || ngroup > MAXGROUP)
+    error->all(FLERR,"Invalid grid group count in restart file");
 
   int n;
   for (int i = 0; i < ngroup; i++) {
