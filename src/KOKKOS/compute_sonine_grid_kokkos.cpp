@@ -305,6 +305,7 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid, 
     double *v = d_particles[i].v;
 
     int k = igroup*npergroup;
+    d_tally(icell,k++) += mass;
 
     double vthermal[3];
     double csq;
