@@ -99,12 +99,21 @@ void ComputeSurfKokkos::init_normflux()
   Kokkos::deep_copy(d_normflux,h_normflux);
 
   // Cannot realloc inside a Kokkos parallel region, so size tally2surf as nsurf
-  memoryKK->grow_kokkos(k_tally2surf,tally2surf,nsurf,"surf:tally2surf");
-  d_tally2surf = k_tally2surf.view_device();
-  d_surf2tally = DAT::t_int_1d("surf:surf2tally",nsurf);
-  Kokkos::deep_copy(d_surf2tally,-1);
+  // also called mid-cycle via reallocate() (e.g. fix balance) after tallies
+  //   were made but before they are consumed, so preserve surf2tally and
+  //   never shrink the tally storage, else the tallies would be lost
 
-  memoryKK->grow_kokkos(k_array_surf_tally,array_surf_tally,nsurf,ntotal,"surf:array_surf_tally");
+  int nold = d_surf2tally.extent(0);
+  int nalloc = MAX(nsurf,nold);
+  if (nalloc > nold) {
+    Kokkos::resize(d_surf2tally,nalloc);
+    Kokkos::deep_copy(Kokkos::subview(d_surf2tally,Kokkos::make_pair(nold,nalloc)),-1);
+  }
+
+  memoryKK->grow_kokkos(k_tally2surf,tally2surf,nalloc,"surf:tally2surf");
+  d_tally2surf = k_tally2surf.view_device();
+
+  memoryKK->grow_kokkos(k_array_surf_tally,array_surf_tally,nalloc,ntotal,"surf:array_surf_tally");
   d_array_surf_tally = k_array_surf_tally.view_device();
 }
 
@@ -265,7 +274,10 @@ int ComputeSurfKokkos::tallyinfo(surfint *&ptr)
 
   // compress array_surf_tally
 
-  int nsurf = surf->nlocal + surf->nghost;
+  // scan full surf2tally, it may be larger than current nlocal+nghost
+  //   if surfs were rebalanced since the tallies were made
+
+  int nsurf = d_surf2tally.extent(0);
   int istart = 0;
   int iend = nsurf-1;
 
@@ -321,7 +333,7 @@ void ComputeSurfKokkos::grow_tally()
   // Cannot realloc inside a Kokkos parallel region, so size tally2surf the
   //  same as surf2tally
 
-  int nsurf = surf->nlocal + surf->nghost;
+  int nsurf = d_surf2tally.extent(0);
 
   memoryKK->grow_kokkos(k_tally2surf,tally2surf,nsurf,"surf:tally2surf");
   d_tally2surf = k_tally2surf.view_device();

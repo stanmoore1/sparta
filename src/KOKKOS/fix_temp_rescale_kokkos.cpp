@@ -137,7 +137,7 @@ void FixTempRescaleKokkos::operator()(TagFixTempRescale_end_of_step_no_average, 
 
   // vscale = scale factor for thermal velocity components
 
-  const double vscale = sqrt(t_target/t_current);
+  const double vscale = (t_current <= 0.0) ? 1.0 : sqrt(t_target/t_current);
 
   // 2nd pass: loop over particles in cell
   // rescale thermal velocity components
@@ -212,7 +212,8 @@ void FixTempRescaleKokkos::end_of_step_average(double t_target_in)
   // scale all particles in all cells by vscale
 
   t_current /= n_current;
-  vscale = sqrt(t_target/t_current);
+  if (t_current <= 0.0) vscale = 1.0;
+  else vscale = sqrt(t_target/t_current);
 
   // loop over grid cells to rescale velocity of particles in each
   // single-particle cells are also rescaled, their d_vcom = 0.0

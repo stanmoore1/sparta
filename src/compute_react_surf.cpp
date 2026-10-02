@@ -134,12 +134,12 @@ void ComputeReactSurf::init()
   bigint flag = 0;
   if (dim == 2) {
     for (int i = 0; i < nslocal; i++) {
-      if (!(lines[i].mask & groupbit)) return;
+      if (!(lines[i].mask & groupbit)) continue;
       if (lines[i].isr != isr) flag++;
     }
   } else {
     for (int i = 0; i < nslocal; i++) {
-      if (!(tris[i].mask & groupbit)) return;
+      if (!(tris[i].mask & groupbit)) continue;
       if (tris[i].isr != isr) flag++;
     }
   }
