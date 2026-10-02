@@ -221,7 +221,10 @@ void ReadGrid::read_cells()
       for (i = 0; i < nchunk; i++) {
         eof = fgets(&buffer[m],MAXLINE,fp);
         if (eof == NULL) error->one(FLERR,"Unexpected end of grid file");
-        m += strlen(&buffer[m]);
+        int len = strlen(&buffer[m]);
+        if (len == MAXLINE-1 && buffer[m+len-1] != '\n' && !feof(fp))
+          error->one(FLERR,"Grid file line too long");
+        m += len;
       }
       if (buffer[m-1] != '\n') strcpy(&buffer[m++],"\n");
       m++;
