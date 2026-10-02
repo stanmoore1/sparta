@@ -407,7 +407,7 @@ void ReadSurf::command(int narg, char **arg)
         } else {
           Surf::Tri *tris = surf->tris;
           for (m = 0; m < nsurf; m++) {
-            if (tris[csurfs[m]].id >= nsurf_old) break;
+            if (tris[csurfs[m]].id > nsurf_old) break;
           }
         }
         if (m < nsurf && partflag == CHECK) {
@@ -581,8 +581,9 @@ void ReadSurf::read_multiple(char *file)
 
   if (nsurf_allfiles != nsurf_all) {
     char str[128];
-    fprintf(screen,"Read surf mismatch in surf count across mutiple files: base "
-	    BIGINT_FORMAT ", actual " BIGINT_FORMAT "\n",nsurf_all,nsurf_allfiles);
+    snprintf(str,128,"Read surf mismatch in surf count across mutiple files: "
+             "base " BIGINT_FORMAT ", actual " BIGINT_FORMAT,
+             nsurf_all,nsurf_allfiles);
     error->all(FLERR,str);
   }
 
@@ -615,21 +616,21 @@ void ReadSurf::read_file(char *file)
 
   if (strcmp(keyword,"Points") == 0) {
     if (npoint_file == 0)
-      error->all(FLERR,"Read_surf file has no points keyword");
+      error->one(FLERR,"Read_surf file has no points keyword");
     read_points();
     parse_keyword(0);
   } else if (npoint_file)
-    error->all(FLERR,"Read_surf file has no Points section");
+    error->one(FLERR,"Read_surf file has no Points section");
 
   // read and store data from Lines or Triangles section
 
   if (dim == 2) {
     if (strcmp(keyword,"Lines") != 0)
-      error->all(FLERR,"Read_surf did not find Lines section of surf file");
+      error->one(FLERR,"Read_surf did not find Lines section of surf file");
     read_lines();
   } else {
     if (strcmp(keyword,"Triangles") != 0)
-      error->all(FLERR,"Read_surf did not find Triangles section of surf file");
+      error->one(FLERR,"Read_surf did not find Triangles section of surf file");
     read_tris();
   }
 
@@ -806,7 +807,7 @@ void ReadSurf::header()
         error->one(FLERR,"Surf file cannot contain lines for 3d simulation");
       bigint bnline;
       sscanf(line,BIGINT_FORMAT,&bnline);
-      if (bnline > MAXSMALLINT) error->all(FLERR,"Read surf nline is too large");
+      if (bnline > MAXSMALLINT) error->one(FLERR,"Read surf nline is too large");
       nsurf_file = nline_file = bnline;
     } else if (strstr(line,"triangles")) {
       if (dim == 2)
@@ -861,9 +862,9 @@ void ReadSurf::read_points()
 
     buf = buffer;
     next = strchr(buf,'\n');
-    *next = '\0';
+    if (next) *next = '\0';
     int nwords = input->count_words(buf);
-    *next = '\n';
+    if (next) *next = '\n';
 
     if (dim == 2 && nwords != 3)
       error->one(FLERR,"Incorrect point format in surf file");
@@ -930,12 +931,12 @@ void ReadSurf::read_lines()
 
     buf = buffer;
     next = strchr(buf,'\n');
-    *next = '\0';
+    if (next) *next = '\0';
     int nwords = input->count_words(buf);
-    *next = '\n';
+    if (next) *next = '\n';
 
     if (nwords != nwords_required)
-      error->all(FLERR,"Incorrect line format in surf file");
+      error->one(FLERR,"Incorrect line format in surf file");
 
     // if Points section in file, each read line has indices into it
 
@@ -951,7 +952,7 @@ void ReadSurf::read_lines()
         p1 = input->inumeric(FLERR,strtok(NULL," \t\n\r\f"));
         p2 = input->inumeric(FLERR,strtok(NULL," \t\n\r\f"));
         if (p1 < 1 || p1 > npoint_file || p2 < 1 || p2 > npoint_file || p1 == p2)
-          error->all(FLERR,"Invalid point index in Lines section");
+          error->one(FLERR,"Invalid point index in Lines section");
 
 	if (ncustom) {
 	  icvalue = 0;
@@ -1082,12 +1083,12 @@ void ReadSurf::read_tris()
 
     buf = buffer;
     next = strchr(buf,'\n');
-    *next = '\0';
+    if (next) *next = '\0';
     int nwords = input->count_words(buf);
-    *next = '\n';
+    if (next) *next = '\n';
 
     if (nwords != nwords_required)
-      error->all(FLERR,"Incorrect line format in surf file");
+      error->one(FLERR,"Incorrect line format in surf file");
 
     // if Points section in file, each read line has indices into it
 
@@ -1104,8 +1105,8 @@ void ReadSurf::read_tris()
         p2 = input->inumeric(FLERR,strtok(NULL," \t\n\r\f"));
         p3 = input->inumeric(FLERR,strtok(NULL," \t\n\r\f"));
         if (p1 < 1 || p1 > npoint_file || p2 < 1 || p2 > npoint_file ||
-            p3 < 1 || p3 > npoint_file || p1 == p2 || p2 == p3)
-          error->all(FLERR,"Invalid point index in Triangles section");
+            p3 < 1 || p3 > npoint_file || p1 == p2 || p2 == p3 || p1 == p3)
+          error->one(FLERR,"Invalid point index in Triangles section");
 
 	if (ncustom) {
 	  icvalue = 0;

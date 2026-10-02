@@ -451,10 +451,13 @@ SPARTA::~SPARTA()
   packargs = NULL;
 
   if (universe->nworlds == 1) {
+    if (screen && screen != stdout) fclose(screen);
     if (logfile) fclose(logfile);
   } else {
     if (screen && screen != stdout) fclose(screen);
     if (logfile) fclose(logfile);
+    if (universe->uscreen && universe->uscreen != stdout)
+      fclose(universe->uscreen);
     if (universe->ulogfile) fclose(universe->ulogfile);
   }
 

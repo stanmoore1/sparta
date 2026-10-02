@@ -487,6 +487,10 @@ void Domain::delete_region(int narg, char **arg)
   delete regions[iregion];
   regions[iregion] = regions[nregion-1];
   nregion--;
+
+  // regions that store indices of other regions must re-resolve them
+
+  for (int i = 0; i < nregion; i++) regions[i]->reset_region_indices();
 }
 
 /* ----------------------------------------------------------------------
