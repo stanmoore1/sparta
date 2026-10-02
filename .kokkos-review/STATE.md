@@ -5,3 +5,4 @@
 - Phase 3 (fix): not started
 - Phase 3 (fix): fixer agents own disjoint file sets; checkpoints in fixes/<FX>.md; orchestrator commits source changes per fixer. compile_one.sh = syntax check vs OpenMP build.
   Launched: FX-surfreact, FX-collide, FX-surfcollide, FX-computegrid, FX-emitsurf, FX-update, FX-surftally. Pending: FX-fixave (G00-3,4,12,20,G14), FX-fft (G00-8,21,G19,G20), FX-computes (G00-2,9,14,G16), FX-emitface (G12), FX-infra (G21), G22 fixes.
+- In-progress (uncommitted) source edits are snapshotted to wip-src.patch by checkpoint.sh every 5 min; on restart: git apply .kokkos-review/wip-src.patch
