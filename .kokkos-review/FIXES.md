@@ -65,3 +65,14 @@
 | F-G14-5 | fix_ave_*_kokkos | 088431eb |
 | F-G14-6 | fix_ave_*_kokkos | 088431eb |
 | G12x-F-G14-1 | fix_ave_*_kokkos | 088431eb |
+| F-G21V-1 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G01-1 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G01-2 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G01-3 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G01-4 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G02-1 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G02-2 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G00-13 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G00-15 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G00-17 | collide_vss_kokkos / react / CPU collide | 00708c6a |
+| F-G04-2 | collide_vss_kokkos / react / CPU collide | 00708c6a |
