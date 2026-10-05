@@ -219,9 +219,9 @@ void SurfCollide::dynamic()
     int spreadflag = 0;
     if (update->ntimestep % tfreq == 0) {
       if (n_owned != surf->nown) {
-	memory->destroy(t_owned);
-	n_owned = surf->nown;
-	memory->create(t_owned,n_owned,"surfcollide:t_owned");
+        memory->destroy(t_owned);
+        n_owned = surf->nown;
+        memory->create(t_owned,n_owned,"surfcollide:t_owned");
       }
 
       input->variable->compute_surf(tindex_var,t_owned,1,0);
@@ -233,11 +233,11 @@ void SurfCollide::dynamic()
     //   distributed and load balance/adaptation took place on previous step
 
     if (spreadflag ||
-	(surf->distributed && surf->localghost_changed_step == update->ntimestep-1)) {
+        (surf->distributed && surf->localghost_changed_step == update->ntimestep-1)) {
       if (n_localghost != surf->nlocal + surf->nghost) {
-	memory->destroy(t_localghost);
-	n_localghost = surf->nlocal + surf->nghost;
-	memory->create(t_localghost,n_localghost,"surfcollide:t_localghost");
+        memory->destroy(t_localghost);
+        n_localghost = surf->nlocal + surf->nghost;
+        memory->create(t_localghost,n_localghost,"surfcollide:t_localghost");
       }
 
       surf->spread_own2local(1,DOUBLE,t_owned,t_localghost);
