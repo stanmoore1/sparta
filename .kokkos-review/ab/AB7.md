@@ -46,3 +46,12 @@ necessary: yes - A crashes on both ave/histo/kk and ave/histo/weight/kk.
 complete: within fix_ave_histo(_weight)_kokkos yes (init() guard shared by both styles, both tested). B gives an error, not CPU parity (CPU bins the values) - acceptable per verify "minimal" option. SIBLING SITES WITH THE SAME BUG REMAIN in B: `compute fft/grid/kk c_is[1]` -> segfault in A and B (gdb B: compute_fft_grid_kokkos.cpp:184 cKKBase->compute_per_grid_kokkos(), cKKBase NULL); `compute lambda/grid/kk c_is[*] NULL lambda` -> segfault in A and B (gdb B: compute_lambda_grid_kokkos.cpp:142). CPU runs both. fix ave/grid/kk with c_is[1] is fine (has a host PERGRIDSURF path), A==B. react/isurf/grid/kk not exercised (needs implicit surf reactions).
 verdict: INCOMPLETE (sibling sites compute fft/grid/kk and compute lambda/grid/kk still NULL-deref a non-KokkosBase isurf/grid/kk compute; the ave/histo fix itself is NECESSARY and works)
 artifacts: $S/ab/AB7/G12x-F-G14-1 (neg/, w/, sib/)
+
+### F-G14-5 — ave/grid/kk init() lacks CPU `nglocal = grid->nlocal; grow_percell(0)`; read_surf after the fix -> split sub-cells untallied / reads past allocation
+class: cpu-observable
+positive control: examples/spiky deck (20x20, read_surf data.spiky -> 400 -> 483 cells incl. split sub-cells), `fix ag ave/grid all 1 1 10 c_g[1]` defined BEFORE read_surf, `compute reduce sum f_ag` vs np, 200 steps | A: c_r = 2.7616126e+267 garbage at every output (t1; t4 same, 82 s under shared-machine load) | B: c_r == np exactly every output (t1 33079, t4 33180) = invariant; CPU same invariant | REPRODUCED
+negative control: fix ave/grid defined AFTER read_surf | A vs B: identical stats t1 and t4 (c_r == np)
+necessary: yes - A garbage (vector variant) and segfault rc=139 (array variant below).
+complete: yes - B correct for per-grid vector (c_g[1]) and array with a post-processed compute (`c_g[1] c_th[1]`, compute thermal/grid temp): f_ag[1] sum == np at t1/t4, max temp plausible vs CPU, dump grid of f_ag[*] over all 483 cells works (A segfaults on this input); t1 and t4. Not tested: real-MPI N procs (MPI builds not present), 3d.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB7/F-G14-5 (neg/, complete/)

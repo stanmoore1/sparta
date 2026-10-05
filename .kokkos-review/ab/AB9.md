@@ -83,3 +83,12 @@ complete: B matches CPU at every call/level tested (2d x/y, 3d y/z, 2 and 3 leve
 verdict: NECESSARY, COMPLETENESS-PARTIAL (function-level necessity only, end-to-end masked by self-correction; MPI/ghost-child variant untested)
 artifacts: $S/ab/AB9/F-G22-1 (in.pos*, gdbA/gdbB/g3A/g3B hits, emu3d.py, cmp.py)
 
+### F-G22-5 — fix grid/check/kk built error messages from stale host particles/cells
+class: gpu-only
+positive control: none possible here — on this OpenMP build the particle and cell DualViews alias (tiny compile test against kokkos_type.h: host ptr == device ptr for tdual_particle_1d and tdual_cell_1d), so host data can never be stale. Also could not provoke any grid/check problem on CPU (create_particles single only into OUTSIDE cells; read_surf `particle keep` errors "Particles are inside new surfaces"; transparent circle + emit/face 100 steps -> no flagged particle in A or B)
+negative control: transparent-circle flow, `fix grid/check 1 error`, 100 steps, CPU and kk t1 | A vs B: identical (no error, Np 84334 cpu / 84409 kk in both)
+necessary: NOT shown (gpu-only; staleness impossible with aliased host/device views).
+complete: by inspection the single sync(Host, PARTICLE_MASK|CELL_MASK) precedes all 5 error-message branches (invalid/outside/split/interior/zero-volume), so all are covered; untested at runtime.
+verdict: NOT-SHOWN-NECESSARY (gpu-only: needs separate host/device memory)
+artifacts: $S/ab/AB9/F-G22-5
+

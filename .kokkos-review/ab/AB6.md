@@ -38,3 +38,12 @@ complete: B guard identical to CPU fix_emit_face.cpp:1109; sibling sites emit/su
 negative control: single emit/face xlo subsonic 0.414 NULL, nrho 1e20 fnum 1e18, create_particles, 200 steps | A vs B: kk identical (np 8392, f_in 4892), CPU identical (8565/5129)
 verdict: NOT-SHOWN-NECESSARY (degenerate-cell nrho already inf/NaN; guarded value unobservable)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB6/F-G12-1
+
+### F-G11-3 — emit/surf/kk perform_task: &d_cummulative_mix[0] evaluated on the unallocated (0-extent) mix view whenever custom fractions + perspecies no
+class: bounds-check
+positive control: MPI/bounds-check SPARTA builds still compiling (23% under load 25-30), so tested the unit: standalone program built against build_base's Kokkos (OpenMP) with KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK, state as in init() (DualView mix never allocated, custom view allocated), kernel pointer selection copied from A and B | A custom: "Kokkos::View ERROR: out of bounds access ... indices [0] but extents [0]" abort | B custom: sum 1.5 (correct), no abort | REPRODUCED (unit)
+necessary: YES (unit-level): A's line always indexes the empty view in the custom/perspecies-no case and aborts under bounds checking; release builds only form a null pointer (no wrong values). Full SPARTA A cannot isolate it because F-G00-1 crashes first on this path.
+complete: B correct in both branches (custom: 1.5; mix allocated: 0.75 = A's value). Sibling sites: emit/face/kk and emit/face/file/kk always allocate their cumulative arrays (mixture or per-task); no other conditional-allocation + unconditional-index pattern found. Release-build B on the real path: F-G00-1 runs (2d/3d, t1/t4) correct. Bounds-checked full-SPARTA B run not done (build unfinished).
+negative control: unit mix-mode (allocated mix view): A == B (0.75); full runs without custom fractions identical A vs B (see F-G00-1)
+verdict: NECESSARY, COMPLETENESS-PARTIAL (bounds-checked full SPARTA B run pending the DEBUG_BOUNDS_CHECK build; unit + release runs pass)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB6/F-G11-3 (unit.cpp, inc/ with bounds-check config)

@@ -62,3 +62,13 @@ complete: kernels sharing backup/restore tested: collisions_one (in.v), subcell 
 necessary: yes
 verdict: NECESSARY, COMPLETENESS-PARTIAL (ambipolar kernels and gas-tally retry path not run; same backup()/restore() code)
 artifacts: $S/ab/AB1/F-G00-15
+
+### F-G04-2 (+R-A-1, R-A-2) — Kokkos TCE never warned about react_prob <0 or >1 (CPU warns once per run)
+class: cpu-observable
+positive control: in.w = 2^3 cells, 1000 N2/N, T 1e5 K, 2 x run 20, react/retry yes; pos.tce (real rates) / neg.tce (negative A coeff) / both.tce (N2+N2 negative, N2+N huge) | A: 0 TCE warnings in every case (all kernels, t1/t4) | B: pos 2 "exceeded 1.0" (one per run), neg 2 "Negative TCE reaction probability" (one per run), both 1 "Negative" (bit-or, negative preferred, R-A-2) | CPU: neg 2 "Negative", both 1 "Negative", pos 0-1 (stochastic) | REPRODUCED
+negative control: T 8000 K (prob always in [0,1]) | A vs B: identical thermo (step 40 ncoll 187 T 7928.8758), 0 warnings in A, B and CPU; neg.tce run: A==B identical thermo (warning only, no behaviour change)
+complete: kernels: collisions_one (in.w, t1 and t4: B warns 1), group (in.wsg mixture group SELF, seeds 1/3/7: A 0, B 1, CPU 1), one-group ambipolar with 3-body recombination (examples/ambi_3body 100 steps, seeds 1-4: B warns 1/1/1/1, CPU 1/1/1/0, A 0). Warning reset per run (B prints once in each of 2 runs for neg/pos, same as CPU ReactTCE::init reset). tce/qk and qk have no CPU warning, so no sibling needed. R-A-1: source check - check_prob_warn(int) has no deep_copy; flag rides in d_scalars slot 9 (existing per-pass copy). Not tested: subcell, group-ambipolar kernels (same check in collisions()).
+observation (not this fix): over 30 seeds (in.ws, 40 steps, T 1e5) B kk warned ">1" in 25/30 runs vs CPU 16/30 (p~0.02); the probability formula and check placement are identical in react_tce_kokkos.h and react_tce.cpp, so this reflects a difference in the sampled collision-energy tail between kk and CPU collision paths, not the warning logic. Low priority follow-up.
+necessary: yes
+verdict: NECESSARY, COMPLETENESS-PARTIAL (subcell and group-ambipolar kernels not run; same host-side check)
+artifacts: $S/ab/AB1/F-G04-2
