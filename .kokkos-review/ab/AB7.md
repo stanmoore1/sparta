@@ -64,3 +64,27 @@ necessary: yes - shown with the isolated variant V (B minus F-G14-6 crashes; B f
 complete: yes - single growth site in fix_ave_grid_kokkos.cpp, now identical to CPU; covers grow_percell(0) from init and grow_percell(nsplit) (same code). Vector/array outputs fine (array tested). Sibling sweep: CollideVSSKokkos::grow_percell already uses while; no other KOKKOS per-grid grower with a single bump (emit ntaskmax single bumps are guarded per-task, different pattern). Also checked: adapt_grid refine (2x2 / 4x4, 1600 / 6400 cells) before first run is NOT a trigger - A, B, V all correct there (adapt path notifies the fix).
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB7/F-G14-6 (variant/, neg/, in.c2/in.c4 adapt checks)
+
+### F-G00-20 (dup F-G14-7) — ave/grid/kk init() has no CUSTOM case (value2index=-1 -> etype[-1]/ewhich[-1]); nvalues>1, j>0 INT custom read from edarray
+class: unreachable
+positive control: stock parser accepts only c_/f_/v_ (stock B: "No values in fix ave/grid command" for g_ inputs), so the CUSTOM branch is dead. Instrumented scratch builds A'/B' (copy of src/fix_ave_grid.cpp whose parser maps `g_name` -> which=CUSTOM, + flavor_pergrid=1; linked against the A resp. B build objects; $S/ab/AB7/F-G00-20/variant). Deck: 20x20 grid, custom grid ivec=floor(2*cxlo)+1, iarray=[3,7]*ivec, dvec=cylo+0.25, darray=[2,3,5]*dvec; `fix ave/grid all 1 5 10` with f1 g_ivec | f2 g_iarray[2] | f3 g_dvec g_iarray[2] g_darray[3] g_ivec | f4 g_darray[1]; reduce sums. Analytic: 4200 | 29400 | 2000 29400 10000 4200 | 4000 | A': 4200 | 29400 | 4200 6000 10000 4200 | 12600 (wrong attribute picked for f3[1] and f4; INT array col read as double -> 6000) t1 and t4 | B': exact analytic values t1 and t4, == CPU-style (B' -in) | REPRODUCED (instrumented only)
+negative control: stock A vs B, `fix ave/grid all 1 5 10 v_gdvec v_giarray2 c_g[1]` | A vs B: identical t1/t4 (2000 / 29400 analytic; c_g[1] sum = np-average, CPU 3787.4 vs 3783.2)
+necessary: not in the stock code (unreachable from input); the latent defect is real and demonstrated with the instrumented parser (A' wrong on 3 of 6 values).
+complete: yes - B' correct on all CUSTOM branches: nvalues==1 INT vec / INT array j>0 / DOUBLE array j>0, and nvalues>1 DOUBLE vec, INT array j>0 (the eiarray fix), DOUBLE array j>0, INT vec; t1 and t4.
+verdict: NOT-SHOWN-NECESSARY (unreachable: parser never produces CUSTOM; with an instrumented parser A' is wrong and B' == CPU == analytic on every branch)
+artifacts: $S/ab/AB7/F-G00-20 (variant/, neg/)
+
+## AB7 summary
+| ID | verdict |
+|---|---|
+| F-G00-3 | NECESSARY+COMPLETE (A segfault on group-masked per-grid input; B == CPU bit-exact, both styles, all 5 input sites) |
+| F-G00-4 | NOT-SHOWN-NECESSARY (gpu-only; B == A == CPU on compute/fix/variable scalar sites) |
+| F-G00-12 | NECESSARY+COMPLETE (A empty histogram; B == independent X/V path bit-exact, region and region+mix) |
+| F-G14-1 (= G12x-F-G14-2) | NECESSARY+COMPLETE (A inf/-inf; B == CPU 1e+20/-1e+20, all ave modes, both styles) |
+| G12x-F-G14-1 | INCOMPLETE (ave/histo(/weight)/kk fixed: A segfault -> B clean error; siblings compute fft/grid/kk and lambda/grid/kk still segfault on isurf/grid/kk input in B) |
+| F-G14-5 | NECESSARY+COMPLETE (A garbage 2.8e267 / segfault; B reduce == np invariant) |
+| F-G14-6 | NECESSARY+COMPLETE (isolated variant B-minus-fix segfaults with 2075 new split cells; B correct) |
+| F-G00-20 | NOT-SHOWN-NECESSARY (unreachable; instrumented parser: A' wrong, B' == CPU == analytic) |
+Side finding (CPU, out of scope): src/fix_ave_histo_weight.cpp:412 reads particle->mixture[imix] with imix uninitialized when `region` is used without `mix` -> CPU segfault (observed).
+
+## STATUS: COMPLETE

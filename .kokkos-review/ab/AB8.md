@@ -117,3 +117,22 @@ necessary: not shown - the call is real and against the FFTW API contract, but F
 complete: B removes the call from both fft2d_kokkos and fft3d_kokkos destroy (grep: only comments remain); init_threads/plan_with_nthreads unchanged
 verdict: NOT-SHOWN-NECESSARY (undefined behaviour per FFTW docs, benign with FFTW 3.3.10 on this machine; fix removes the call consistently)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-7 (vg_A.txt, vg_B.txt)
+
+### F-G19-6 / F-G20-3 — cuFFT/hipFFT plans never destroyed in fft_2d/3d_destroy_plan_kokkos (leak per FFT object)
+class: gpu-only
+positive control: host mock (G19-6/): fft2d/3d_kokkos.cpp + remap from A/B compiled with -DFFT_KOKKOS_CUFFT or -DFFT_KOKKOS_HIPFFT against stub cufft.h / hipfft/hipfft.h that count PlanMany/Destroy (fftdata_kokkos.h force-included with only the "Must enable CUDA/HIP" #error lines removed); 10x create+delete of FFT3dKokkos(8^3) and FFT2dKokkos(8x8) | A: CUFFT and HIPFFT: created=50 destroyed=0 live=50 | B: created=50 destroyed=50 live=0 | REPRODUCED (mock)
+negative control: KISS builds: destroy path unchanged (all KISS runs in this file A/B consistent; no new failures)
+necessary: yes (mock shows every cuFFT/hipFFT plan leaks in A; real GPU not available)
+complete: yes - 2D (fast, slow) and 3D (fast, mid, slow) plans for both cuFFT and hipFFT all destroyed (destroy count == create count)
+verdict: NECESSARY+COMPLETE (host mock with stub libraries; real GPU run not possible here)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-6 (results.txt)
+
+### R-C-3 — kiss_fft_functor allocated a fresh scratch view on every FFT stage call (perf follow-up to F-G20-9)
+class: cpu-observable (perf)
+A here = bdbc461a fft2d/3d_kokkos + kissfft_kokkos (post F-G20-9, pre-R-C-3) compiled from git show into R-C-3/I_src (e071055f has no per-call allocation, it has the race instead); B = HEAD
+positive control: drvp harness, 3D FFT3dKokkos t4, 20 forward FFTs, Kokkos Tools allocate callback counting "kissscratch" allocations during compute | I: 60 kissscratch allocations (3 per FFT, one per stage), 120 Kokkos allocations total | B: 0 kissscratch allocations, 60 total (only the per-stage d_tmp remains) | REPRODUCED (allocation count). Wall time not meaningful (load avg 15-20 from the concurrent MPI builds): I 4.63/4.45 s vs B 4.52/4.46 s
+negative control: results bit-identical to CPU FFT3d for I and B (14^3, 16^3, also 14x22x26 for I); B correctness otherwise covered by F-G20-9 sweeps (40 harness cases + compute runs incl. radices 7/11/13, fwd/bwd, all permutes)
+necessary: yes as a perf change (per-call allocations eliminated); no correctness bug involved
+complete: all KISS call sites in fft2d/fft3d (incl. 1d_only) use plan->d_kissscr (grep); scratch sized as max over all fwd/bwd stage cfgs - covered by mixed-radix 14x22x26 fwd+bwd runs (B = CPU)
+verdict: NECESSARY+COMPLETE (perf; allocation-count evidence, timing inconclusive on loaded machine)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/R-C-3 (results.txt)
