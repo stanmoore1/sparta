@@ -84,3 +84,94 @@ complete: for lambda/grid itself yes (all allocation branches: nrho_values>1/==1
   - checked OK in A and B: grid, thermal/grid, eflux/grid, pflux/grid, tvib/grid, property/grid (kk) via the same adapt_grid-before-run input.
 verdict: INCOMPLETE (sibling prewrap NULL-deref remains in compute sonine/grid/kk (vcom) and compute dt/grid/kk (tau,temp,usq,vsq,wsq); lambda/grid part itself is NECESSARY+COMPLETE)
 artifacts: $S/ab/AB4/G12x-F-G16-2 (in.x, in.sib, in.dt)
+
+Library-driver note (F-G16-4/6/7/8): these bugs are only reachable through the C library API
+(sparta_extract_compute, library.cpp). A small driver ($S/ab/AB4/lib/drv.cpp) was compiled with each build's
+flags and linked against the static libs of A ($S/build_base/src) and B ($S/build/src, same binary as
+spa_new_final). It loads in.base (N2+O2, 20k particles, 4^3 cells, `compute cnt count N2 O2`,
+`compute pg property/grid all xc yc`, `compute ke ke/particle`), then calls sparta_extract_compute and
+inspects the compute's invoked_* members.
+
+### F-G16-4 — compute count (CPU + kk) compute_vector() set invoked_scalar instead of invoked_vector
+class: cpu-observable (library API only)
+positive control: driver `flags`: run 0, sparta_extract_compute("cnt",0,1) | A: invoked_vector -1, invoked_scalar 0 (CPU and kk) | B: invoked_vector 0 (== step), invoked_scalar -1 (CPU and kk) | REPRODUCED
+negative control: vector values A == B == CPU (10039 9961)
+necessary: yes (wrong flag on both CPU and Kokkos); impact is only redundant recomputation in sparta_extract_compute.
+complete: B correct on CPU and kk. Sibling check: grep of compute_vector() bodies in src/ and src/KOKKOS for `invoked_scalar =` found no other compute_vector setting the scalar flag.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB4/lib
+
+### F-G16-8 — compute property/grid/kk never set invoked_per_grid
+class: cpu-observable (library API only)
+positive control: driver `flags`: sparta_extract_compute("pg",2,2) after run 0 | A kk: invoked_per_grid -1 (CPU 0) | B kk: 0 | REPRODUCED
+negative control: CPU A == B (0); values identical
+necessary: yes (flag never set in A kk; consequence is re-invocation on every library call only).
+complete: B sets it at the top of compute_per_grid_kokkos (covers both prewrap and kk paths reached via compute_per_grid). Siblings: other KOKKOS per-grid computes (grid, thermal, tvib, sonine, pflux, eflux, lambda, distsurf, dt, fft) set invoked_per_grid (grep).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB4/lib
+
+### F-G16-6 — compute ke/particle/kk: no invoked_per_particle, no modify_device/sync_host for host consumers
+class: gpu-only (sync part) + cpu-observable (invoked flag, library API)
+positive control: driver `flags`: sparta_extract_compute("ke",1,1) after run 0 | A kk: invoked_per_particle -1 | B kk: 0 | REPRODUCED (flag part). Host-staleness part cannot occur on OpenMP (host and device views alias).
+negative control: sum of extracted ke A kk == B kk == CPU (1.29286550629737e-16)
+necessary: flag part yes; host-sync part NOT-SHOWN (gpu-only).
+complete: flag + values correct in B; sync part untestable here.
+verdict: NECESSARY, COMPLETENESS-PARTIAL (host sync_host/modify_device part gpu-only, untested)
+artifacts: $S/ab/AB4/lib
+
+### F-G16-7 — compute ke/particle/kk: prewrap host call sets nmax, later kk call writes into empty device view
+class: cpu-observable (crash; library API only)
+positive control: driver `prewrap_ke`: sparta_extract_compute("ke",1,1) BEFORE the first run (prewrap -> host ke allocated, sum 1.29286550629737e-16), then `compute r reduce sum c_ke` + run 0 (reduce/kk -> compute_per_particle_kokkos) | A kk: SIGSEGV in ComputeKEParticleKokkos::operator() (compute_ke_particle_kokkos.cpp:101, write to 0-extent d_vector_particle) | B kk: no crash, reduce sum 1.29286550629736e-16, extract after run sum 1.29286550629737e-16, clean exit (no double free) | REPRODUCED
+negative control: CPU A == CPU B (same sums); without the prewrap extract (driver `flags`) A kk works
+necessary: yes (A crashes).
+complete: B correct for the kk path after prewrap (reduce/kk and library extract) and clean shutdown (ke = NULL after destroy_kokkos). Sibling: other per-particle KOKKOS computes with a prewrap host fallback — only ke/particle has per-particle output in KOKKOS (grep compute_*_kokkos.cpp per_particle).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB4/lib
+
+### F-G00-2 — compute ke/particle/kk operator() reads host `update->mvv2e` on device; missing modify_device
+class: gpu-only
+positive control: n/a on this machine (host pointer deref is legal on OpenMP; host/device alias, so modify_device is a no-op)
+negative control: ke/particle values: library extract sums A kk == B kk == CPU (1.29286550629737e-16), also the reduce/kk sum after run (B) matches CPU
+necessary: NOT-SHOWN (gpu-only).
+complete: n/a on CPU backend; B uses the member mvv2e (code read) and values unchanged.
+verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control A == B == CPU
+artifacts: $S/ab/AB4/lib
+
+### F-G00-14 — compute reduce/kk reads fix ave/grid d_vector_grid/d_array_grid without sync_pergrid_device_kokkos()
+class: gpu-only (on host backends) / mpi
+positive control attempted: fix ave/grid all 1 2 2 c_g[*] c_pg (+ reduce/kk sum/max of f_av columns) with fix adapt refine at step 2 (64->512 cells) and refine+coarsen every 2/4 steps, t1/t4 | A == B == CPU at every output step (e.g. step 4: r1 20000, r2 2.54884181362022e-23, r3 1e-12) | NOT REPRODUCED. Reason: on OpenMP host and device views alias, and FixAveGridKokkos::grow_percell re-points d_vector_grid/d_array_grid itself, so the cached handle is never stale; staleness needs separate device memory (GPU). MPI builds ($S/bmpi_*) not finished (make at 28%), so a multi-rank balance test was not possible.
+negative control: no adapt, t1/t4: A == B == CPU (r1 20000, r2 3.18637472966332e-24 ...)
+necessary: NOT-SHOWN (gpu-only on host backends).
+complete: B == CPU in all tested adapt variants; MPI multi-rank and GPU untested.
+verdict: NOT-SHOWN-NECESSARY (gpu-only: host/device alias on OpenMP); negative controls A == B == CPU
+artifacts: $S/ab/AB4/F-G00-14 (in.x, in.rc)
+
+### F-G16-5 — compute distsurf/grid/kk does not sync grid cells/cinfo to device before use (second run after grid change)
+class: gpu-only
+positive control attempted: sphere (1200 tris), 8^3 grid, run 1; adapt_grid refine surf (80 cells refined) + balance_grid; new dump grid c_distsurf, run 1 (output at second-run setup) | A == B == CPU at both steps (1072 cells, rel 0), t1 and t4 | NOT REPRODUCED (k_cells/k_cinfo host and device alias on OpenMP; sync is a no-op)
+negative control: same input A vs B vs CPU identical (first run 512 cells, second run 1072 cells)
+necessary: NOT-SHOWN (gpu-only).
+complete: B == CPU on CPU backend; GPU untested.
+verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control A == B == CPU
+artifacts: $S/ab/AB4/F-G16-5
+
+## Summary AB4
+| ID | verdict |
+|---|---|
+| F-G15-1 | NECESSARY+COMPLETE (sonine sorted kernel; A shifted moments, B == CPU) |
+| F-G00-5 | NECESSARY+COMPLETE (grid+pflux sorted; A undercounts 42 vs 10079; siblings thermal/eflux OK) |
+| F-G00-6 | NECESSARY+COMPLETE (tvib race A rel up to 1.0 at t4 modeflag 0/1; modeflag 2 A segfault; B == CPU) |
+| F-G00-7 | NECESSARY+COMPLETE (sonine dup path; A rel ~2, B == CPU) |
+| F-G00-2 | NOT-SHOWN-NECESSARY (gpu-only); A == B == CPU |
+| F-G00-9 | NECESSARY+COMPLETE (property/surf/kk subset group; 2d/3d/distributed, vector/array) |
+| F-G00-14 | NOT-SHOWN-NECESSARY (gpu-only on host backends; MPI builds unavailable); A == B == CPU |
+| G12x-F-G16-2 | INCOMPLETE — lambda/grid fixed (A segfault, B == CPU, 4 variants) but same prewrap NULL-deref remains in compute sonine/grid/kk (vcom) and dt/grid/kk (tau/temp/usq/vsq/wsq): B segfaults with adapt_grid before first run, CPU OK |
+| F-G16-1 | NECESSARY+COMPLETE (CPU + kk; needs ranged wildcard c_g[2*3]) |
+| F-G16-4 | NECESSARY+COMPLETE (CPU + kk; library API) |
+| F-G16-5 | NOT-SHOWN-NECESSARY (gpu-only); A == B == CPU |
+| F-G16-6 | NECESSARY, COMPLETENESS-PARTIAL (invoked flag shown; host-sync part gpu-only) |
+| F-G16-7 | NECESSARY+COMPLETE (library prewrap extract -> A segfault, B correct) |
+| F-G16-8 | NECESSARY+COMPLETE (library API invoked_per_grid) |
+| F-G16-9 | NECESSARY+COMPLETE for area (A CPU area 0 for all tris); NEW unfixed sibling: CPU pack_v3y/pack_v3z read p1 instead of p3 (compute_property_surf.cpp:427,444) |
+
+## STATUS: COMPLETE

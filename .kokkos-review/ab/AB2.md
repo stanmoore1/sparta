@@ -53,3 +53,13 @@ necessary: yes (CPU crash; KK spurious tally events).
 complete: B correct for vanish and transparent, CPU and KK.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB2/F-G08-3
+
+### F-G08-2 — piston (CPU + kk) dereferenced ip after surface chemistry deleted it; orphaned reaction product on outside-box return
+class: cpu-observable
+positive control: examples/surf_collide/in.piston (100 steps) + `surf_react r1 global 0.3 0.0` (pdelete) on the piston face xlo | A: CPU SIGSEGV (exit 139), KK t1 SIGSEGV (exit 139) | B: CPU, KK t1, KK t4 all complete (step 100: np 15011 / 15046 / 15003, T 272.4 / 270.4 / 269.0) | REPRODUCED
+second part (orphan product, deck in.diss: N2 -> N + N p=0.1 on piston face): A and B both run; A CPU np 15062, B CPU 14972, B KK 15009, B KK t4 15032 - no direct observable separates the orphan from RNG noise | NOT REPRODUCED
+negative control: in.piston without surf_react | A vs B: identical stats tables (CPU and KK)
+necessary: yes for the null-deref part (crash on CPU and KK); the orphan-discard part not shown necessary (no observable found).
+complete: B correct for delete reaction on CPU, KK t1, KK t4; dissociation path runs on all three (KK discard relies on R-A-4, see below).
+verdict: NECESSARY+COMPLETE (null-deref part); orphan-discard sub-part NOT-SHOWN-NECESSARY (no distinguishing observable)
+artifacts: $S/ab/AB2/F-G08-2

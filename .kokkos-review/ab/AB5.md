@@ -69,3 +69,13 @@ necessary: yes — A gives wrong counts/abort/segfault on every grow variant (kk
 complete: both code paths covered (CPU init in compute_gas_reaction_grid.cpp, kk init in _kokkos.cpp), modes every and select, grow and none, cpu and kk — B errors cleanly in all. Sibling search: react->nlist is used outside react*/ only in compute_gas_reaction_grid(_kokkos) and finish.cpp (runtime use, no stale sizing) -> no missed site. Behaviour note: B also errors for formerly harmless inputs (every/select + `react none`, which A-cpu/A-kk-every ran with 0 counts; and a re-issued react with FEWER reactions). A re-issued react with the same count is still accepted. This is a conservative, documented error, not a wrong result. Thread count irrelevant (check is in init()).
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB5/F-G18-2 (in.base, run.sh, small.tce, log.{pos_every,pos_select,pos_none_sel,pos_none_every,neg_every,neg_full,neg_all,neg_all_none}.*)
+
+### F-G17-3 — compute surf/kk & isurf/grid/kk: reallocate() mid-step (grid->notify_changed by fix move/surf, adapt, balance) recreated surf2tally -> step's tallies lost
+class: cpu-observable (explicit, 1 rank) / mpi (isurf/grid via fix balance)
+positive control: 2d circle, emit/face flow, compute surf all all n press, fix move/surf all 10 100000 trans 0 0 0 (notify_changed every 10 steps, zero displacement), stats 10 with compute reduce sum c_cs[1] c_cs[2] | A-kk: tallies 0 0 on every output step (t1 and t4) while nscoll = 39..66; A-cpu: n == nscoll | B-kk: n == nscoll exactly on every step (t1, t4), press ~4.3e-20 same magnitude as CPU ref | REPRODUCED
+  variant consumer fix ave/surf (every 1, running ave over 10, defined after move/surf): A-kk running mean n = 9.76 at step 100 vs B-kk 12.86, CPU ref 13.28 (A drops each move-step tally, ~1/10 of samples) | REPRODUCED
+negative control: same decks with move/surf Nevery=1000 (never fires in 100 steps) | A vs B: identical (kk and cpu; n==nscoll e.g. 148 at step 100 kk), incl. the ave/surf variant
+necessary: yes for compute surf/kk (A-kk zero tallies on reallocate steps, t1 and t4).
+complete: compute surf/kk verified with two consumers (compute reduce at output, fix ave/surf end_of_step), t1+t4, invariant n==nscoll holds in B. Not yet covered: compute isurf/grid/kk (implicit surfs reallocate only via fix balance -> needs real MPI; fix ablate's own reallocate is masked by combined=1) and the grow branch (nsurf increasing, needs distributed surfs on >1 rank). See MPI addendum below if present.
+verdict: NECESSARY, COMPLETENESS-PARTIAL (isurf/grid/kk + grow branch need MPI build)
+artifacts: $S/ab/AB5/F-G17-3 (in.base.orig, in.ave, run.sh, log.{pos,pos_t4,neg,ave_pos,ave_neg}.*)
