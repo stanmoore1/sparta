@@ -5,8 +5,11 @@ MPI builds (bmpi_*) not present at start of AB1.
 ### F-G21V-1 — react/extra padding applied only with react/retry yes (inverted)
 class: cpu-observable
 positive control: in.one2 = 1-cell 3d box, 1000 N2 at 1e5 K, dt 3e-8, tce dissociation (np 1000->2000), t 1 | A: "Ran out of space in Kokkos collisions, increase react/extra" at step 1 for react/extra 1.0, 2.0 AND 4.0 (knob has no effect) | B: react/extra 1.0 -> same error (expected), 2.0 and 4.0 -> run completes, step 30 np 2000 T 42909.171 = CPU ref (np 2000 T 42909.171) | REPRODUCED
-negative control: (a) react/retry yes on in.one2: A and B both complete, np 2000 T 42909.171; (b) in.one (3e4 K, low rate, no overflow) react/extra 1.0 and 2.0: A == B identical thermo (step 200 np 1360 ncoll 323 T 11965.688) | A vs B: identical
-verdict: VERIFIED
+negative control: (a) react/retry yes on in.one2: A and B both complete, np 2000 T 42909.171; (b) in.one (3e4 K, low rate, no overflow) react/extra 1.0 and 2.0: A == B identical thermo (step 200 np 1360 ncoll 323 T 11965.688); (c) examples/ambi/in.ambi.group.react (no growth) x1.0/x3.0: A == B identical (step 300 np 10077 ncoll 884) | A vs B: identical
+necessary: yes - A ignores react/extra in the default no-retry mode on all 5 kernels (fails at x2/x3/x4 like x1)
+complete: all 5 pre-loop sites exercised, A fails at react/extra 3-4, B passes, B fails at 1.0 (padding is what makes it pass):
+  collisions_one (in.one2) | subcell (in.sub, partners subcell: A x4 err @1354, B x4 ok np 2000 T 42909.171 = CPU) | group (in.grp, group SELF: A x4 err @2077, B x4 ok np 2000 T 42909.171 = CPU) | group_ambipolar (examples/ambi/in.ambi, `collide vss species`, 300 steps: A x3 err @2625, B x3 ok np 131425) | one_ambipolar (in.ambi1, single-group mixture, 200 steps: A x3 err @3303, B x3 ok np 130066). All t 1. No other react_extra consumer besides update_kokkos.cpp (already !retry).
+verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB1/F-G21V-1
 
 ### F-G01-1 — collide ambipolar lookup misses explicit "fix ambipolar/kk" (OOB fix[nfix]) / no kokkos_flag check
@@ -15,15 +18,19 @@ positive control: examples/ambi/in.ambi (200 steps) with `fix ambi ambipolar/kk 
 positive control 2 (kokkos_flag check): in.cpufix2 = all styles explicit /kk (no -sf), plain CPU `fix ambipolar`, no surfs | A: runs silently with FixAmbipolar C-cast to FixAmbipolarKokkos (step 200 np 160048, no ions ever formed) | B: clean "ERROR: Must use fix ambipolar/kk when Kokkos is enabled" | REPRODUCED
 negative control: in.ambi with plain `fix ambipolar` -sf kk: no-react A == B identical (np 128615 ncoll 942 T 173285.75); react+retry A/B both complete (np 129943 vs 129956, stat. equal; differ only through other fixes in this commit range) | A vs B: identical / agree within noise
 note: CPU collide.cpp/react_bird.cpp half cannot be exercised: CPU `collide vss` is refused with -k on ("Must use Kokkos-supported collision style"), and ambipolar/kk needs -k on.
-side observation (not this fix): stock examples/ambi/in.ambi with -k on -sf kk and default react/extra 1.1 errors "Ran out of space in Kokkos collisions" at step ~100-200 on both A and B (collisions_one_ambipolar); passes with react/retry yes.
-verdict: VERIFIED
+side observation (not this fix): stock examples/ambi/in.ambi with -k on -sf kk and default react/extra 1.1 errors "Ran out of space in Kokkos collisions" at step ~100-200 on both A and B (collisions_group_ambipolar; t 1); passes with react/retry yes or react/extra 3.0 in B. The default 1.1 is too small for this stock example.
+necessary: yes (A segfaults on documented explicit-/kk input; A silently runs with a bad cast for a plain CPU fix)
+complete: kk lookup tested with group_ambipolar kernel (in.ambi uses `collide vss species`) with and without react; kokkos_flag check tested. The CPU-file halves (collide.cpp, react_bird.cpp::ambi_check) : ReactBird::ambi_check is also called by CollideVSSKokkos::init (collide_vss_kokkos.cpp:387) when react is defined: the kkfix+react run passing in B covers it; CPU Collide::init path is unreachable with -k on. Sibling surf_collide lookups belong to AB2 (F-G09-x).
+verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB1/F-G01-1
 
 ### F-G01-2 — vremax/remain reallocated on group-count change but not re-seeded when vre_start=no (kk + CPU)
 class: cpu-observable
 positive control: in.no = 10^3-cell box, 10000 N2/N 50:50 at 1e4 K, `collide_modify vremax 0 no`, run 60, `mixture air group SELF` (1->2 groups), run 60; kk (t 1) and CPU styles | A kk: run 2 nattempt=0 ncoll=0 every step, T frozen 10167.044; A cpu: same, 0/0, T frozen 10135.772 | B kk: run 2 steps 80/100/120 nattempt 631/608/595 ncoll 176/168/188; B cpu: 591/614/590, 149/194/171 | REPRODUCED (kk and CPU)
 negative control: in.yes (same but vremax 0 yes, re-seed every run): A == B bit-identical for kk and CPU, and equal to B's in.no run 2 (631/176..., 591/149...) | A vs B: identical; run 1 of in.no also identical A vs B
-verdict: VERIFIED
+necessary: yes (kk and CPU: zero collisions in run 2)
+complete: both changed sites (collide.cpp CPU, collide_vss_kokkos.cpp kk) shown; B in.no run 2 bit-identical to in.yes run 2 for both. Variant 2->1 groups not run (same code block).
+verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB1/F-G01-2
 
 ### F-G04-1 — ReactBirdKokkos::init did not zero device reaction tallies (2nd run reports cumulative)
@@ -32,7 +39,7 @@ positive control: in.tw = 1-cell N2 dissociation (F-G21V-1 in.one), run 100 + ru
 negative control: same input | A vs B: identical thermo and tallies; CPU ref run2 4/50 (per-run, different RNG stream) - B matches the per-run semantics
 necessary: NOT shown on this machine (aliasing host/device memory)
 complete: only one init path (ReactBirdKokkos::init, shared by tce/qk/tce-qk kk styles); B correct here
-verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control A==B identical
+verdict: NOT-SHOWN-NECESSARY (gpu-only: host/device alias on OpenMP); negative control A==B identical
 artifacts: $S/ab/AB1/F-G04-1
 
 ### F-G00-17 — test_collision_kokkos lacks vremax==0 guard (0/0 NaN accepts collision)
@@ -72,3 +79,22 @@ observation (not this fix): over 30 seeds (in.ws, 40 steps, T 1e5) B kk warned "
 necessary: yes
 verdict: NECESSARY, COMPLETENESS-PARTIAL (subcell and group-ambipolar kernels not run; same host-side check)
 artifacts: $S/ab/AB1/F-G04-2
+
+### F-G02-2 — racy `d_max{delete,cellcount,electron}() += DELTA` grow requests (18 sites) -> atomic_max
+class: race
+positive control: in.m = 3^3 cells, 5000 N2 at 1e5 K, dt 3e-8, react/retry yes (many cells overflow plist in the same pass -> concurrent grow requests), 30 steps, t 1 x1 and t 4 x3 | A: all complete, step 30 np 10000 T 46014.866, ncoll 75405 (t1) / 76345, 76022, 75835 (t4) | B: all complete, np 10000 T 46014.866, ncoll 75943 (t1) / 75578, 76377, 76179 (t4) | NOT REPRODUCED (the race only loses/duplicates a grow increment; the retry loop re-requests, so no wrong result is observable on host; needs TSan or GPU lost-update)
+negative control: same runs; also every retry run in F-G21V-1/F-G01-3/F-G00-15 | A vs B: agree within noise (identical np/T, ncoll spread same as t4 run-to-run spread)
+necessary: NOT shown (formal data race with benign outcome on host; UB in C++ model)
+complete: B source has atomic_max at all 18 sites (grep: no remaining `d_max*() +=` in collide_vss_kokkos.cpp); retry exercised for collisions_one (in.m), subcell/group (F-G21V-1 in.sub/in.grp with retry) and ambipolar (F-G01-1 retry runs) - all complete in B
+verdict: NOT-SHOWN-NECESSARY (race not observable on host backend); negative control agrees
+artifacts: $S/ab/AB1/F-G02-2
+
+### F-G01-4 / F-G02-1 — zero-volume cell only flagged the error and kept going (inf/NaN attempt count, ~2^31 loop on GPU)
+class: unreachable / gpu-only
+positive control attempted: in.z = 2^3 cells with box z-extent 1e-316 so cell volume underflows to 0 | create_particles weights by volume -> 0 particles created (WARNING "Created unexpected # of particles: 0 versus 1000"), so no cell has np>=2 and the kernel volume check is never reached (A and B identical, 0 attempts); at z=1e-310 (denormal, nonzero volume) A and B both hang identically in setup (timeout 60 s, not in collide). No valid input found that puts >=2 particles in a zero-volume cell.
+host behaviour of A's UB: standalone g++ x86-64 test: (int)inf = (int)NaN = -2147483648, so on the OpenMP backend A's nattempt is negative, the attempt loop does not run and the host error fires exactly as in B; only CUDA's saturating cast (INT_MAX) gives the ~2^31-iteration hang.
+negative control: all non-degenerate runs in this file (e.g. F-G01-2 in.yes, F-G00-17 in.t300, F-G21V-1 in.one) | A vs B: bit-identical
+necessary: NOT shown (unreachable through valid input, and A's UB is benign on x86)
+complete: source check - `if (volume == 0.0) { d_error_flag() = 1; return; }` at all 5 kernels in B (collisions_one, subcell, group, group_ambipolar, one_ambipolar), all before rand_pool.get_state()
+verdict: NOT-SHOWN-NECESSARY (unreachable; UB only diverges on GPU); negative control identical
+artifacts: $S/ab/AB1/F-G01-4

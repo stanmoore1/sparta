@@ -57,3 +57,15 @@ necessary: yes — A skips the warning and leaves stale tallies after re-init on
 complete: all 4 changed loops exercised (2d+3d x explicit+implicit), CPU and kk t1; B==reference in each. The multi-rank deadlock aspect (one rank returning before the collective MPI_Allreduce) not run: MPI builds ($S/bmpi_*) still compiling (26%) at test time.
 verdict: NECESSARY, COMPLETENESS-PARTIAL (N-rank deadlock variant not run, MPI builds unavailable)
 artifacts: $S/ab/AB5/F-G17-5 (2d explicit), F-G17-5/3d, F-G17-5/isurf, F-G17-5/isurf3d
+
+### F-G18-2 — compute gas/reaction/grid(/kk): column map sized from react->nlist at definition; re-issued `react` (more reactions) or `react none` -> OOB / NULL deref (kk + CPU)
+class: cpu-observable
+positive control: 4^3 box, N2/N at 60000 K, 20000 particles, `react tce small.tce` (2 O2 reactions), compute g gas/reaction/grid all air <mode>, then `react tce air.tce` (45 reactions; N2+N2=#9, N2+N=#10 fire) or `react none`, compute reduce sum c_g[*], run 30
+  every + grow: A-kk wrong counts (cols 60/68 vs nreact 132 — tallies of #9/#10 spill into neighbouring rows) then abort rc=134; A-cpu SIGSEGV | B (kk, cpu): ERROR "reactions changed since compute was defined" | REPRODUCED
+  select 1 2 + grow: A-kk silently wrong (col1 = 131/138, i.e. reactions #9/#10 counted as selected reaction 1 via OOB reaction2col read); A-cpu SIGSEGV | B: same ERROR | REPRODUCED
+  select 1 2 + react none: A-kk SIGSEGV in init (react->nlist on NULL); A-cpu runs (0 counts) | B: ERROR | REPRODUCED (kk)
+negative control: (1) react unchanged (small.tce, every) and (2) compute defined after the full air.tce (every, cols 9/10 = 62/70 sum = nreact 132 kk; 51/72 = 123 cpu); (3) mode all with react grown or set to none | A vs B: identical (kk and cpu) in all three
+necessary: yes — A gives wrong counts/abort/segfault on every grow variant (kk and CPU) and segfault on kk select + react none.
+complete: both code paths covered (CPU init in compute_gas_reaction_grid.cpp, kk init in _kokkos.cpp), modes every and select, grow and none, cpu and kk — B errors cleanly in all. Sibling search: react->nlist is used outside react*/ only in compute_gas_reaction_grid(_kokkos) and finish.cpp (runtime use, no stale sizing) -> no missed site. Behaviour note: B also errors for formerly harmless inputs (every/select + `react none`, which A-cpu/A-kk-every ran with 0 counts; and a re-issued react with FEWER reactions). A re-issued react with the same count is still accepted. This is a conservative, documented error, not a wrong result. Thread count irrelevant (check is in init()).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB5/F-G18-2 (in.base, run.sh, small.tce, log.{pos_every,pos_select,pos_none_sel,pos_none_every,neg_every,neg_full,neg_all,neg_all_none}.*)

@@ -90,3 +90,21 @@ necessary: yes (unit level)
 complete: yes (see F-G20-6 sibling sweep)
 verdict: NECESSARY+COMPLETE
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/packunit
+
+### F-G19-4 (CPU+kk) — fft2d remap plans passed (FFT_PRECISION, ..., 2) instead of (nqty=2, ..., FFT_PRECISION): FFT_SINGLE 2D moves only half of each complex value
+class: build-system (FFT_SINGLE builds only)
+positive control: FFT_SINGLE harness (G19-4/drv2s_{A,B}: fft2d_kokkos/remap2d_kokkos/fft2d/remap2d/fft2d_wrap compiled with -DFFT_SINGLE from A/B sources, linked to the A/B libs), forward 2D vs naive double DFT, 16x16 / 14x10 / 8x6 | A: Kokkos maxerr/max 1.02 / 1.01 / 0.98, CPU 1.02 / 1.09 / 0.94 (garbage) | B: Kokkos 3.4e-8 / 6.5e-8 / 5.0e-8 (float-exact); CPU: plan creation FAILS - remap_2d_create_plan prints "Single precision not supported" and returns NULL (src/FFT/remap2d.cpp:152 rejects precision==1, and its pack/unpack pointers are NULL for precision 1), FFT2d errors "Could not create 2d FFT plan" | REPRODUCED
+negative control: 3D FFT_SINGLE (drv3s, 8x6x10, fft3d already used nqty=2,...,FFT_PRECISION): A = B, Kokkos and CPU both 8.9e-8; double-precision builds: FFT_PRECISION==2 so the arg swap is a no-op (all double runs in this file: B = CPU bit-identical)
+necessary: yes (A wrong on both Kokkos and CPU in FFT_SINGLE 2D)
+complete: Kokkos part yes. CPU part NO: B's CPU FFT2d now passes precision=1 to CPU remap_2d_create_plan, which refuses single precision, so CPU compute fft/grid in a 2D FFT_SINGLE build turns from silently wrong into a hard error at plan creation (CPU remap3d ignores precision, CPU remap2d does not). Making CPU 2D single work would need remap2d.cpp to ignore precision like remap3d (or the CPU call to keep precision=2 with nqty=2).
+verdict: INCOMPLETE (CPU 2D FFT_SINGLE: "Single precision not supported" -> "Could not create 2d FFT plan"; Kokkos part NECESSARY+COMPLETE)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-4 (results.txt)
+
+### F-G20-8 — CUDA/SYCL branches of fftdata_kokkos.h did not #undef FFT_KOKKOS_NVPL
+class: build-system
+positive control: preprocessor probe of the macro block of fftdata_kokkos.h (A vs B) with -DSPARTA_KOKKOS -DKOKKOS_ENABLE_{CUDA,SYCL} -DFFT_KOKKOS_NVPL | A: FFT_KOKKOS_NVPL and FFT_KOKKOS_KISS both defined, LIB="NVPL FFT" (data-type chain picks fftw_complex -> the KISS .re/.im code cannot compile); CUDA+NVPL+CUFFT: NVPL still defined | B: NVPL undefined, KISS only, LIB="KISS FFT"; CUDA+NVPL+CUFFT -> cuFFT only | REPRODUCED (preprocessor level)
+negative control: HIP+NVPL (already undef'd in A): A = B KISS; CUDA without NVPL: A = B KISS; host build +NVPL: A = B "NVPL FFT" (NVPL still allowed on host)
+necessary: yes at preprocessor level (no CUDA/SYCL toolchain here to show the compile error itself)
+complete: yes - all three device branches (CUDA, HIP, SYCL) now undef NVPL; MKL_GPU/CUFFT/HIPFFT/KISS selection unchanged
+verdict: NECESSARY+COMPLETE (preprocessor-level; real CUDA/SYCL compile not possible here)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G20-8

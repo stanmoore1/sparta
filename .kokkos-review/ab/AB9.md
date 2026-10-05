@@ -92,3 +92,16 @@ complete: by inspection the single sync(Host, PARTICLE_MASK|CELL_MASK) precedes 
 verdict: NOT-SHOWN-NECESSARY (gpu-only: needs separate host/device memory)
 artifacts: $S/ab/AB9/F-G22-5
 
+### F-G18-2-cpu — compute gas/reaction/grid (CPU) kept columns/reaction2col sized for the react command at definition; re-issued/removed react -> OOB
+class: cpu-observable
+setup: 3d 4x4x4 cells, 5-species air at 40000 K, collide vss, `react tce small.tce` (2 reactions), compute g gas/reaction/grid every|select 1 2, plus compute gall ... all as reference; run 30; then `react tce air.tce` (45 reactions) or `react none`; run 30; dump grid c_gall c_g[*]
+positive control (CPU): every | A: runs silently, 4 cells at step 60 where sum(c_g columns) != c_gall (reactions >2 written into neighbouring cells' rows) | B: "ERROR: Compute gas/reaction/grid reactions changed since compute was defined" | REPRODUCED
+positive control (CPU): select 1 2 | A: SIGSEGV (reaction2col OOB) | B: same clean error | REPRODUCED
+react none (CPU, every) | A: runs (stale compute, all zeros) | B: clean error (intended behaviour change; matches Kokkos)
+Kokkos (with `package kokkos react/retry yes`): every A SIGSEGV, select A SIGSEGV, none A abort "SharedAllocationRecord failed increment" | B: clean error for all 3 (Kokkos side fixed in 605d2aee, init delegates to the same check)
+negative control: (a) react unchanged between runs (in.neg) and (b) react re-issued with the SAME 45-reaction file (in.negsame) | CPU A vs B: identical stats and grid dumps; per-cell sum(cols)==all in every dump. kk negsame: both run, per-cell consistent; A/B differ statistically only (B carries other collide/react fixes; step-30 counts 4 vs 1)
+necessary: A corrupts per-cell counts (every) or segfaults (select) on CPU, and crashes on Kokkos.
+complete: B errors for every, select, and react none, on CPU and Kokkos; mode all (no columns) unaffected and still allowed; re-issuing a same-size react is still allowed (negsame runs). Note the check compares only nlist, so a re-issued react with the same count but a different reaction order is still accepted (columns then mean different reactions; not OOB).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB9/F-G18-2-cpu
+
