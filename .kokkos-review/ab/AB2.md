@@ -58,11 +58,11 @@ artifacts: $S/ab/AB2/F-G08-3
 ### F-G08-2 — piston (CPU + kk) dereferenced ip after surface chemistry deleted it; orphaned reaction product on outside-box return
 class: cpu-observable
 positive control: examples/surf_collide/in.piston (100 steps) + `surf_react r1 global 0.3 0.0` (pdelete) on the piston face xlo | A: CPU SIGSEGV (exit 139), KK t1 SIGSEGV (exit 139) | B: CPU, KK t1, KK t4 all complete (step 100: np 15011 / 15046 / 15003, T 272.4 / 270.4 / 269.0) | REPRODUCED
-second part (orphan product, deck in.diss: N2 -> N + N p=0.1 on piston face): A and B both run; A CPU np 15062, B CPU 14972, B KK 15009, B KK t4 15032 - no direct observable separates the orphan from RNG noise | NOT REPRODUCED
+second part (orphan product on the outside-box early return; deck in.diss3: N2 -> N + N p=1 on the piston face, 200 steps, observables np and count of particles with x <= 1e-15, i.e. sitting exactly on the wall) | A CPU: 16 particles parked at x=0 at step 200 (1 at steps 50/100 with p=0.1), np 10400; A KK t1/t4: np 10383 / 10276 (no x=0 parking, orphans are advected) | B CPU / KK t1 / KK t4: 0 particles at x=0, np 10217 / 10214 / 10230 (A excess over B: CPU +183, KK t1 +169, KK t4 +46; B spread 16) | REPRODUCED
 negative control: in.piston without surf_react | A vs B: identical stats tables (CPU and KK)
-necessary: yes for the null-deref part (crash on CPU and KK); the orphan-discard part not shown necessary (no observable found).
-complete: B correct for delete reaction on CPU, KK t1, KK t4; dissociation path runs on all three (KK discard relies on R-A-4, see below).
-verdict: NECESSARY+COMPLETE (null-deref part); orphan-discard sub-part NOT-SHOWN-NECESSARY (no distinguishing observable)
+necessary: yes for both parts - null deref crashes CPU and KK; orphan products show up as particles parked on the wall (CPU) and as extra particles in A.
+complete: B correct for the delete reaction (CPU, KK t1, KK t4) and the dissociation/orphan path (CPU, KK t1, KK t4); the KK discard depends on R-A-4 (verified below).
+verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB2/F-G08-2
 
 ### R-A-4 — KK move: reaction product flagged PDISCARD inside a surface collision was never put on the migrate list (advected with garbage, never deleted)
