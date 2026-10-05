@@ -83,3 +83,21 @@ necessary: yes (wrong group tallies, hang/segfault for a new mixture).
 complete: per-grid compute (grid/kk), per-surf tally (surf/kk), boundary tally (boundary/kk) checked; t1+t4. All 17 consumers re-fetch k_species2group in pre_*_tally()/compute_*()/end_of_step (grep), so the refreshed view reaches them; collide_vss_kokkos builds its own d_species2group in init() (not affected).
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB2/F-G18-1
+
+### F-G00-11b — KK non-SURFACE boundary branch did not reset jpart, so boundary_tally_kk saw a stale product from an earlier surface reaction of the same particle
+class: cpu-observable
+positive control: 2d, N2 beam (2000 m/s, 3000 K), dt 1e-3, specular circle with prob N2 -> N + N (p=1), boundary o r p, compute boundary all nflux mflux (running average) on the reflecting ylo/yhi faces; physical value 0 exactly (each reflect adds +w and -w); react/extra 4.0 (no retry, keeps the deferred F-G00-11a out) | A t1: ylo nflux -16.77, mflux -3.90e-25, yhi -16.84 / -3.92e-25; A t4: -16.74 / -16.91 | B t1, t4: 0 0 0 0 exactly; CPU ref (A and B CPU): 0 0 0 0 | REPRODUCED
+negative control: same deck without surf_react | A vs B: identical stats tables (0). Also in the positive deck np/nscoll/nsreact columns identical A vs B (only the tally changes).
+necessary: yes.
+complete: reflect faces checked t1/t4; OUTFLOW/PERIODIC branches of boundary_tally_kk do not read jp, so the single reset before domain_kk_copy.obj.collide_kokkos covers every non-SURFACE style. Not covered (by design): retry double-counting F-G00-11a (DEFERRED) - with react/retry yes the tallies would still be inflated.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G00-11b
+
+### F-G13-4 — ParticleKokkos::remove_custom compacted ewhich/eicol/edcol on host but never synced them to device
+class: gpu-only
+positive control: n/a - on Serial/OpenMP the DualView device side aliases host memory, so the missing sync cannot be observed on this machine
+negative control: 2d circle + emit, `custom particle create a int 0 / b float 2 / c int 0`, set all, run 100; `custom particle remove a`; run 100; uncompute; `custom particle remove b`; run 100 (exercises remove_custom then copy/pack/zero_custom with compacted ewhich/eicol/edcol); observables sum p_b[2], sum p_c | A vs B: identical stats tables KK t1 and CPU (KK t1 step 300 np 78050 sum c 2115); t4 within noise (A 77869/2159, B 77775/2112)
+necessary: NOT shown (needs separate device memory; source review agrees with verify G13: device ewhich/eicol/edcol are read by copy/pack/unpack_custom_kokkos, zero_custom_kokkos, collide_vss_kokkos, compute_tvib_grid_kokkos).
+complete: fix mirrors add_custom's sync block. Sibling: GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) has the same omission (compacts ewhich/eicol/edcol, syncs only the outer views), but no kernel reads the grid's device ewhich/eicol/edcol (grep: only particle-side k_ewhich/k_eicol/k_edcol view_device users), so it is latent, not a live bug.
+verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control passes; latent sibling noted in GridKokkos::remove_custom
+artifacts: $S/ab/AB2/F-G13-4
