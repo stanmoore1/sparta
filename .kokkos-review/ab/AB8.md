@@ -108,3 +108,12 @@ necessary: yes at preprocessor level (no CUDA/SYCL toolchain here to show the co
 complete: yes - all three device branches (CUDA, HIP, SYCL) now undef NVPL; MKL_GPU/CUFFT/HIPFFT/KISS selection unchanged
 verdict: NECESSARY+COMPLETE (preprocessor-level; real CUDA/SYCL compile not possible here)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G20-8
+
+### F-G19-7 — destroy_plan called FFTW cleanup_threads() unconditionally (invalidates other live FFTW plans)
+class: build-system (FFT_KOKKOS_FFTW3 + FFT_KOKKOS_FFTW_THREADS only)
+positive control: FFTW3+threads harness (G19-7/drvw_{A,B}: fft2d/3d_kokkos + remap compiled with -DFFT_KOKKOS_FFTW3 -DFFT_KOKKOS_FFTW_THREADS from A/B sources, libfftw3 3.3.10 + libfftw3_threads, t 4): keep a 32^3 FFT3dKokkos, create+run+delete a second FFT3dKokkos (or a FFT2dKokkos), then rerun the surviving plan 3x | A: gdb confirms fftw_cleanup_threads() is called from fft_3d_destroy_plan_kokkos while the other plan is live and the FFTW worker threads exit; but the surviving plan's reruns are bit-identical to its pre-delete result and valgrind memcheck reports 0 errors | B: cleanup_threads never called; reruns identical; valgrind 0 errors | NOT REPRODUCED (no observable misbehaviour with this FFTW version; per FFTW docs the behaviour is undefined)
+negative control: same runs - A and B outputs identical
+necessary: not shown - the call is real and against the FFTW API contract, but FFTW 3.3.10 tolerates it here
+complete: B removes the call from both fft2d_kokkos and fft3d_kokkos destroy (grep: only comments remain); init_threads/plan_with_nthreads unchanged
+verdict: NOT-SHOWN-NECESSARY (undefined behaviour per FFTW docs, benign with FFTW 3.3.10 on this machine; fix removes the call consistently)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-7 (vg_A.txt, vg_B.txt)

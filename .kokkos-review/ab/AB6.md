@@ -33,6 +33,7 @@ positive control: 2d circle, emit/surf subsonic 1.38e-22 NULL (PONLY) twopass, c
 necessary: NOT SHOWN. Whenever the guard fires (soundspeed_cell == 0 or NaN) the same task's nrho = nrho_cell + (p-press)/soundspeed^2 is inf/NaN in both CPU and Kokkos, so ntarget is NaN/inf: the task inserts nothing (int(NaN) < 0) or the run aborts, and the task vstream (reset from vcom every step) is never consumed. The guard is a parity/hygiene change with no observable effect.
 complete: B has the guard identical to CPU fix_emit_surf.cpp:1533; sibling sites: emit/face/kk fixed by F-G12-1, emit/face/file/kk already guarded. Residual shared (CPU+KK, A and B) issue on the same zero-thermal-energy path: the unguarded nrho division -> inf/NaN ntarget -> CPU OOM/hang (v10 normal no) and KK abort (v3.3/v10 normal no); out of this fix's scope, reported for follow-up.
 negative control: examples/emit/in.emit.surf.subsonic (300 steps, collisions, window 100) kk t1 | A vs B: identical stats (np 37957 at step 300); t4 runs of both exceeded the 120 s timeout under machine load (not compared)
+necessary/complete: see lines above
 verdict: NOT-SHOWN-NECESSARY (guarded value has no consumer when the guard fires; nrho already inf/NaN)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB6/F-G11-4
 
@@ -53,3 +54,30 @@ complete: B correct in both branches (custom: 1.5; mix allocated: 0.75 = A's val
 negative control: unit mix-mode (allocated mix view): A == B (0.75); full runs without custom fractions identical A vs B (see F-G00-1)
 verdict: NECESSARY, COMPLETENESS-PARTIAL (bounds-checked full SPARTA B run pending the DEBUG_BOUNDS_CHECK build; unit + release runs pass)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB6/F-G11-3 (unit.cpp, inc/ with bounds-check config)
+
+### F-G12-2 — emit face/face-file/surf kk subsonic_sort left sorted_kk=1, so a 2nd subsonic emit fix in the same step reuses a stale d_plist without fix 1's insertions
+class: cpu-observable
+positive control: two identical subsonic PONLY fixes (p 0.414, nrho 1e20 fnum 1e18, create_particles, no collide) in one step; stats = np, f_in1[2], f_in2[2] (cumulative inserted). Signature: fix 2 must see fix 1's inserted particles -> higher density -> more insertions (CPU: in2 > in1). Kokkos pools share seed 12345, so a stale list gives in1 == in2 exactly.
+  emit/face xlo, 200 steps: CPU A=B np 83582 in1 39961 in2 40506 | kk A t1 76305 36594 = 36594 (stale), t4 79077 37975 = 37975 | kk B t1 80341 38258 / 38857, t4 79174 37776 / 38270
+  emit/surf circle, 8 steps: CPU A=B np 59681 15670 / 37089 | kk A t1 10694 1886 = 1886 (inflow ~6x too small), t4 killed (timeout/OOM under load) | kk B t1 55850 15356 / 33572, t4 95167 25662 / 62583
+  emit/face/file (file with press only), 60 steps: CPU A=B 13284 2615 / 2658 | kk A t1 13073 2531 = 2531, t4 13133 2561 = 2561 | kk B t1 13096 2509 / 2576, t4 13189 2561 / 2617 | REPRODUCED (all three styles)
+necessary: YES - in A the second fix never sees fix 1's insertions on all 3 call sites (in1 == in2 exactly, emit/surf growth collapses vs CPU), t1 and t4.
+complete: B reproduces the CPU behaviour (in2 > in1, totals within noise of CPU) for emit/face, emit/surf, emit/face/file, at t1 and t4. With collide vss (sorted at step start by collide) A and B both use the step-start lists, same as CPU (4-step trace A == B; CPU also uses its stale sorted lists in that case per verify). Not tested: multi-proc (MPI build unavailable).
+negative control: single subsonic emit/face (F-G12-1 neg): A == B identical kk and CPU; mixed emit/face xlo + emit/surf circle (disjoint cells, 8 steps): kk A == kk B identical (np 7600, 165/513), CPU A == B identical
+verdict: NECESSARY, COMPLETENESS-PARTIAL (multi-proc untested; all 3 call sites x t1/t4 pass)
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB6/F-G12-2
+
+## Summary
+| ID | verdict |
+|---|---|
+| F-G00-1 | NECESSARY, COMPLETENESS-PARTIAL (A kk segfaults; B correct 2d/3d/per-surf/adapt, t1/t4; multi-proc untested) |
+| F-G11-1 | NECESSARY+COMPLETE (A leaks: maxRSS 820 vs 175 MB; B flat with 1/2 computes, t1/t2) |
+| F-G11-2 | NECESSARY+COMPLETE (unit-level; run-level probability ~1e-16) |
+| F-G11-3 | NECESSARY, COMPLETENESS-PARTIAL (unit with bounds check: A aborts, B ok; full-SPARTA bounds-check build pending) |
+| F-G11-4 | NOT-SHOWN-NECESSARY (when guard fires nrho is already inf/NaN in CPU+KK; vstream never consumed) |
+| F-G12-1 | NOT-SHOWN-NECESSARY (same reason, emit/face) |
+| F-G12-2 | NECESSARY, COMPLETENESS-PARTIAL (all 3 styles reproduced and fixed at t1/t4; multi-proc untested) |
+
+Side finding (not a regression, A and B identical, CPU too): subsonic PONLY with a zero-thermal-energy cell gives nrho = inf/NaN -> "insertion count exceeds 32-bit int" error, or KK 27 GiB alloc abort / CPU OOM.
+
+## STATUS: COMPLETE

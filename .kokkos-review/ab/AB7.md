@@ -55,3 +55,12 @@ necessary: yes - A garbage (vector variant) and segfault rc=139 (array variant b
 complete: yes - B correct for per-grid vector (c_g[1]) and array with a post-processed compute (`c_g[1] c_th[1]`, compute thermal/grid temp): f_ag[1] sum == np at t1/t4, max temp plausible vs CPU, dump grid of f_ag[*] over all 483 cells works (A segfaults on this input); t1 and t4. Not tested: real-MPI N procs (MPI builds not present), 3d.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB7/F-G14-5 (neg/, complete/)
+
+### F-G14-6 — ave/grid/kk grow_percell grows maxgrid by a single DELTAGRID (1024) even when nglocal+nnew needs more
+class: cpu-observable
+positive control: 50x50 box, 100x100 grid (10000 cells), `fix ag ave/grid all 1 1 10 c_g[1] c_g[1]` defined, then 25x `read_surf data.spiky trans ... scale 0.4 0.4 1` before the first run -> 12075 cells (2075 new split sub-cells > 1024), `compute reduce sum f_ag[1]/[2]` vs np, 50 steps. Since A also lacks F-G14-5, a scratch variant V = B with only this fix reverted (single `maxgrid += DELTAGRID;`, scratch-compiled fix_ave_grid_kokkos.cpp linked against the B build objects; $S/ab/AB7/F-G14-6/variant) isolates F-G14-6 | A: segfault rc=139 (t1,t4) | V: segfault rc=139 (t1,t4), gdb: compute_reduce.cpp:829 reading f_ag array sized 11024 < nglocal 12075 | B: rc=0, c_r == c_r2 == np at every output (t1 5218, t4 5292); CPU same invariant (12075 cells) | REPRODUCED
+negative control: same 25-surf deck with fix ave/grid defined after read_surf | A vs B vs V: stats identical t1 and t4. F-G14-5 spiky deck (83 new cells < 1024): V == B identical.
+necessary: yes - shown with the isolated variant V (B minus F-G14-6 crashes; B fine). Other route (unpack_grid_one with nsplit>1024 via `global splitmax` + migration) not exercised: needs one cell split into >1024 sub-cells.
+complete: yes - single growth site in fix_ave_grid_kokkos.cpp, now identical to CPU; covers grow_percell(0) from init and grow_percell(nsplit) (same code). Vector/array outputs fine (array tested). Sibling sweep: CollideVSSKokkos::grow_percell already uses while; no other KOKKOS per-grid grower with a single bump (emit ntaskmax single bumps are guarded per-task, different pattern). Also checked: adapt_grid refine (2x2 / 4x4, 1600 / 6400 cells) before first run is NOT a trigger - A, B, V all correct there (adapt path notifies the fix).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB7/F-G14-6 (variant/, neg/, in.c2/in.c4 adapt checks)

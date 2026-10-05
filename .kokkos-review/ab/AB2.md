@@ -63,3 +63,13 @@ necessary: yes for the null-deref part (crash on CPU and KK); the orphan-discard
 complete: B correct for delete reaction on CPU, KK t1, KK t4; dissociation path runs on all three (KK discard relies on R-A-4, see below).
 verdict: NECESSARY+COMPLETE (null-deref part); orphan-discard sub-part NOT-SHOWN-NECESSARY (no distinguishing observable)
 artifacts: $S/ab/AB2/F-G08-2
+
+### R-A-4 — KK move: reaction product flagged PDISCARD inside a surface collision was never put on the migrate list (advected with garbage, never deleted)
+class: cpu-observable
+positive control: 2d circle, N beam, fix ambipolar e N+, surf_react N -> N+ + e (p=1): fix ambipolar sets j=-1 so the electron product is flagged PDISCARD; react/extra 4.0 (no retry, isolates from F-G00-10); invariant count(e) == 0 (CPU ref: 0) | A: stray electrons survive at step 300: diffuse 2351, cll 2592, td 2325, impulsive 77994, adiabatic 31936, specular 39931 (np inflated accordingly, e.g. specular 134374 vs CPU 94668) | B: e = 0 for all 6 models at t1 and t4 (5 models), np close to CPU (specular 94443 vs 94668; diffuse 226228 vs CPU 227080) | REPRODUCED
+piston outside-box discard path (new PDISCARD source from F-G08-2): B KK t1/t4 with piston + N2 -> N+N on xlo run clean (F-G08-2 in.diss); no A comparison possible (path did not exist in A)
+negative control: N2+ -> N + N+ deck (no PDISCARD product), cll, react/extra 4.0 | A vs B: identical stats tables
+necessary: yes (all 6 surf_collide kk models leak discarded electrons in A).
+complete: B correct for diffuse/cll/td/impulsive/adiabatic/specular t1, 5 of them t4; piston path runs clean.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/R-A-4 (also $S/ab/AB2/F-G00-10/in.ion.* with retry)

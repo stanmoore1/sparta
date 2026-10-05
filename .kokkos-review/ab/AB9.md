@@ -105,3 +105,25 @@ complete: B errors for every, select, and react none, on CPU and Kokkos; mode al
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB9/F-G18-2-cpu
 
+### F-G22-3 — SurfKokkos::grow (non-prewrap) did not zero lines/tris [old,nmax) when nmax unchanged (CPU Surf::grow memsets)
+class: cpu-observable (unit level); end-to-end needs ghost surfs (MPI)
+method: driver linked against A/B libs (unit/drv.cpp): read surfs, `run 0` (prewrap=0 so the Kokkos path is used), fill tail slots [nlocal,nmax) with stale copies (id=1000+i, as remove_ghosts() leaves ghost lines there), call surf->grow(nlocal) with nmax unchanged, exactly as Surf::add_surfs does
+positive control: 2d circle (50 lines, nmax 1024) and 3d cube (12 tris) | A Kokkos: 974 / 1012 stale nonzero-ID slots remain | B Kokkos: 0 / 0 | REPRODUCED. CPU Surf::grow (same driver without -k): 0 in A and B (reference)
+1-proc end-to-end (read_surf circle, then read_surf triangle with duplicate line ID 1,1,3): "Missing read_surf IDs = 1" in A and B, CPU and kk — no ghosts on 1 proc so tail already zero; stale-ghost variant needs MPI (see below if run)
+negative control: valid second surface (IDs 1,2,3), emit/face flow 100 steps | A vs B: identical (cpu: Np 19147 nscoll 134; kk: Np 19181 nscoll 119)
+necessary: shown at unit level (A keeps stale lines/tris in new slots, defeating the "Missing read_surf IDs" check); end-to-end not shown on 1 proc.
+complete: both branches (2d lines, 3d tris) fixed and tested; live slots [0,old) untouched. Sibling SurfKokkos::grow_own (mylines/mytris) has no memset either, but it resizes exactly nown_old->nown so Kokkos resize value-initializes the new tail; only an extent>nown_old state (not reachable via add_surfs, clear_explicit resets) would leave stale data - not tested.
+verdict: NECESSARY, COMPLETENESS-PARTIAL (unit-level; MPI ghost end-to-end pending/untested)
+artifacts: $S/ab/AB9/F-G22-3 (drv.cpp, results.txt, *.log)
+
+### F-G22-2 — GridKokkos grow_cells/grow_sinfo resized k_cells/k_cinfo/k_sinfo WithoutInitializing (CPU memsets new tail)
+class: unreachable (hygiene; verify found no reader of the uninitialized fields) -> unit test
+method: driver (#define protected public) linked to A/B libs; 2d 20x20 grid, `run 0` (prewrap=0), then force grow_cells(maxcell,maxlocal) and grow_sinfo twice; count nonzero bytes in the new tail; glibc perturb (GLIBC_TUNABLES=glibc.malloc.perturb=171, mmap_threshold 32MB) to expose uninitialized memory
+positive control (resize branch) | A Kokkos: cells tail 983040 nonzero bytes, cinfo 524288, sinfo resize 393216 | B Kokkos: 0 / 0 / 0 | CPU (A and B): 0 | REPRODUCED (memory-content level)
+sibling not covered: first allocation branch (`cells/cinfo/sinfo == NULL` -> MemKK::realloc_kokkos, NoInit) | B Kokkos: sinfo first alloc 0->8192 still 393216 nonzero bytes with perturb and 4000 nonzero bytes even with default malloc (A identical); CPU 0. Fix only touched the Kokkos::resize branch.
+negative control: CPU path (no -k) identical A vs B (all zero); behaviour: no reader of the garbage exists per verify, so no run-level difference expected (grid examples covered by other clusters)
+necessary: NOT shown behaviourally (no consumer of uninitialized fields known); shown only as memory-content divergence from CPU.
+complete: resize branches of k_cells, k_cinfo, k_sinfo all now zeroed; the initial-allocation (realloc_kokkos) branch of the same three functions still returns uninitialized memory (sinfo demonstrated), so CPU-parity is not complete.
+verdict: INCOMPLETE (first-allocation realloc_kokkos branch still uninitialized: sinfo 0->8192 nonzero bytes in B) — and NOT-SHOWN-NECESSARY behaviourally (hygiene only)
+artifacts: $S/ab/AB9/F-G22-2 (drv.cpp, results.txt)
+

@@ -9,6 +9,7 @@ negative control: (a) react/retry yes on in.one2: A and B both complete, np 2000
 necessary: yes - A ignores react/extra in the default no-retry mode on all 5 kernels (fails at x2/x3/x4 like x1)
 complete: all 5 pre-loop sites exercised, A fails at react/extra 3-4, B passes, B fails at 1.0 (padding is what makes it pass):
   collisions_one (in.one2) | subcell (in.sub, partners subcell: A x4 err @1354, B x4 ok np 2000 T 42909.171 = CPU) | group (in.grp, group SELF: A x4 err @2077, B x4 ok np 2000 T 42909.171 = CPU) | group_ambipolar (examples/ambi/in.ambi, `collide vss species`, 300 steps: A x3 err @2625, B x3 ok np 131425) | one_ambipolar (in.ambi1, single-group mixture, 200 steps: A x3 err @3303, B x3 ok np 130066). All t 1. No other react_extra consumer besides update_kokkos.cpp (already !retry).
+side observation (perf, consequence of the corrected semantics): with react/retry yes, B no longer pads by react/extra (documented), and each retry grows plist by only DELTACELLCOUNT=2 (unchanged since A), so heavy per-cell growth needs ~(overflow/2) full re-passes with backup/restore: in.one2 retry t 1 loop time A 0.22 s vs B 1.35 s (6x; steps 1-7 dominate), in.sub/in.grp retry t 4 A 9.6/7.7 s vs B 58/69 s. Results agree (np 2000, T 42909.171). Suggest a geometric grow step for the retry path (follow-up, not a correctness issue).
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB1/F-G21V-1
 
