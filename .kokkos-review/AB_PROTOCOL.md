@@ -46,3 +46,16 @@ build) and is gone (B = fixed build), using positive and/or negative controls.
 - Do NOT edit source under /home/user/sparta (only your results file). Do not run git except read-only.
 - If a fix appears not to work (FIX-FAILS) record evidence clearly; do not fix it.
 - When all IDs are done append `## STATUS: COMPLETE`.
+
+## GOAL CLARIFICATION (from the user): prove each bugfix is NECESSARY and COMPLETE
+- NECESSARY: a positive control where A (pre-fix) demonstrably misbehaves on the buggy path
+  (wrong vs reference/analytic, crash, bounds abort, NaN, leak growth...). If you cannot make A fail,
+  the fix is not proven necessary -> say so (NOT-SHOWN-NECESSARY, with why: gpu-only/unreachable/etc.).
+- COMPLETE: B is correct (matches CPU reference / analytic / invariant) on EVERY variant the fix
+  claims to cover: every call site / kernel path (sorted vs atomic, 2d/3d, each surf_collide model,
+  each mode/option, t1 vs t4, 1 vs N procs), not just one. Also look for sibling sites the fix
+  missed (same pattern elsewhere) and test them; if B still fails anywhere -> INCOMPLETE with evidence.
+- Negative controls still required (B must not change behaviour off the buggy path).
+- Verdict values become: NECESSARY+COMPLETE | NECESSARY, COMPLETENESS-PARTIAL (<untested variants>) |
+  INCOMPLETE (<failing variant>) | NOT-SHOWN-NECESSARY (<why>) | FIX-FAILS.
+  Record "necessary:" and "complete:" lines with evidence in each entry.
