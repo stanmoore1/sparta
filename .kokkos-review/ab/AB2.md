@@ -51,7 +51,7 @@ positive control: 2d, N beam, circle (diffuse + prob N->O p=0.5) + closed square
 negative control: same decks keeping surf_react but with `compute surf sq air n ke` and no reaction tally (no reader of `reaction`) | A vs B: identical stats tables, CPU and KK, vanish and transparent.
 extra positive (no surf_react at all, etot/echem + reaction tally kept): A CPU still SIGSEGV for both styles (CPU `reaction` uninitialized at function scope, update.cpp:578), A KK dumps 23 spurious rows; B CPU/KK run, 0 rows
 necessary: yes (CPU crash; KK spurious tally events).
-complete: B correct for vanish and transparent, CPU and KK.
+complete: B correct for vanish and transparent, CPU and KK t1. Siblings: every other CPU and KK surf_collide collide() and Domain::collide / DomainKokkos::collide_kokkos already set reaction = 0 first (grep), so no model is left that returns without writing it.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB2/F-G08-3
 
@@ -101,3 +101,12 @@ necessary: NOT shown (needs separate device memory; source review agrees with ve
 complete: fix mirrors add_custom's sync block. Sibling: GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) has the same omission (compacts ewhich/eicol/edcol, syncs only the outer views), but no kernel reads the grid's device ewhich/eicol/edcol (grep: only particle-side k_ewhich/k_eicol/k_edcol view_device users), so it is latent, not a live bug.
 verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control passes; latent sibling noted in GridKokkos::remove_custom
 artifacts: $S/ab/AB2/F-G13-4
+
+### F-G06-1 — FIXED_LISTS: unused slist_active_{coll,react}_tally_copy slots not re-padded with placeholder computes
+class: unreachable (only -DSPARTA_KOKKOS_FIXED_LISTS builds; verify G06: stale slots never dereferenced, closures copied with tracking disabled, so no UAF reachable)
+positive control: n/a - change is inside #ifdef SPARTA_KOKKOS_FIXED_LISTS, not compiled into A/B; even in such a build the verify analysis shows no observable failure
+negative control: tally_computes deck with two surf/collision/tally computes + tally dumps, run 300; undump/uncompute one (active count 2->1); run 300; uncompute the other (1->0); run 300 | A vs B: stats tables and both tally dumps byte-identical (KK t1: 1131/497 dump lines; CPU too); KK t4 last row identical (np 42986 nscoll 195)
+necessary: NOT shown (latent invariant/hygiene fix; no reachable failure).
+complete: both missing types (coll_tally, react_tally) get placeholders per the diff; not compiled/run with FIXED_LISTS here (fixer reports compile OK with -DSPARTA_KOKKOS_FIXED_LISTS).
+verdict: NOT-SHOWN-NECESSARY (unreachable / build-flag-only, latent); negative control passes
+artifacts: $S/ab/AB2/F-G06-1
