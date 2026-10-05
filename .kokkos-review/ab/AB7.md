@@ -14,16 +14,20 @@ artifacts: $S/ab/AB7/F-G00-3 (neg/, w/, complete/)
 class: gpu-only
 positive control: n/a on host backend (OpenMP device views are host memory, so host atomics are legal; bug = host write to device memory on CUDA/HIP)
 negative control: `fix ave/histo 1 10 10 0 12000 6 v_n` (v_n equal np) + `fix ave/histo 1 10 10 0 400 8 c_t` (compute temp), ave running, 50 steps | A vs B: identical (stats + both histogram files, t1 and t4); B histogram of np is plausible vs CPU (50 values, min 0, max 10508 vs CPU 10529; same bin distribution within 1 count); new device bin_scalar path gives same min/max/counts as old host path
-verdict: UNTESTABLE-HERE (gpu-only; negative control A==B identical)
-artifacts: $S/ab/AB7/F-G00-4
+necessary: NOT SHOWN - on OpenMP the device views alias host memory, so A's host atomics are correct; failure needs CUDA/HIP without UVM.
+complete: yes on host for all three call sites: compute scalar (c_t, A==B identical), fix scalar (`fix gc grid/check/kk 1 error` -> f_gc, beyond extra) and equal-style var (`v_s equal step`, ave window 2, beyond end): B (and A) histogram files bit-identical to CPU for t1 and t4; analytic check window steps 11..30 -> bins 0,0,4,5,11, min 11 max 30. Nrepeat>1 covered. Weight style: global scalar inputs are rejected by calculate_weights() (error), so no extra site; grep: no remaining host bin_one(minmax,...) call in fix_ave_histo*_kokkos.cpp.
+verdict: NOT-SHOWN-NECESSARY (gpu-only; B correct on every host call site, A==B==CPU)
+artifacts: $S/ab/AB7/F-G00-4 (complete/)
 
 ### F-G00-12 — ave/histo/weight/kk per-particle (variable) input with `region` never binned (kernels commented out)
 class: cpu-observable
 positive control: `variable vx particle vx`, `variable one particle 1.0`; `fix ave/histo/weight 10 1 10 -2000 2000 8 v_vx v_one region left mode vector` (+ same with `mix sub`, sub = N only) | A: histogram always empty, count 0, min/max inf/-inf every step (t1,t4) | B: step 50 t1 count 10442 (region-only), 5331 (region+mix), min 9.16 max 1663.9; B histogram for v_vx+region is bin-for-bin identical to B/A explicit-attribute `vx`+region path; CPU region+mix reference 5337 of 10529 (statistically consistent) | REPRODUCED
 negative control: same deck, `v_vx v_one mix sub` (no region, BinParticles3) and `vx v_one region left` (X/V path) | A vs B: stats identical t1/t4; histogram files identical except the step-0 empty-histogram min/max line (inf/-inf -> 1e+20/-1e+20, the intended F-G14-1 change)
 side finding (CPU, not in scope): CPU FixAveHistoWeight::bin_particles(double*,int) (src/fix_ave_histo_weight.cpp:412) segfaults with `region` and no `mix` (reads particle->mixture[imix] with imix unset); CPU reference therefore only available for region+mix.
-verdict: VERIFIED
-artifacts: $S/ab/AB7/F-G00-12 (neg/)
+necessary: yes - A bins nothing (count 0) for v_ particle-variable + region, with and without mix (t1,t4).
+complete: yes - both re-enabled kernels (BinParticles1 region+mix, BinParticles2 region-only) with a non-trivial weight `v_w = 1+0.001*vy`: B t1 and t4 histogram files bit-identical to the independent explicit-attribute path (`vx v_w region left [mix sub]`, X/V kernels) in the same run (A differs: a1!=a2, b1!=b2); counts statistically = CPU (t1 3205.9/6250.9 wt, CPU 3224.3/6305.0). Sibling base ave/histo/kk v_vx region+mix already worked (A and B c1==c2). Per-particle compute input (c_ke) is rejected by ave/histo(/weight)/kk in A and B ("Compute kind not compatible"), so particle-style variable is the only reachable site.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB7/F-G00-12 (neg/, complete/)
 
 ### F-G14-1 (= G12x-F-G14-2) — ave/histo/kk empty histogram reports min/max as Kokkos identities instead of CPU +-1e20
 class: cpu-observable
