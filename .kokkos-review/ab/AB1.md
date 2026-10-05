@@ -10,6 +10,7 @@ necessary: yes - A ignores react/extra in the default no-retry mode on all 5 ker
 complete: all 5 pre-loop sites exercised, A fails at react/extra 3-4, B passes, B fails at 1.0 (padding is what makes it pass):
   collisions_one (in.one2) | subcell (in.sub, partners subcell: A x4 err @1354, B x4 ok np 2000 T 42909.171 = CPU) | group (in.grp, group SELF: A x4 err @2077, B x4 ok np 2000 T 42909.171 = CPU) | group_ambipolar (examples/ambi/in.ambi, `collide vss species`, 300 steps: A x3 err @2625, B x3 ok np 131425) | one_ambipolar (in.ambi1, single-group mixture, 200 steps: A x3 err @3303, B x3 ok np 130066). All t 1. No other react_extra consumer besides update_kokkos.cpp (already !retry).
 side observation (perf, consequence of the corrected semantics): with react/retry yes, B no longer pads by react/extra (documented), and each retry grows plist by only DELTACELLCOUNT=2 (unchanged since A), so heavy per-cell growth needs ~(overflow/2) full re-passes with backup/restore: in.one2 retry t 1 loop time A 0.22 s vs B 1.35 s (6x; steps 1-7 dominate), in.sub/in.grp retry t 4 A 9.6/7.7 s vs B 58/69 s. Results agree (np 2000, T 42909.171). Suggest a geometric grow step for the retry path (follow-up, not a correctness issue).
+bounds check: B_bc (see F-G01-3) in.sub/in.grp react/extra 4.0: complete, no bounds errors, np 2000 T 42909.171.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB1/F-G21V-1
 
@@ -68,6 +69,7 @@ positive control: in.v = 1 cell, 1000 CO2 (mars.species + co2.species.vib, 4 mod
 negative control: same input at T 5000 K (no overflow, no restore), retry yes, 20 steps | A vs B: dumps byte-identical, thermo identical, 0 inconsistent
 complete: kernels sharing backup/restore tested: collisions_one (in.v), subcell (in.vsub: A 74/567 bad, B 0/602), group (in.vgrp: A 283/485 bad, B 0/533); t 1 and t 4. Not tested: the two ambipolar kernels (would need ionized polyatomic species with discrete vib) and the gas-tally-forced backup path; they call the same backup()/restore() so the fix applies structurally.
 necessary: yes
+bounds check: B_bc (collide_vss_kokkos.cpp with KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK, see F-G01-3) on in.v/in.vsub/in.vgrp retry: no bounds errors, 0 inconsistent particles
 verdict: NECESSARY, COMPLETENESS-PARTIAL (ambipolar kernels and gas-tally retry path not run; same backup()/restore() code)
 artifacts: $S/ab/AB1/F-G00-15
 
@@ -99,3 +101,31 @@ necessary: NOT shown (unreachable through valid input, and A's UB is benign on x
 complete: source check - `if (volume == 0.0) { d_error_flag() = 1; return; }` at all 5 kernels in B (collisions_one, subcell, group, group_ambipolar, one_ambipolar), all before rand_pool.get_state()
 verdict: NOT-SHOWN-NECESSARY (unreachable; UB only diverges on GPU); negative control identical
 artifacts: $S/ab/AB1/F-G01-4
+
+### F-G01-3 — react-retry path in collisions_one widens d_plist but not d_nn_last_partner (nearcp) -> OOB write
+class: bounds-check (also heap corruption in the -O3 build)
+tools: bmpi_* builds still compiling, so A and B were relinked in scratch with only collide_vss_kokkos.cpp recompiled with -DKOKKOS_ENABLE_DEBUG_BOUNDS_CHECK (bc/mk.sh -> bc/spa_A_bc, bc/spa_B_bc; check verified with a standalone OOB test)
+positive control: in.nn = 1 cell, 1000 N2 at 1e5 K, dt 3e-8, `collide_modify partners nearcp 10`, react/retry yes react/extra 1.0 (plist starts at the 1038 seed, step 1 overflows -> retry grows plist past nn_last_partner), 30 steps | A_bc t1 and t4: abort "Kokkos::View ERROR: out of bounds access label=(collide:nn_last_partner) with indices [0,1038] but extents [1,1038]"; A -O3 (no bounds check): "free(): invalid next size (normal)", exit 134 (heap corruption) | B_bc t1: completes, np 2000 T 42909.171; B_bc t4 x2: completes, np 2000 T 42909.171; B -O3: completes, same; CPU ref np 2000 T 42909.171 | REPRODUCED
+negative control: (a) same input without nearcp (in.one2, retry, extra 1.0): A_bc and B_bc both complete, identical (step 30 nattempt 36282 ncoll 3022); (b) in.nn with default react/extra (A pads 10% under retry): A completes, A_bc no abort | A vs B: identical / agree within noise
+complete: only collisions_one carries d_nn_last_partner across a retry; subcell retry already calls grow_subcell_views(), group nearcp (find_nn_group) does not use d_nn_last_partner, ambipolar kernels have no nearcp. t1 and t4 run in B_bc without bounds errors.
+necessary: yes (bounds abort + heap corruption crash in A)
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB1/F-G01-3 (bc/ holds the bounds-check binaries)
+
+## Summary (AB1)
+| ID | verdict |
+|---|---|
+| F-G21V-1 | NECESSARY+COMPLETE (all 5 kernels; perf note: retry path grows plist by 2 per re-pass) |
+| F-G01-1 | NECESSARY+COMPLETE (A segfault with fix ambipolar/kk; A silent bad cast with CPU fix) |
+| F-G01-2 | NECESSARY+COMPLETE (kk + CPU: A 0 collisions after regroup) |
+| F-G01-3 | NECESSARY+COMPLETE (A bounds abort / heap corruption with nearcp + retry) |
+| F-G01-4 / F-G02-1 | NOT-SHOWN-NECESSARY (unreachable via valid input; UB benign on x86, GPU-only hang) |
+| F-G02-2 | NOT-SHOWN-NECESSARY (host race not observable; A/B agree) |
+| F-G00-13 | NECESSARY+COMPLETE (A never recombines with np==2 + electron J) |
+| F-G00-15 | NECESSARY, COMPLETENESS-PARTIAL (ambipolar + gas-tally retry paths not run) |
+| F-G00-17 | NOT-SHOWN-NECESSARY (unreachable: vremax==0 gives 0 attempts) |
+| F-G04-1 | NOT-SHOWN-NECESSARY (gpu-only; host/device alias on OpenMP) |
+| F-G04-2 (+R-A-1/R-A-2) | NECESSARY, COMPLETENESS-PARTIAL (subcell, group-ambipolar not run) |
+No FIX-FAILS / INCOMPLETE found. Side findings: stock examples/ambi/in.ambi fails with default react/extra 1.1 under -sf kk (A and B); kk TCE ">1" warning rate 25/30 vs CPU 16/30 runs.
+
+## STATUS: COMPLETE

@@ -48,7 +48,8 @@ positive control: 2d, N beam, circle (diffuse + prob N->O p=0.5) + closed square
   | A CPU: SIGSEGV (exit 139) for vanish and transparent (surf->sr[isr=-1] with stale reaction)
   | A KK: no crash, but spurious reaction events on sq: 3840 rows (vanish), 3549 rows (transparent) in the surf/reaction/tally dump; etot/echem equal to B by luck
   | B CPU and KK: 0 tally rows, runs complete; KK echem 0, etot 9.04e-18 vs CPU 9.08e-18 | REPRODUCED
-negative control: same decks without surf_react | A vs B stats: identical (CPU and KK, both styles). Note A KK still dumped 23 spurious rows there (uninitialized reaction), B 0.
+negative control: same decks keeping surf_react but with `compute surf sq air n ke` and no reaction tally (no reader of `reaction`) | A vs B: identical stats tables, CPU and KK, vanish and transparent.
+extra positive (no surf_react at all, etot/echem + reaction tally kept): A CPU still SIGSEGV for both styles (CPU `reaction` uninitialized at function scope, update.cpp:578), A KK dumps 23 spurious rows; B CPU/KK run, 0 rows
 necessary: yes (CPU crash; KK spurious tally events).
 complete: B correct for vanish and transparent, CPU and KK.
 verdict: NECESSARY+COMPLETE
@@ -73,3 +74,12 @@ necessary: yes (all 6 surf_collide kk models leak discarded electrons in A).
 complete: B correct for diffuse/cll/td/impulsive/adiabatic/specular t1, 5 of them t4; piston path runs clean.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB2/R-A-4 (also $S/ab/AB2/F-G00-10/in.ion.* with retry)
+
+### F-G18-1 — device species2group table built only at the first run; mixture/group changes between runs not seen by kk computes
+class: cpu-observable
+positive control: (1) in.regroup: 2d periodic box, run 10; `mixture air O group two`; compute grid all air n + reduce; run 10. (2) in.newmix: run 10; create mixtures m2..m5 after run 1; compute grid on m5 (2 groups); run 10. (3) in.regroup2: beam + circle, after run 1 regroup, compute surf + compute boundary per group | A: (1) groups (10000, 0) instead of (6928, 3072), t1 and t4; (2) t1 hangs (timeout), t4 SIGSEGV (stale 1x2 table indexed with imix=4); (3) surf n (755.24, 0) and xhi boundary (382.08, 0) vs CPU (529.87, 225) and (264.11, 113.96) | B: (1) and (2) stats byte-identical to CPU, t1 and t4; (3) surf (530.94, 224.3), boundary (267.77, 114.31), within noise of CPU (KK RNG stream differs) | REPRODUCED
+negative control: in.neg (same as (3) without the mixture change, one group) | A vs B KK: identical stats tables; KK 755.24 vs CPU 754.87
+necessary: yes (wrong group tallies, hang/segfault for a new mixture).
+complete: per-grid compute (grid/kk), per-surf tally (surf/kk), boundary tally (boundary/kk) checked; t1+t4. All 17 consumers re-fetch k_species2group in pre_*_tally()/compute_*()/end_of_step (grep), so the refreshed view reaches them; collide_vss_kokkos builds its own d_species2group in init() (not affected).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G18-1

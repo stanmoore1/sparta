@@ -4,3 +4,5 @@
 - FU-3 (from AB6, CPU+kk): subsonic pressure-only emit (face/surf) adjacent to a cell with zero thermal energy -> nrho inf/NaN -> int overflow error / huge allocation / OOM in both A and B, CPU and Kokkos. Root cause upstream of F-G11-4/F-G12-1 guards.
 - FU-4 (from AB7, G12x-F-G14-1 INCOMPLETE): compute fft/grid/kk (compute_fft_grid_kokkos.cpp:184) and compute lambda/grid/kk (compute_lambda_grid_kokkos.cpp:142) segfault with an isurf/grid/kk (non-KokkosBase per-grid compute) input; CPU works. Need same error check (or host fallback).
 - FU-5 (from AB7, CPU): src/fix_ave_histo_weight.cpp:412 with region and no mix reads uninitialized mixture index -> segfault.
+- FU-6 (from AB1, perf regression caused by F-G21V-1): with react/retry yes, B no longer pads (correct per docs) but each retry grows plist by only DELTACELLCOUNT=2 -> many retries; B ~6x slower than A on heavy-growth case (in.one2 t1 0.22s vs 1.35s). Use geometric growth (e.g. max(+DELTA, 1.5x)) in retry grow requests.
+- FU-7 (from AB1, low): kk TCE prob>1 warning fires 25/30 seeds vs CPU 16/30 (p~0.02); same formula -> possible high-energy collision sampling difference kk vs CPU. Investigate only.
