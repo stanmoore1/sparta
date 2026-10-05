@@ -594,8 +594,8 @@ void Surf::add_tri_copy(int ownflag, Tri *tri)
 ------------------------------------------------------------------------- */
 
 void Surf::add_surfs(int replace, int ncount,
-		     Line *newlines, Tri *newtris,
-		     int nc, int *index_custom, double **cvalues)
+                     Line *newlines, Tri *newtris,
+                     int nc, int *index_custom, double **cvalues)
 {
   // if replace: remove all existing surfs and their memory
   // remove ghost surfs for replace or add
@@ -649,7 +649,7 @@ void Surf::add_surfs(int replace, int ncount,
   // redistribute surfs to correct layout in Surf data structs
 
   redistribute_surfs(ncount,newlines,newtris,nc,index_custom,cvalues,
-		     nsurf_new,nsurf_old);
+                     nsurf_new,nsurf_old);
 
   // check if new surf IDs are contiguous from 1 to Nsurf_new
   // if any ID = 0 in rendezvous output, new surf IDs were NOT contiguous
@@ -658,18 +658,18 @@ void Surf::add_surfs(int replace, int ncount,
   if (domain->dimension == 2) {
     if (!distributed) {
       for (int i = nlocal_old; i < nlocal; i++)
-	if (lines[i].id == 0) flag++;
+        if (lines[i].id == 0) flag++;
     } else {
       for (int i = nown_old; i < nown; i++)
-	if (surf->mylines[i].id == 0) flag++;
+        if (surf->mylines[i].id == 0) flag++;
     }
   } else {
     if (!distributed) {
       for (int i = nlocal_old; i < nlocal; i++)
-	if (tris[i].id == 0) flag++;
+        if (tris[i].id == 0) flag++;
     } else {
       for (int i = nown_old; i < nown; i++)
-	if (surf->mytris[i].id == 0) flag++;
+        if (surf->mytris[i].id == 0) flag++;
     }
   }
 
@@ -968,7 +968,7 @@ void Surf::extract_masks(int *masks)
         masks[i] = mylines[i].mask;
     } else {
       for (int i = 0; i < nown; i++)
-	masks[i] = mytris[i].mask;
+        masks[i] = mytris[i].mask;
     }
   } else {
     int m = 0;

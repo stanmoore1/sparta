@@ -50,8 +50,8 @@ enum{INT,DOUBLE};                      // several files
 ------------------------------------------------------------------------- */
 
 void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
-			      int nc, int *index_custom, double **cvalues,
-			      bigint nsurf_new, bigint nsurf_old)
+                              int nc, int *index_custom, double **cvalues,
+                              bigint nsurf_new, bigint nsurf_old)
 {
   int dim = domain->dimension;
 
@@ -86,11 +86,11 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
   if (!distributed) {
     if (dim == 2) {
       lines_contig = (Line *)
-	memory->smalloc(bbytes,"surf:lines_contig");
+        memory->smalloc(bbytes,"surf:lines_contig");
       memset(lines_contig,0,bbytes);
     } else {
       tris_contig = (Tri *)
-	memory->smalloc(bbytes,"surf:tris_contig");
+        memory->smalloc(bbytes,"surf:tris_contig");
       memset(tris_contig,0,bbytes);
     }
   }
@@ -158,10 +158,10 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
 
     if (dim == 2)
       MPI_Allgatherv(lines_contig,ncount,surf_type,
-		     &lines[nsurf_old],recvcounts,displs,surf_type,world);
+                     &lines[nsurf_old],recvcounts,displs,surf_type,world);
     else
       MPI_Allgatherv(tris_contig,ncount,surf_type,
-		     &tris[nsurf_old],recvcounts,displs,surf_type,world);
+                     &tris[nsurf_old],recvcounts,displs,surf_type,world);
 
     MPI_Type_free(&surf_type);
 
@@ -210,8 +210,8 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
   nbytes = (1+nvalues_custom) * sizeof(double);
 
   nout = comm->rendezvous(1,n,in_rvous,nbytes,
-			  0,proclist,rendezvous_redistribute_custom,
-			  0,buf,0,(void *) this);
+                          0,proclist,rendezvous_redistribute_custom,
+                          0,buf,0,(void *) this);
 
   memory->destroy(proclist);
 }
@@ -223,7 +223,7 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
 ------------------------------------------------------------------------- */
 
 int Surf::rendezvous_redistribute_surfs(int n, char *inbuf, int &flag,
-					int *&proclist, char *&outbuf, void *ptr)
+                                        int *&proclist, char *&outbuf, void *ptr)
 {
   Surf *sptr = (Surf *) ptr;
 
@@ -290,7 +290,7 @@ int Surf::rendezvous_redistribute_surfs(int n, char *inbuf, int &flag,
 ------------------------------------------------------------------------- */
 
 int Surf::rendezvous_redistribute_custom(int n, char *inbuf, int &flag,
-					 int *&proclist, char *&outbuf, void *ptr)
+                                         int *&proclist, char *&outbuf, void *ptr)
 {
   Surf *sptr = (Surf *) ptr;
 
@@ -330,52 +330,52 @@ int Surf::rendezvous_redistribute_custom(int n, char *inbuf, int &flag,
 
     if (type == 0) {
       if (size == 0) {
-	int *ivector = eivec[ewhich[index]];
+        int *ivector = eivec[ewhich[index]];
 
-	m = 0;
-	for (i = 0; i < n; i++) {
-	  id = (surfint) ubuf(in_custom[m]).i;
-	  j = (id-1) / nprocs;
-	  ivector[j] = static_cast<int> (in_custom[m+offset]);
-	  m += skip;
-	}
+        m = 0;
+        for (i = 0; i < n; i++) {
+          id = (surfint) ubuf(in_custom[m]).i;
+          j = (id-1) / nprocs;
+          ivector[j] = static_cast<int> (in_custom[m+offset]);
+          m += skip;
+        }
 
       } else {
-	int **iarray = eiarray[ewhich[index]];
+        int **iarray = eiarray[ewhich[index]];
 
-	m = 0;
-	for (i = 0; i < n; i++) {
-	  id = (surfint) ubuf(in_custom[m]).i;
-	  j = (id-1) / nprocs;
-	  for (k = 0; k < size; k++)
-	    iarray[j][k] = static_cast<int> (in_custom[m+offset+k]);
-	  m += skip;
-	}
+        m = 0;
+        for (i = 0; i < n; i++) {
+          id = (surfint) ubuf(in_custom[m]).i;
+          j = (id-1) / nprocs;
+          for (k = 0; k < size; k++)
+            iarray[j][k] = static_cast<int> (in_custom[m+offset+k]);
+          m += skip;
+        }
       }
 
     } else {
       if (size == 0) {
-	double *dvector = edvec[ewhich[index]];
+        double *dvector = edvec[ewhich[index]];
 
-	m = 0;
-	for (i = 0; i < n; i++) {
-	  id = (surfint) ubuf(in_custom[m]).i;
-	  j = (id-1) / nprocs;
-	  dvector[j] = in_custom[m+offset];
-	  m += skip;
-	}
-	
+        m = 0;
+        for (i = 0; i < n; i++) {
+          id = (surfint) ubuf(in_custom[m]).i;
+          j = (id-1) / nprocs;
+          dvector[j] = in_custom[m+offset];
+          m += skip;
+        }
+
       } else {
-	double **darray = edarray[ewhich[index]];
+        double **darray = edarray[ewhich[index]];
 
-	m = 0;
-	for (i = 0; i < n; i++) {
-	  id = (surfint) ubuf(in_custom[m]).i;
-	  j = (id-1) / nprocs;
-	  for (k = 0; k < size; k++)
-	    darray[j][k] = in_custom[m+offset+k];
-	  m += skip;
-	}
+        m = 0;
+        for (i = 0; i < n; i++) {
+          id = (surfint) ubuf(in_custom[m]).i;
+          j = (id-1) / nprocs;
+          for (k = 0; k < size; k++)
+            darray[j][k] = in_custom[m+offset+k];
+          m += skip;
+        }
       }
     }
 
@@ -582,15 +582,15 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
 
     if (n == 1) {
       for (i = 0; i < nown; i++) {
-	m = me + i*nprocs;
-	myvec[m] = ivec[i];
+        m = me + i*nprocs;
+        myvec[m] = ivec[i];
       }
     } else {
       for (i = 0; i < nown; i++) {
-	ij = i * n;
-	mj = (me + i*nprocs) * n;
-	for (j = 0; j < n; j++)
-	  myvec[mj++] = ivec[ij++];
+        ij = i * n;
+        mj = (me + i*nprocs) * n;
+        for (j = 0; j < n; j++)
+          myvec[mj++] = ivec[ij++];
       }
     }
 
@@ -613,15 +613,15 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
 
     if (n == 1) {
       for (i = 0; i < nown; i++) {
-	m = me + i*nprocs;
-	myvec[m] = ivec[i];
+        m = me + i*nprocs;
+        myvec[m] = ivec[i];
       }
     } else {
       for (i = 0; i < nown; i++) {
-	ij = i * n;
-	mj = (me + i*nprocs) * n;
-	for (j = 0; j < n; j++)
-	  myvec[mj++] = ivec[ij++];
+        ij = i * n;
+        mj = (me + i*nprocs) * n;
+        for (j = 0; j < n; j++)
+          myvec[mj++] = ivec[ij++];
       }
     }
 
@@ -681,8 +681,8 @@ void Surf::spread_own2local_rendezvous(int n, int type, void *in, void *out)
   char *buf;
 
   int nreturn = comm->rendezvous(1,nall,(char *) inbuf,3*sizeof(int),
-				 0,proclist,rendezvous_own2local,
-				 0,buf,outbytes,(void *) this);
+                                 0,proclist,rendezvous_own2local,
+                                 0,buf,outbytes,(void *) this);
 
   memory->destroy(proclist);
   memory->destroy(inbuf);
@@ -706,11 +706,11 @@ void Surf::spread_own2local_rendezvous(int n, int type, void *in, void *out)
     for (i = 0; i < nreturn; i++) {
       index = ibuf[m++];
       if (n == 1)
-	ioutbuf[index] = ibuf[m++];
+        ioutbuf[index] = ibuf[m++];
       else {
-	k = index * n;
-	for (j = 0; j < n; j++)
-	  ioutbuf[k++] = ibuf[m++];
+        k = index * n;
+        for (j = 0; j < n; j++)
+          ioutbuf[k++] = ibuf[m++];
       }
     }
 
@@ -718,11 +718,11 @@ void Surf::spread_own2local_rendezvous(int n, int type, void *in, void *out)
     for (i = 0; i < nreturn; i++) {
       index = (int) ubuf(dbuf[m++]).i;
       if (n == 1)
-	doutbuf[index] = dbuf[m++];
+        doutbuf[index] = dbuf[m++];
       else {
-	k = index * n;
-	for (j = 0; j < n; j++)
-	  doutbuf[k++] = dbuf[m++];
+        k = index * n;
+        for (j = 0; j < n; j++)
+          doutbuf[k++] = dbuf[m++];
       }
     }
   }
@@ -736,8 +736,8 @@ void Surf::spread_own2local_rendezvous(int n, int type, void *in, void *out)
 ------------------------------------------------------------------------- */
 
 int Surf::rendezvous_own2local(int n, char *inbuf,
-			       int &flag, int *&proclist, char *&outbuf,
-			       void *ptr)
+                               int &flag, int *&proclist, char *&outbuf,
+                               void *ptr)
 {
   int j,k,m,idata;
   int *ibuf,*iout;
@@ -773,11 +773,11 @@ int Surf::rendezvous_own2local(int n, char *inbuf,
       proclist[i] = oproc;
       iout[k++] = oindex;
       if (size == 1)
-	iout[k++] = ibuf[index];
+        iout[k++] = ibuf[index];
       else {
-	idata = index * size;
-	for (j = 0; j < size; j++)
-	  iout[k++] = ibuf[idata++];
+        idata = index * size;
+        for (j = 0; j < size; j++)
+          iout[k++] = ibuf[idata++];
       }
     }
 
@@ -791,11 +791,11 @@ int Surf::rendezvous_own2local(int n, char *inbuf,
       proclist[i] = oproc;
       dout[k++] = ubuf(oindex).d;
       if (size == 1)
-	dout[k++] = dbuf[index];
+        dout[k++] = dbuf[index];
       else {
-	idata = index * size;
-	for (j = 0; j < size; j++)
-	  dout[k++] = dbuf[idata++];
+        idata = index * size;
+        for (j = 0; j < size; j++)
+          dout[k++] = dbuf[idata++];
       }
     }
   }
@@ -869,8 +869,8 @@ void Surf::assign_unique()
   char *buf;
 
   int nout = comm->rendezvous(1,nlocal,(char *) inbuf,3*sizeof(int),
-			      0,proclist,rendezvous_unique,
-			      0,buf,outbytes,(void *) this);
+                              0,proclist,rendezvous_unique,
+                              0,buf,outbytes,(void *) this);
 
   memory->destroy(proclist);
   memory->destroy(inbuf);
@@ -903,8 +903,8 @@ void Surf::assign_unique()
 ------------------------------------------------------------------------- */
 
 int Surf::rendezvous_unique(int n, char *inbuf,
-			    int &flag, int *&proclist, char *&outbuf,
-			    void *ptr)
+                            int &flag, int *&proclist, char *&outbuf,
+                            void *ptr)
 {
   int i,k,m;
 
@@ -1018,20 +1018,20 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
     if (type == INT) {
       ibuf[k++] = index;
       if (n == 1)
-	ibuf[k++] = iinput[isurf];
+        ibuf[k++] = iinput[isurf];
       else {
-	idata = index * n;
-	for (j = 0; j < n; j++)
-	  ibuf[k++] = iinput[idata++];
+        idata = index * n;
+        for (j = 0; j < n; j++)
+          ibuf[k++] = iinput[idata++];
       }
     } else {
       dbuf[k++] = index;
       if (n == 1)
-	dbuf[k++] = dinput[isurf];
+        dbuf[k++] = dinput[isurf];
       else {
-	idata = index * n;
-	for (j = 0; j < n; j++)
-	  dbuf[k++] = dinput[idata++];
+        idata = index * n;
+        for (j = 0; j < n; j++)
+          dbuf[k++] = dinput[idata++];
       }
     }
   }
@@ -1054,8 +1054,8 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
 
   char *buf;
   int nreturn = comm->rendezvous(1,nunique,in_rvous,inbytes,
-				 0,proclist,rendezvous_local2own,
-				 0,buf,0,(void *) this);
+                                 0,proclist,rendezvous_local2own,
+                                 0,buf,0,(void *) this);
 
   memory->destroy(proclist);
   memory->destroy(ibuf);
@@ -1068,8 +1068,8 @@ void Surf::spread_local2own(int n, int type, void *in, void *out)
 ------------------------------------------------------------------------- */
 
 int Surf::rendezvous_local2own(int n, char *inbuf,
-			       int &flag, int *&proclist, char *&outbuf,
-			       void *ptr)
+                               int &flag, int *&proclist, char *&outbuf,
+                               void *ptr)
 {
   int j,m,idata;
   int *ibuf,*iout;
@@ -1096,22 +1096,22 @@ int Surf::rendezvous_local2own(int n, char *inbuf,
     for (int i = 0; i < n; i++) {
       index = ibuf[m++];
       if (size == 1)
-	iout[index] = ibuf[m++];
+        iout[index] = ibuf[m++];
       else {
-	idata = index * size;
-	for (j = 0; j < size; j++)
-	  iout[idata++] = ibuf[m++];
+        idata = index * size;
+        for (j = 0; j < size; j++)
+          iout[idata++] = ibuf[m++];
       }
     }
   } else if (type == DOUBLE) {
     for (int i = 0; i < n; i++) {
       index = static_cast<int> (dbuf[m++]);
       if (size == 1)
-	dout[index] = dbuf[m++];
+        dout[index] = dbuf[m++];
       else {
-	idata = index * size;
-	for (j = 0; j < size; j++)
-	  dout[idata++] = dbuf[m++];
+        idata = index * size;
+        for (j = 0; j < size; j++)
+          dout[idata++] = dbuf[m++];
       }
     }
   }

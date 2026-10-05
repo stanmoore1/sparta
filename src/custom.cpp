@@ -757,26 +757,26 @@ bigint Custom::set_particle(Mixture *mixture, Region *region,
     if (csize == 0) {
       int *cvector = particle->eivec[particle->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) cvector[i] = iscalar;
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) cvector[i] = iscalar;
+        }
       }
 
     } else {
       int **carray = particle->eiarray[particle->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) carray[i][ccol] = iscalar;
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) carray[i][ccol] = iscalar;
+        }
       }
     }
 
@@ -784,26 +784,26 @@ bigint Custom::set_particle(Mixture *mixture, Region *region,
     if (csize == 0) {
       double *cvector = particle->edvec[particle->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) cvector[i] = vector[i];
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) cvector[i] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) cvector[i] = scalar;
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) cvector[i] = scalar;
+        }
       }
 
     } else {
       double **carray = particle->edarray[particle->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) carray[i][ccol] = vector[i];
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) carray[i][ccol] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nlocal; i++) {
-	  if (choose[i]) carray[i][ccol] = scalar;
-	}
+        for (int i = 0 ; i < nlocal; i++) {
+          if (choose[i]) carray[i][ccol] = scalar;
+        }
       }
     }
   }
@@ -862,26 +862,26 @@ bigint Custom::set_grid(int groupbit, Region *region,
     if (csize == 0) {
       int *cvector = grid->eivec[grid->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) cvector[i] = iscalar;
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) cvector[i] = iscalar;
+        }
       }
 
     } else {
       int **carray = grid->eiarray[grid->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) carray[i][ccol] = iscalar;
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) carray[i][ccol] = iscalar;
+        }
       }
     }
 
@@ -889,26 +889,26 @@ bigint Custom::set_grid(int groupbit, Region *region,
     if (csize == 0) {
       double *cvector = grid->edvec[grid->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) cvector[i] = vector[i];
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) cvector[i] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) cvector[i] = scalar;
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) cvector[i] = scalar;
+        }
       }
 
     } else {
       double **carray = grid->edarray[grid->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) carray[i][ccol] = vector[i];
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) carray[i][ccol] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nglocal; i++) {
-	  if (choose[i]) carray[i][ccol] = scalar;
-	}
+        for (int i = 0 ; i < nglocal; i++) {
+          if (choose[i]) carray[i][ccol] = scalar;
+        }
       }
     }
   }
@@ -969,15 +969,15 @@ bigint Custom::set_surf(int groupbit, Region *region,
     }
     if (flag && region) {
       if (dim == 2) {
-	point[0] = 0.5 * (lines[i].p1[0] + lines[i].p2[0]);
-	point[1] = 0.5 * (lines[i].p1[1] + lines[i].p2[1]);
-	point[2] = 0.0;
+        point[0] = 0.5 * (lines[i].p1[0] + lines[i].p2[0]);
+        point[1] = 0.5 * (lines[i].p1[1] + lines[i].p2[1]);
+        point[2] = 0.0;
       } else {
-	point[0] = MathConst::THIRD *
+        point[0] = MathConst::THIRD *
           (tris[i].p1[0] + tris[i].p2[0] + tris[i].p3[0]);
-	point[1] = MathConst::THIRD *
+        point[1] = MathConst::THIRD *
           (tris[i].p1[1] + tris[i].p2[1] + tris[i].p3[1]);
-	point[2] = MathConst::THIRD *
+        point[2] = MathConst::THIRD *
           (tris[i].p1[2] + tris[i].p2[2] + tris[i].p3[2]);
       }
       if (!region->inside(point)) flag = 0;
@@ -996,26 +996,26 @@ bigint Custom::set_surf(int groupbit, Region *region,
     if (csize == 0) {
       int *cvector = surf->eivec[surf->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) cvector[i] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) cvector[i] = iscalar;
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) cvector[i] = iscalar;
+        }
       }
 
     } else {
       int **carray = surf->eiarray[surf->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) carray[i][ccol] = static_cast<int> (vector[i]);
+        }
       } else {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) carray[i][ccol] = iscalar;
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) carray[i][ccol] = iscalar;
+        }
       }
     }
 
@@ -1023,26 +1023,26 @@ bigint Custom::set_surf(int groupbit, Region *region,
     if (csize == 0) {
       double *cvector = surf->edvec[surf->ewhich[cindex]];
       if (vector) {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) cvector[i] = vector[i];
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) cvector[i] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) cvector[i] = scalar;
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) cvector[i] = scalar;
+        }
       }
 
     } else {
       double **carray = surf->edarray[surf->ewhich[cindex]];
       ccol--;
       if (vector) {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) carray[i][ccol] = vector[i];
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) carray[i][ccol] = vector[i];
+        }
       } else {
-	for (int i = 0 ; i < nsown; i++) {
-	  if (choose[i]) carray[i][ccol] = scalar;
-	}
+        for (int i = 0 ; i < nsown; i++) {
+          if (choose[i]) carray[i][ccol] = scalar;
+        }
       }
     }
   }
@@ -1213,7 +1213,7 @@ bigint Custom::read_file(int mode, int colcount,
       *next = '\n';
 
       if (nwords != colcount + 1)
-	error->all(FLERR,"Incorrect line format in custom attribute file");
+        error->all(FLERR,"Incorrect line format in custom attribute file");
 
       // grid ID will match either an owned or ghost grid cell
 
