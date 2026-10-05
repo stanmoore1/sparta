@@ -16,3 +16,6 @@
 - Phase 4 results: examples t1 base(e071055f) vs final: 140/141 thermo IDENTICAL; ambi differs (now runs further before pre-existing "Ran out of space" with default react/extra).
   Failures identical in base: ambi (react/extra), cylinder (rc 137 killed), implicit*/jagged.3d* (missing generated data files). Running t4 crash/NaN check -> scratchpad/run_final_t4.
 - t4 run: same outcome set as t1 (no new crashes/NaN). ALL PHASES COMPLETE.
+- Phase 6 (A/B every fix, user request 2026-10-05): protocol AB_PROTOCOL.md, clusters AB_CLUSTERS.md, results ab/AB1..AB9.md.
+  9 agents launched. MPI+boundscheck builds of base/fixed compiling in scratchpad/bmpi_{base,fixed}. Then: write report (artifact).
+  To resume: relaunch any ABn without "## STATUS: COMPLETE" with the same prompt (protocol resumes).
