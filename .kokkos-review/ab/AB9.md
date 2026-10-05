@@ -106,14 +106,14 @@ verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB9/F-G18-2-cpu
 
 ### F-G22-3 — SurfKokkos::grow (non-prewrap) did not zero lines/tris [old,nmax) when nmax unchanged (CPU Surf::grow memsets)
-class: cpu-observable (unit level); end-to-end needs ghost surfs (MPI)
+class: unreachable end-to-end (unit-level divergence only)
 method: driver linked against A/B libs (unit/drv.cpp): read surfs, `run 0` (prewrap=0 so the Kokkos path is used), fill tail slots [nlocal,nmax) with stale copies (id=1000+i, as remove_ghosts() leaves ghost lines there), call surf->grow(nlocal) with nmax unchanged, exactly as Surf::add_surfs does
 positive control: 2d circle (50 lines, nmax 1024) and 3d cube (12 tris) | A Kokkos: 974 / 1012 stale nonzero-ID slots remain | B Kokkos: 0 / 0 | REPRODUCED. CPU Surf::grow (same driver without -k): 0 in A and B (reference)
-1-proc end-to-end (read_surf circle, then read_surf triangle with duplicate line ID 1,1,3): "Missing read_surf IDs = 1" in A and B, CPU and kk — no ghosts on 1 proc so tail already zero; stale-ghost variant needs MPI (see below if run)
+1-proc end-to-end (read_surf circle, then read_surf triangle with duplicate line ID 1,1,3): "Missing read_surf IDs = 1" in A and B, CPU and kk — tail already zero
 negative control: valid second surface (IDs 1,2,3), emit/face flow 100 steps | A vs B: identical (cpu: Np 19147 nscoll 134; kk: Np 19181 nscoll 119)
-necessary: shown at unit level (A keeps stale lines/tris in new slots, defeating the "Missing read_surf IDs" check); end-to-end not shown on 1 proc.
+necessary: shown at unit level only (A keeps stale lines/tris in new slots). End-to-end looks unreachable: grow() is only used for non-distributed explicit surfs, which have no ghosts; remove_surf/create_isurf go through clear_explicit (SurfKokkos resets k_lines -> fresh zeroed view); compress_explicit (shrinks nlocal leaving a stale tail) is distributed-only, where add_surfs uses grow_own and the ID check reads mylines. So the "Missing read_surf IDs" check is not defeated in any reachable sequence found.
 complete: both branches (2d lines, 3d tris) fixed and tested; live slots [0,old) untouched. Sibling SurfKokkos::grow_own (mylines/mytris) has no memset either, but it resizes exactly nown_old->nown so Kokkos resize value-initializes the new tail; only an extent>nown_old state (not reachable via add_surfs, clear_explicit resets) would leave stale data - not tested.
-verdict: NECESSARY, COMPLETENESS-PARTIAL (unit-level; MPI ghost end-to-end pending/untested)
+verdict: NOT-SHOWN-NECESSARY (unreachable end-to-end; CPU-parity fix verified at unit level for 2d lines and 3d tris)
 artifacts: $S/ab/AB9/F-G22-3 (drv.cpp, results.txt, *.log)
 
 ### F-G22-2 — GridKokkos grow_cells/grow_sinfo resized k_cells/k_cinfo/k_sinfo WithoutInitializing (CPU memsets new tail)
@@ -143,6 +143,12 @@ class: cpu-observable (+ mpi for the guard swap)
 positive control 1 (integration, 1 proc, A_opt/B_opt cpu and kk): examples/surf_react_adsorb circle + `surf_react adsorb ps sample-PS_2.surf ... surf` (tau = DOUBLE array, nactive_ps=5), `global surfs explicit/distributed`, run 200, `balance_grid rcb cell` (-> grid_changed -> spread_inverse_custom(tau)), dump surf s_tau[*], second balance_grid, dump again | A: owned tau rows permuted — only 1/50 rows equal to B, multiset of rows identical (pure index permutation), and a 2nd balance permutes again (1/50 rows unchanged) | B: 2nd balance leaves 50/50 rows unchanged (idempotent round trip local->own->local) | REPRODUCED (cpu and kk identical)
 positive control 2 (unit driver unit/drv.cpp linked to A/B libs, 1 proc, distributed circle, 4 customs filled per local surf with f(ID), assign_unique, spread_inverse_custom, check owned == f(ID)) | A: INT vec 0 wrong, INT array 147/150 wrong, DOUBLE vec SIGSEGV, DOUBLE array 147/150 wrong | B: 0 wrong in all 4 | REPRODUCED
 negative control: distributed run without grid change (distnb) and explicit (non-distributed) runs: A vs B identical tau dumps and stats (cpu: Np 23994 / 23952; kk: 23938 / 24011)
-MPI guard swap: (pending, see addendum below)
+MPI (own CPU-only real-MPI builds of A/B src, $S/ab/AB9/cpumpi/{A,B}/spa_mpi, since the KOKKOS MPI builds were not finished; the bug and fix are in non-Kokkos code and SurfKokkos::spread_inverse_custom just calls it):
+  integration np=4, same adsorb input with the circle shrunk into one corner (3 procs own surfs but have no local surfs) | A: SIGSEGV in Surf::spread_inverse_custom (surf_custom.cpp:396, NULL local array) <- SurfReactAdsorb::grid_changed <- balance_grid | B: runs, idempotent (50/50 rows unchanged by 2nd balance) | REPRODUCED
+  integration np=4, centred circle | A: 7 owned tau rows zero, only 19/50 rows survive a 2nd balance, row multiset changes (values corrupted, not just permuted) | B: 50/50 idempotent, multiset preserved | REPRODUCED
+  unit driver np=4 (gridcut 0): corner circle (nown>0, nlocal+nghost=0 on 3 procs) | A: SIGSEGV for INT array, DOUBLE vec, DOUBLE array | B: 0 wrong values in all 4 branches; 3-line triangle (nsurf<nprocs: one proc nown=0, in 4 placements incl. the proc with nown=0 holding all 3 local surfs) | A: SIGSEGV in INT array/DOUBLE vec/DOUBLE array | B: 0 wrong in all 4; centred circle np=2/4 | A: INT array 150/129 wrong values, DOUBLE array same, DOUBLE vec SIGSEGV | B: 0
+necessary: A permutes/corrupts owned tau after a grid change (1 proc and np=4), and segfaults whenever a proc owns surfs but has no local surfs (or vice versa) — reached by surf_react adsorb PS with distributed surfs.
+complete: all 4 branches (INT vec/array, DOUBLE vec/array) correct in B on np=1,2,4 and in both guard directions (nown>0/local=0 and nown=0/local>0); spread_local2own n>1 fixed for INT and DOUBLE (array branches correct); receiving side rendezvous_local2own and spread_own2local use the owned/local index consistently (inspected). Only production caller is tau (DOUBLE array); other branches covered by the unit driver.
+verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB9/F-G22-4 (in.dist2, cmp_tau.py, unit/)
 

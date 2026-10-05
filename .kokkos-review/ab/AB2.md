@@ -7,7 +7,7 @@ class: cpu-observable
 positive control: 2d circle, N beam, `surf_collide 1 diffuse/kk 300 1.0` (-sf kk); 3d piston deck with `piston/kk`, `vanish/kk`, `specular/kk` | A: ERROR "Unknown Kokkos surface collide method" (update_kokkos.cpp:2768) for both, t1 and t4 | B: runs; stats byte-identical to plain-name decks (diffuse step 400 np 40086 nscoll 191; piston step 100 np 15127 T 273.39) | REPRODUCED
 negative control: plain-name decks | A vs B: identical (all stats rows)
 necessary: yes - A aborts on every explicit /kk surf_collide name tried (diffuse, piston, vanish, specular).
-complete: B OK for diffuse/kk, piston/kk, vanish/kk, specular/kk, t1 and t4 (diffuse); cll/td/impulsive/adiabatic/transparent explicit names not run individually (same sc_style_is helper, all 9 names go through it). Siblings: see 4a residual.
+complete: all 9 kk surf_collide styles checked with explicit /kk names: A aborts for each; B runs and is byte-identical to the plain-name deck (diffuse, cll, td, impulsive, adiabatic on the circle deck; piston, vanish, specular, transparent on the piston deck); diffuse also at t4. Siblings: see 4a residual (compute_surf_kokkos surf_react dispatch).
 verdict: NECESSARY+COMPLETE (for the update_kokkos.cpp site)
 artifacts: $S/ab/AB2/F-G09-4 (in.sc_kk, pist/in.piston_kk)
 
