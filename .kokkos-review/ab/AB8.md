@@ -25,3 +25,13 @@ positive control: "c_B[1] c_B[2] sum yes kx ky kz kmag" 16^3 3D and "... kx ky k
 negative control: "c_B[1] c_B[2] kx yes kmag yes" (sum no), 3D+2D: A = B = CPU bit-identical
 verdict: VERIFIED
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-1
+
+### F-G19-3 — compute fft/grid/kk invoked before first run (prewrap) falls back to base host compute_per_grid with NULL irregular/fft objects
+class: cpu-observable
+positive control: library driver (drv.cpp linked to A/B libs) sparta_extract_compute(F,2,2) right after "compute F fft/grid c_A c_B[2]", no run | A kk t4: SIGSEGV, gdb: Irregular::exchange_uniform(this=0x0) from ComputeFFTGrid::compute_per_grid (NULL irregular1 = the reported bug) | B kk: clean error "Cannot (yet) invoke compute fft/grid/kk before the first run", extract returns NULL | REPRODUCED
+  note: the CPU style also segfaults here (A and B, different cause: input compute property/grid vector not yet allocated before init -> sendbuf=NULL), so this is a pre-existing general pre-run limitation, not a kk regression. adapt_grid value c_F trigger ends in "requires uniform one-level grid" error for CPU/A/B alike (maxlevel check precedes) -> not a usable trigger.
+negative control: same driver with "run 0" before extract: B kk = CPU (F[0]=8390656,0,2048,0, sumsq 9.3859360358e13); A kk runs (cols 3-4 wrong only due to F-G19-2)
+necessary: yes (A NULL-deref crash on the prewrap path)
+complete: yes - the prewrap branch is the only host fallback in compute_per_grid; B errors cleanly instead of crashing. (Fix is an error, not a feature: pre-run extraction is still unsupported by design.)
+verdict: NECESSARY+COMPLETE
+artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G19-3
