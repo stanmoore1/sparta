@@ -62,3 +62,25 @@ necessary: yes (A CPU area 0 for every triangle).
 complete: B correct for 3d explicit and explicit/distributed (mytris), in-group and group all. Sibling site in the same file NOT fixed: pack_v3y / pack_v3z (CPU) read p1 instead of p3 (same copy-paste class of bug) -> CPU B v3y/v3z still wrong (201/201 in-group rows). Out of the F-G16-9 claim (area only) but a remaining sibling bug in the CPU property/surf packers.
 verdict: NECESSARY+COMPLETE (for area); NEW sibling CPU bug pack_v3y/pack_v3z unfixed (recommend fix: p1 -> p3 at compute_property_surf.cpp:427,444)
 artifacts: $S/ab/AB4/surf (dump.surf.cpu{A,B}_3d*, chk3d.py)
+
+### F-G16-1 — lambda/grid (CPU + kk) reads post-processed nrho from column nrhoindex-1 instead of m
+class: cpu-observable (CPU and Kokkos)
+note: nrho is one argument expanded by expand_args, so j-1 != m needs a ranged wildcard, e.g. `c_g[2*3]` (c_g[*] always gives j-1 == m).
+positive control: N2+O2, `compute g grid all species n nrho` (post-process compute, 4 cols), `fix av ave/grid all 1 1 1 c_g[*]`; `lambda/grid c_g[2*3] c_th[1] lambda tau` vs reference `lambda/grid f_av[2*3] c_th[1] lambda tau` (the fix branch reads columns directly); dump step 1 | A: Lc vs Lf rel 1.0 on CPU and kk (e.g. lambda 2.2475e-5 vs 2.0478e-5; m=1 reads column 2 of a 2-column array_grid1, i.e. out of bounds) | B: Lc == Lf exactly on CPU and kk; kk B == CPU B bit-identical | REPRODUCED
+negative control: `compute g grid all species nrho` + c_g[*] (j-1 == m): CPU A, kk A, kk B == CPU B, Lc == Lf
+necessary: yes (both CPU and Kokkos A wrong with a ranged wildcard).
+complete: B correct on CPU and Kokkos (t4), with temp compute. Sibling branches checked by reading: the non-post-process compute branch and the fix branch correctly read column j-1 of the source's own array (CPU and kk). nrho_values==1 branch unchanged.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB4/lambda (in.x, in.neg)
+
+### G12x-F-G16-2 — lambda/grid/kk prewrap host compute_per_grid derefs NULL host arrays (lambdainv, array_grid1, ...)
+class: cpu-observable (crash)
+positive control: before first run: `compute L lambda/grid c_g[*] <temp> lambda tau` + `adapt_grid all refine value c_L[1] 0.0 1.0 thresh more more maxlevel 2 iterate 1`, then dump grid + run 0; 4 variants: {N2 O2 (nrho_values=2, array_grid1), N2 only (nrho_values=1)} x {temp c_th[1], temp NULL} | A kk t4: SIGSEGV in all 4 variants (gdb: compute_lambda_grid.cpp:473 from AdaptGrid::refine_value) | B kk: no crash, 64 cells refined, dumped c_L (512 cells after adapt) bit-identical to CPU in all 4 variants | REPRODUCED
+negative control: CPU runs (A/B CPU unaffected); lambda tests above (after first run) A kk == B kk
+necessary: yes (crash in all 4 variants).
+complete: for lambda/grid itself yes (all allocation branches: nrho_values>1/==1, temp/NULL, and reallocate after adapt changes nglocal). SIBLINGS NOT FIXED — same pattern (Kokkos reallocate() overrides the base and skips host scratch the prewrap CPU path uses), same adapt_grid-before-run input:
+  - compute sonine/grid/kk: A and B SIGSEGV at compute_sonine_grid.cpp:173 (host vcom NULL; kk reallocate creates only d_vcom); CPU OK (32 cells refined).
+  - compute dt/grid/kk: A and B SIGSEGV at compute_dt_grid.cpp:460 (host tau/temp/usq/vsq/wsq NULL; kk reallocate creates only d_*_vector); CPU OK (64 refined). Input: dt/grid all 0.1 0.1 c_pp[1..5] with property/grid inputs.
+  - checked OK in A and B: grid, thermal/grid, eflux/grid, pflux/grid, tvib/grid, property/grid (kk) via the same adapt_grid-before-run input.
+verdict: INCOMPLETE (sibling prewrap NULL-deref remains in compute sonine/grid/kk (vcom) and compute dt/grid/kk (tau,temp,usq,vsq,wsq); lambda/grid part itself is NECESSARY+COMPLETE)
+artifacts: $S/ab/AB4/G12x-F-G16-2 (in.x, in.sib, in.dt)
