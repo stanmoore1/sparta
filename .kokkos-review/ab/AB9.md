@@ -33,3 +33,19 @@ negative control: same TU using tdual_pcell_1d/t_pcell_1d/t_host_pcell_1d | A vs
 verdict: VERIFIED
 artifacts: $S/ab/AB9/F-G21-5
 
+### F-G21-8 — unanchored ".*fft|pack|remap.*kokkos.*" CMake filters drop all KOKKOS files when the checkout path contains pack/fft/remap
+class: build-system
+method: `cmake -P` driver including the exact filter block extracted from A/B src/KOKKOS/CMakeLists.txt (only CONFIGURE_DEPENDS removed, invalid in script mode) and A/B cmake/common/set/style_file_glob.cmake (minus configure_file loop), run in mock trees with the real src/KOKKOS file names under .../packages/sparta/, .../fftstage/sparta/, .../remapper/x/, .../plain/sparta/.
+positive control: PKG_FFT=OFF, "packages"/"fft"/"remap" paths | A: SRC_FILES 192->2 (only rand_pool_wrap.cpp/.h survive), style_files 100->1, grid_kokkos.cpp/.h dropped | B: SRC_FILES 177, style_files 90, grid_kokkos.* kept, identical to plain path | REPRODUCED
+negative control: plain path PKG_FFT=OFF -> A and B remove the same 14 FFT-family files (B additionally kokkos_base_fft.h, see F-G21-9); PKG_FFT=ON all paths -> A and B identical (192 src / 100 headers)
+verdict: VERIFIED
+artifacts: $S/ab/AB9/F-G21-8 (cmake_results.txt, drv.cmake, dump.cmake)
+
+### F-G21-9 — list(REMOVE_ITEM style_files kokkos_base_fft.h) never matched (absolute paths / wrong list)
+class: build-system
+method: same cmake -P harness as F-G21-8
+positive control: plain path PKG_FFT=OFF | A: kokkos_base_fft.h kept in both SPARTA_PKG_KOKKOS_SRC_FILES (n=178) and style_files (n=91) | B: removed from both (n=177 / 90) | REPRODUCED
+negative control: PKG_FFT=ON | A vs B: identical (kokkos_base_fft.h present in both lists, 192/100)
+verdict: VERIFIED
+artifacts: $S/ab/AB9/F-G21-8
+

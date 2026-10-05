@@ -24,3 +24,18 @@ positive control: closed box (boundary r r p), 20000 O particles, specular circl
 negative control: same input, `run 100` + `run 105` (first run ends on a sync step) | A vs B: identical (t1 and t4), both conserve 20000
 verdict: VERIFIED
 artifacts: $S/ab/AB3/F-G10-4 (in.persist, log.{A,B}.{split,aligned}.t{1,4}, log.cpu.split)
+
+### F-G10-5 — adsorb/kk backup() allocates nsingle/tally_single/species_delta/mark backups on the blitted image -> leaked each backup (+ RanKnuth under EXACT)
+class: cpu-observable (allocation count via Kokkos tools hook)
+positive control: closed box, 20000 O, adsorb gs sample-GS_1.surf nsync 10, -pk kokkos react/retry yes, 500 steps; (a) SURF mode on circle (b) FACE mode on xlo/xhi/ylo/yhi | A: SURF: nsingle_backup/tally_single_backup/species_delta_backup/mark_backup each alloc 500 dealloc 0 (308 KB orphaned, species_delta_backup 400 B/step scales with nlocal+nghost); FACE: nsingle/tally_single/species_delta_backup alloc 500 dealloc 0 | B: each label alloc 1 dealloc 1 (SURF and FACE) | REPRODUCED
+negative control: same inputs with react/retry no (no backup) and with retry yes | A vs B: identical stats (SURF: np, sum nstick, np+nstick=20000 at step 500 in all 4 runs; FACE: np, nbound) 
+note: the SPARTA_KOKKOS_EXACT RanKnuth (host) part is not covered: no EXACT binary available (A_opt/B_opt built with SPARTA_KOKKOS_EXACT=OFF).
+verdict: VERIFIED (non-EXACT part; EXACT RanKnuth part untested)
+artifacts: $S/ab/AB3/F-G10-5 (in.surf, in.face, out.{surf,face}.{A,B}.{yes,no})
+
+### F-G10-6 — adsorb/kk state_synced_to_device set only on blitted image -> H2D state copy on every pre_react (perf only)
+class: cpu-observable (deep_copy count via Kokkos tools begin_deep_copy hook)
+positive control: same runs as F-G10-5 (500 steps, nsync 10, 1 surf_collide model) | A: deep_copy into sra:total_state/species_state/area/weight 500x each (every step), SURF and FACE, retry yes/no | B: 50x each (once per nsync=10 window, i.e. after each sync step) | REPRODUCED
+negative control: same runs | A vs B: identical stats (results unaffected, as expected for a perf-only fix); B also identical to CPU in F-G10-4 split run
+verdict: VERIFIED
+artifacts: $S/ab/AB3/F-G10-5 (out.* KDC lines)
