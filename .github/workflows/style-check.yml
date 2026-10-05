@@ -1,0 +1,36 @@
+# GitHub action to run checks from tools/coding_standard
+name: "Check for Programming Style Conformance"
+
+on:
+  pull_request:
+    branches:
+      - master
+
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+jobs:
+  build:
+    name: Programming Style Conformance
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Install Python dependencies
+      run: python3 -m pip install pyyaml
+
+    - name: Run Tests
+      working-directory: src
+      shell: bash
+      run: |
+         make check-whitespace
+         make check-permissions
+         make check-homepage
+         make check-unicode
