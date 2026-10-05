@@ -127,3 +127,22 @@ complete: resize branches of k_cells, k_cinfo, k_sinfo all now zeroed; the initi
 verdict: INCOMPLETE (first-allocation realloc_kokkos branch still uninitialized: sinfo 0->8192 nonzero bytes in B) — and NOT-SHOWN-NECESSARY behaviourally (hygiene only)
 artifacts: $S/ab/AB9/F-G22-2 (drv.cpp, results.txt)
 
+### F-G21-7 — EXACT build: CommKokkos::migrate_particles called base Particle::compress_migrate on unsynced host data with a possibly non-ascending plist
+class: mpi (EXACT + real MPI + threaded comm) / gpu-only for the sync half
+runtime test: NOT possible here — needs a -DSPARTA_KOKKOS_EXACT build of the whole KOKKOS package with real MPI (the macro changes ~30 KOKKOS headers/sources, so no partial relink); the non-EXACT real-MPI builds were still at ~31% after >1h; with MPI stubs (1 proc) no particle ever migrates.
+unit-level (drv.cpp linked to A libs, replicates the two compress strategies on real Particle objects, 12 particles): non-ascending plist {5,11,10} | A strategy (Particle::compress_migrate unconditionally): 1 migrated particle kept locally (duplicate) and 1 non-migrating particle lost | B strategy (ascending test -> compress_reactions): 0 kept / 0 lost; {7,2,9,4}: both correct; ascending {2,5,10,11}: both correct (negative control)
+compile: A and B comm_kokkos.cpp both pass -fsyntax-only with -DSPARTA_KOKKOS_EXACT
+sync half (missing sync(Host) before host compaction, device not refreshed): gpu-only — host/device views alias on this OpenMP build.
+necessary: NOT shown at runtime; the mechanism (compress_migrate on non-ascending list duplicates/loses particles) is shown at unit level; whether the EXACT threaded path actually produces non-ascending d_plist on OpenMP was not observed.
+complete: by inspection the EXACT branch mirrors CPU Comm::migrate_particles (sync Host, ascending test, compress, modify Host, then the existing grow + sync(Device)); untested at runtime.
+verdict: NOT-SHOWN-NECESSARY (needs EXACT+MPI build; sync part gpu-only)
+artifacts: $S/ab/AB9/F-G21-7
+
+### F-G22-4 — Surf::spread_inverse_custom swapped NULL guards + DOUBLE-vector passed &edvec[..]; spread_local2own n>1 read local data at owned index
+class: cpu-observable (+ mpi for the guard swap)
+positive control 1 (integration, 1 proc, A_opt/B_opt cpu and kk): examples/surf_react_adsorb circle + `surf_react adsorb ps sample-PS_2.surf ... surf` (tau = DOUBLE array, nactive_ps=5), `global surfs explicit/distributed`, run 200, `balance_grid rcb cell` (-> grid_changed -> spread_inverse_custom(tau)), dump surf s_tau[*], second balance_grid, dump again | A: owned tau rows permuted — only 1/50 rows equal to B, multiset of rows identical (pure index permutation), and a 2nd balance permutes again (1/50 rows unchanged) | B: 2nd balance leaves 50/50 rows unchanged (idempotent round trip local->own->local) | REPRODUCED (cpu and kk identical)
+positive control 2 (unit driver unit/drv.cpp linked to A/B libs, 1 proc, distributed circle, 4 customs filled per local surf with f(ID), assign_unique, spread_inverse_custom, check owned == f(ID)) | A: INT vec 0 wrong, INT array 147/150 wrong, DOUBLE vec SIGSEGV, DOUBLE array 147/150 wrong | B: 0 wrong in all 4 | REPRODUCED
+negative control: distributed run without grid change (distnb) and explicit (non-distributed) runs: A vs B identical tau dumps and stats (cpu: Np 23994 / 23952; kk: 23938 / 24011)
+MPI guard swap: (pending, see addendum below)
+artifacts: $S/ab/AB9/F-G22-4 (in.dist2, cmp_tau.py, unit/)
+
