@@ -95,3 +95,18 @@ Setup: S=$S (session scratchpad). Work dir $S/gpusim/GS-sweep (scripts in bin/, 
   end of SurfKokkos::wrap_kokkos().
 - Classification: pre-existing-unfixed (same on A_sync). Related to (but distinct from) the KNOWN restart surf custom
   array item: that one is read_restart, this is `custom surf set` / read_surf custom before run 1.
+
+### Poison pass (B_poison / A_poison, SPARTA_KOKKOS_POISON=1, ASAN_OPTIONS=detect_leaks=0:halt_on_error=0:log_path=...)
+positive control (harness check): GS-poison's F-G16-5 deck on A_poison with this harness -> use-after-poison in
+  ComputeDistSurfGridKokkos (TagComputeDistSurfGrid_surf_distance), as GS-poison recorded. Harness catches faults.
+Bp np1: all examples (skipped: ablation.3d [stock 131 s], implicit.3d.big, jagged.3d* [no valid data]) -> 133 runs.
+  Every run rc=0 and stats identical to stock, with 0 ASan reports, EXCEPT the 4 custom/*.restart decks:
+  use-after-poison (memcpy) in Grid::unpack_custom grid_custom.cpp:467 <- GridKokkos::unpack_custom grid_custom_kokkos.cpp:395
+  <- ReadRestart::create_child_cells read_restart.cpp:1453 (4-10 sites), then the modify_host "grid:ivector" abort (rc=134).
+  Ap np1 on custom/*: identical sites/counts -> pre-existing; this is the KNOWN reallocate_custom device-side resize
+  + auto_sync double-claim (fixed in the repo, not in B_sync). Tag: KNOWN.
+  Poison also gives stats for the decks where watch/audit time out: ablation.3d.reactions, ambi, ambi_3body,
+  bfield, torque: Bp == stock.
+Bp np4 (circle, sphere, adapt.static/rotate, surf.move/remove/add, emit.face/surf.flow/surf.normal, ablation.2d,
+  ablation.multi.inner.3d, collide, collide_3D): 0 ASan reports on all ranks, rc=0, stats == stockmpi np4.
+  Bw/Ba np4 on the same subset: stats == stockmpi np4; reports only R1/R1b/R2/R3/R4b (benign classes).
