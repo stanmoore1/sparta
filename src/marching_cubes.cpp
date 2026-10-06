@@ -1538,9 +1538,11 @@ int MarchingCubes::interior_ambiguity_verification(int edge)
   double t, At = 0.0, Bt = 0.0, Ct = 0.0, Dt = 0.0, a = 0.0, b = 0.0;
   double verify;
 
-  // no diagonal corner pair matched in interior_ambiguity(): no tunnel
+  // no diagonal corner pair matched in interior_ambiguity(), only possible
+  //   when a corner value equals thresh exactly: no tunnel, same as the
+  //   default return at the end of this function (0 would select tunnel)
 
-  if (edge < 0) return 0;
+  if (edge < 0) return 1;
 
   switch (edge) {
 
