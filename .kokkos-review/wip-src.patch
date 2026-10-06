@@ -1,138 +1,133 @@
-diff --git a/src/KOKKOS/compute_dt_grid_kokkos.cpp b/src/KOKKOS/compute_dt_grid_kokkos.cpp
-index 182916b8..fb27e87a 100644
---- a/src/KOKKOS/compute_dt_grid_kokkos.cpp
-+++ b/src/KOKKOS/compute_dt_grid_kokkos.cpp
-@@ -428,4 +428,18 @@ void ComputeDtGridKokkos::reallocate()
-   d_usq_vector = DAT::t_float_1d ("d_usq_vector", nglocal);
-   d_vsq_vector = DAT::t_float_1d ("d_vsq_vector", nglocal);
-   d_wsq_vector = DAT::t_float_1d ("d_wsq_vector", nglocal);
-+
-+  // host arrays are also allocated (freed by ~ComputeDtGrid), since the
-+  //   host ComputeDtGrid::compute_per_grid() runs while prewrap is set
-+
-+  memory->destroy(tau);
-+  memory->destroy(temp);
-+  memory->destroy(usq);
-+  memory->destroy(vsq);
-+  memory->destroy(wsq);
-+  memory->create(tau,nglocal,"dt/grid:tau");
-+  memory->create(temp,nglocal,"dt/grid:temp");
-+  memory->create(usq,nglocal,"dt/grid:usq");
-+  memory->create(vsq,nglocal,"dt/grid:vsq");
-+  memory->create(wsq,nglocal,"dt/grid:wsq");
- }
-diff --git a/src/KOKKOS/compute_sonine_grid_kokkos.cpp b/src/KOKKOS/compute_sonine_grid_kokkos.cpp
-index cf49c385..efa47123 100644
---- a/src/KOKKOS/compute_sonine_grid_kokkos.cpp
-+++ b/src/KOKKOS/compute_sonine_grid_kokkos.cpp
-@@ -417,4 +417,10 @@ void ComputeSonineGridKokkos::reallocate()
-   memoryKK->create_kokkos(k_tally,tally,nglocal,ntotal,"sonine/grid:tally");
-   d_tally = k_tally.view_device();
-   d_vcom = DAT::t_float_3d ("d_vcom",nglocal,ngroup,4);
-+
-+  // host vcom is also allocated (freed by ~ComputeSonineGrid), since the
-+  //   host ComputeSonineGrid::compute_per_grid() runs while prewrap is set
-+
-+  memory->destroy(vcom);
-+  memory->create(vcom,nglocal,ngroup,4,"sonine/grid:vcom");
- }
 diff --git a/src/KOKKOS/fix_emit_face_file_kokkos.cpp b/src/KOKKOS/fix_emit_face_file_kokkos.cpp
-index 91b9090a..71ab8028 100644
+index 71ab8028..9e3d19e1 100644
 --- a/src/KOKKOS/fix_emit_face_file_kokkos.cpp
 +++ b/src/KOKKOS/fix_emit_face_file_kokkos.cpp
-@@ -916,7 +916,7 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
+@@ -912,6 +912,9 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
+       const double ke = mv[3]/np -
+         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
+       temp_thermal_cell = tprefactor * ke;
++      // thermal ke negligible vs total ke (all particles at COM velocity):
++      // ke is pure roundoff of either sign, treat cell as cold
++      if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
+     } else temp_thermal_cell = temp_thermal_mix;
  
      const double press_cell = nrho_cell * boltz * temp_thermal_cell;
-     double soundspeed_cell;
--    if (np) {
-+    if (np && temp_thermal_cell > 0.0) {
-       const double mass_cell = masstot / np;
-       const double gamma_cell = gamma / np;
-       soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
 diff --git a/src/KOKKOS/fix_emit_face_kokkos.cpp b/src/KOKKOS/fix_emit_face_kokkos.cpp
-index 2651862b..5848f16c 100644
+index 5848f16c..ed013237 100644
 --- a/src/KOKKOS/fix_emit_face_kokkos.cpp
 +++ b/src/KOKKOS/fix_emit_face_kokkos.cpp
-@@ -806,7 +806,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
+@@ -802,6 +802,9 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
+       const double ke = mv[3]/np -
+         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
+       temp_thermal_cell = tprefactor * ke;
++      // thermal ke negligible vs total ke (all particles at COM velocity):
++      // ke is pure roundoff of either sign, treat cell as cold
++      if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
+     } else temp_thermal_cell = temp_thermal_mix;
  
      const double press_cell = nrho_cell * boltz * temp_thermal_cell;
-     double soundspeed_cell;
--    if (np) {
-+    if (np && temp_thermal_cell > 0.0) {
-       const double mass_cell = masstot / np;
-       const double gamma_cell = gamma / np;
-       soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
 diff --git a/src/KOKKOS/fix_emit_surf_kokkos.cpp b/src/KOKKOS/fix_emit_surf_kokkos.cpp
-index 7a3a32b7..bc0b4855 100644
+index bc0b4855..d33dfff2 100644
 --- a/src/KOKKOS/fix_emit_surf_kokkos.cpp
 +++ b/src/KOKKOS/fix_emit_surf_kokkos.cpp
-@@ -1165,7 +1165,7 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
+@@ -1161,6 +1161,9 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
+       const double ke = mv[3]/np -
+         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
+       temp_thermal_cell = tprefactor * ke;
++      // thermal ke negligible vs total ke (all particles at COM velocity):
++      // ke is pure roundoff of either sign, treat cell as cold
++      if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
+     } else temp_thermal_cell = temp_thermal_mix;
  
      const double press_cell = nrho_cell * boltz * temp_thermal_cell;
-     double soundspeed_cell;
--    if (np) {
-+    if (np && temp_thermal_cell > 0.0) {
-       const double mass_cell = masstot / np;
-       const double gamma_cell = gamma / np;
-       soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
-diff --git a/src/compute_property_surf.cpp b/src/compute_property_surf.cpp
-index 29075881..04b3fd58 100644
---- a/src/compute_property_surf.cpp
-+++ b/src/compute_property_surf.cpp
-@@ -424,7 +424,7 @@ void ComputePropertySurf::pack_v3y(int n)
-   else tris = surf->tris;
-   for (int i = 0; i < nsown; i++) {
-     m = cglobal[i];
--    if (tris[m].mask & groupbit) buf[n] = tris[m].p1[1];
-+    if (tris[m].mask & groupbit) buf[n] = tris[m].p3[1];
-     else buf[n] = 0.0;
-     n += nvalues;
-   }
-@@ -441,7 +441,7 @@ void ComputePropertySurf::pack_v3z(int n)
-   else tris = surf->tris;
-   for (int i = 0; i < nsown; i++) {
-     m = cglobal[i];
--    if (tris[m].mask & groupbit) buf[n] = tris[m].p1[2];
-+    if (tris[m].mask & groupbit) buf[n] = tris[m].p3[2];
-     else buf[n] = 0.0;
-     n += nvalues;
-   }
+diff --git a/src/compute_dt_grid.cpp b/src/compute_dt_grid.cpp
+index fb379238..a5e8a72b 100644
+--- a/src/compute_dt_grid.cpp
++++ b/src/compute_dt_grid.cpp
+@@ -451,7 +451,7 @@ void ComputeDtGrid::compute_per_grid()
+     if (ctau->post_process_grid_flag)
+       ctau->post_process_grid(tau_index,1,NULL,NULL,NULL,1);
+ 
+-    if (tau_index == 0)
++    if (tau_index == 0 || ctau->post_process_grid_flag)
+       memcpy(tau,ctau->vector_grid,nglocal*sizeof(double));
+     else {
+       int index = tau_index-1;
+@@ -478,7 +478,7 @@ void ComputeDtGrid::compute_per_grid()
+     if (ctemp->post_process_grid_flag)
+       ctemp->post_process_grid(temp_index,1,NULL,NULL,NULL,1);
+ 
+-    if (temp_index == 0)
++    if (temp_index == 0 || ctemp->post_process_grid_flag)
+       memcpy(temp,ctemp->vector_grid,nglocal*sizeof(double));
+     else {
+       int index = temp_index-1;
+@@ -505,7 +505,7 @@ void ComputeDtGrid::compute_per_grid()
+     if (cusq->post_process_grid_flag)
+       cusq->post_process_grid(usq_index,1,NULL,NULL,NULL,1);
+ 
+-    if (usq_index == 0)
++    if (usq_index == 0 || cusq->post_process_grid_flag)
+       memcpy(usq,cusq->vector_grid,nglocal*sizeof(double));
+     else {
+       int index = usq_index-1;
+@@ -532,7 +532,7 @@ void ComputeDtGrid::compute_per_grid()
+     if (cvsq->post_process_grid_flag)
+       cvsq->post_process_grid(vsq_index,1,NULL,NULL,NULL,1);
+ 
+-    if (vsq_index == 0)
++    if (vsq_index == 0 || cvsq->post_process_grid_flag)
+       memcpy(vsq,cvsq->vector_grid,nglocal*sizeof(double));
+     else {
+       int index = vsq_index-1;
+@@ -559,7 +559,7 @@ void ComputeDtGrid::compute_per_grid()
+     if (cwsq->post_process_grid_flag)
+       cwsq->post_process_grid(wsq_index,1,NULL,NULL,NULL,1);
+ 
+-    if (wsq_index == 0)
++    if (wsq_index == 0 || cwsq->post_process_grid_flag)
+       memcpy(wsq,cwsq->vector_grid,nglocal*sizeof(double));
+     else {
+       int index = wsq_index-1;
 diff --git a/src/fix_emit_face.cpp b/src/fix_emit_face.cpp
-index 12b6349d..965e5c60 100644
+index 965e5c60..13bbff51 100644
 --- a/src/fix_emit_face.cpp
 +++ b/src/fix_emit_face.cpp
-@@ -1092,7 +1092,7 @@ void FixEmitFace::subsonic_grid()
+@@ -1089,6 +1089,9 @@ void FixEmitFace::subsonic_grid()
+       if (np > 1) {
+         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
+         temp_thermal_cell = tprefactor * ke;
++        // thermal ke negligible vs total ke (all particles at COM velocity):
++        // ke is pure roundoff of either sign, treat cell as cold
++        if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
        } else temp_thermal_cell = particle->mixture[imix]->temp_thermal;
  
        press_cell = nrho_cell * boltz * temp_thermal_cell;
--      if (np) {
-+      if (np && temp_thermal_cell > 0.0) {
-         mass_cell = masstot / np;
-         gamma_cell = gamma / np;
-         soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
 diff --git a/src/fix_emit_face_file.cpp b/src/fix_emit_face_file.cpp
-index d86ec60f..ad37cb63 100644
+index ad37cb63..53585d0f 100644
 --- a/src/fix_emit_face_file.cpp
 +++ b/src/fix_emit_face_file.cpp
-@@ -1426,7 +1426,7 @@ void FixEmitFaceFile::subsonic_grid()
+@@ -1424,6 +1424,9 @@ void FixEmitFaceFile::subsonic_grid()
+       if (np > 1) {
+         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
          temp_thermal_cell = tprefactor * ke;
++        // thermal ke negligible vs total ke (all particles at COM velocity):
++        // ke is pure roundoff of either sign, treat cell as cold
++        if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
        } else temp_thermal_cell = particle->mixture[imix]->temp_thermal;
        press_cell = nrho_cell * boltz * temp_thermal_cell;
--      if (np) {
-+      if (np && temp_thermal_cell > 0.0) {
-         mass_cell = masstot / np;
-         gamma_cell = gamma / np;
-         soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
+       if (np && temp_thermal_cell > 0.0) {
 diff --git a/src/fix_emit_surf.cpp b/src/fix_emit_surf.cpp
-index 49e29724..c9236579 100644
+index c9236579..61e6d40f 100644
 --- a/src/fix_emit_surf.cpp
 +++ b/src/fix_emit_surf.cpp
-@@ -1505,7 +1505,7 @@ void FixEmitSurf::subsonic_grid()
+@@ -1503,6 +1503,9 @@ void FixEmitSurf::subsonic_grid()
+       if (np > 1) {
+         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
          temp_thermal_cell = tprefactor * ke;
++        // thermal ke negligible vs total ke (all particles at COM velocity):
++        // ke is pure roundoff of either sign, treat cell as cold
++        if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
        } else temp_thermal_cell = particle->mixture[imix]->temp_thermal;
        press_cell = nrho_cell * boltz * temp_thermal_cell;
--      if (np) {
-+      if (np && temp_thermal_cell > 0.0) {
-         mass_cell = masstot / np;
-         gamma_cell = gamma / np;
-         soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
+       if (np && temp_thermal_cell > 0.0) {
