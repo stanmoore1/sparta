@@ -45,8 +45,9 @@
 using namespace SPARTA_NS;
 
 /* ----------------------------------------------------------------------
-   return 1 if str is a printf format with exactly one double conversion
-   (flags, width, precision allowed; %% is a literal percent), else 0
+   return 1 if str is a printf format with at most one double conversion
+   (flags incl ', width, precision, optional l; %% is literal %), else 0
+   a format with no conversion just prints the literal text
 ------------------------------------------------------------------------- */
 
 static int valid_double_format(const char *str)
@@ -56,16 +57,17 @@ static int valid_double_format(const char *str)
     if (*p != '%') continue;
     p++;
     if (*p == '%') continue;
-    while (*p && strchr("-+ #0",*p)) p++;
+    while (*p && strchr("-+ #0'",*p)) p++;
     while (*p && isdigit(*p)) p++;
     if (*p == '.') {
       p++;
       while (*p && isdigit(*p)) p++;
     }
+    if (*p == 'l') p++;    // l is a no-op for double conversions
     if (!*p || !strchr("eEfFgGaA",*p)) return 0;
     nconv++;
   }
-  return (nconv == 1);
+  return (nconv <= 1);
 }
 using namespace MathConst;
 
@@ -389,7 +391,7 @@ void Variable::set(int narg, char **arg)
     if (find(arg[0]) >= 0) return;
     if (nvar == maxvar) grow();
     if (!valid_double_format(arg[3]))
-      error->all(FLERR,"Variable format must contain exactly one "
+      error->all(FLERR,"Variable format must contain at most one "
                  "floating point conversion (e.g. %g, %10.4f)");
     style[nvar] = FORMAT;
     num[nvar] = 3;

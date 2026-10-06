@@ -584,8 +584,12 @@ void ReadRestart::header(int incompatible)
       grid->surfgrid_algorithm = read_int();
     } else if (flag == SURFMAX) {
       grid->maxsurfpercell = read_int();
+      if (grid->maxsurfpercell <= 0 || grid->maxsurfpercell > MAXSMALLINT/100)
+        error->all(FLERR,"Invalid surfmax in restart file");
     } else if (flag == SPLITMAX) {
       grid->maxsplitpercell = read_int();
+      if (grid->maxsplitpercell <= 0 || grid->maxsplitpercell > MAXSMALLINT/100)
+        error->all(FLERR,"Invalid splitmax in restart file");
     } else if (flag == GRIDCUT) {
       grid->cutoff = read_double();
     } else if (flag == GRID_WEIGHT) {
