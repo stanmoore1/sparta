@@ -8,3 +8,8 @@
 - FU-7 (from AB1, low): kk TCE prob>1 warning fires 25/30 seeds vs CPU 16/30 (p~0.02); same formula -> possible high-energy collision sampling difference kk vs CPU. Investigate only.
 - FU-8 (from AB2, F-G09-4a INCOMPLETE): src/KOKKOS/compute_surf_kokkos.cpp ~189/201 exact-name match "global"/"prob" for surf_react; explicit prob/kk or global/kk + compute surf -> "Unknown Kokkos surface reaction method" (line 214). Test deck: scratchpad/ab/AB2/F-G09-4/in.sr_kk.
 - FU-9 (from AB2, latent): GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) lacks the device sync of ewhich/eicol/edcol like F-G13-4.
+- FU-10 (from AB9, F-G22-2 INCOMPLETE): GridKokkos grow_cells/grow_sinfo first allocation (realloc_kokkos, NoInit) left uninitialized -> zero host view like CPU memset. FIXED.
+- FU-11 (from AB9, F-G22-3 sibling): SurfKokkos::grow_own -> NO CHANGE: tdual ctor and DualView::resize value-initialize (only realloc_kokkos/WithoutInitializing don't).
+- FU-12 (from AB9, F-G18-2 gap): react re-issued with same count but different reactions passes the nlist check (CPU+kk), no OOB; documented limitation, not fixed.
+- Install.sh: kokkos token at end-of-line not stripped (A and B identical; out of scope), not fixed.
+- FU-1..6, FU-8, FU-9: FIXED (see FIXES.md). FU-7: investigated, no code difference found (fixes/FX-followups.md).
