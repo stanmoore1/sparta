@@ -43,6 +43,30 @@
 #include "error.h"
 
 using namespace SPARTA_NS;
+
+/* ----------------------------------------------------------------------
+   return 1 if str is a printf format with exactly one double conversion
+   (flags, width, precision allowed; %% is a literal percent), else 0
+------------------------------------------------------------------------- */
+
+static int valid_double_format(const char *str)
+{
+  int nconv = 0;
+  for (const char *p = str; *p; p++) {
+    if (*p != '%') continue;
+    p++;
+    if (*p == '%') continue;
+    while (*p && strchr("-+ #0",*p)) p++;
+    while (*p && isdigit(*p)) p++;
+    if (*p == '.') {
+      p++;
+      while (*p && isdigit(*p)) p++;
+    }
+    if (!*p || !strchr("eEfFgGaA",*p)) return 0;
+    nconv++;
+  }
+  return (nconv == 1);
+}
 using namespace MathConst;
 
 #define VARDELTA 4
@@ -364,6 +388,9 @@ void Variable::set(int narg, char **arg)
     if (narg != 4) error->all(FLERR,"Illegal variable command");
     if (find(arg[0]) >= 0) return;
     if (nvar == maxvar) grow();
+    if (!valid_double_format(arg[3]))
+      error->all(FLERR,"Variable format must contain exactly one "
+                 "floating point conversion (e.g. %g, %10.4f)");
     style[nvar] = FORMAT;
     num[nvar] = 3;
     which[nvar] = 0;

@@ -346,9 +346,11 @@ SurfReactAdsorb::~SurfReactAdsorb()
     surf->remove_custom(area_index);
     weight_index = surf->find_custom((char *) "weight");
     surf->remove_custom(weight_index);
+    // tau is only created in init(), so may not exist if no run was done
+
     if (psflag) {
       tau_index = surf->find_custom((char *) "tau");
-      surf->remove_custom(tau_index);
+      if (tau_index >= 0) surf->remove_custom(tau_index);
     }
   }
 
