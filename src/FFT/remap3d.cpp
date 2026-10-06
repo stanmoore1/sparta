@@ -611,6 +611,8 @@ struct remap_plan_3d *remap_3d_create_plan(
     MPI_Group_incl(orig_group, plan->commringlen,
                    plan->commringlist, &new_group);
     MPI_Comm_create(comm, new_group, &plan->comm);
+    MPI_Group_free(&new_group);
+    MPI_Group_free(&orig_group);
   }
 
   // if using collective and the comm ring list is empty create
