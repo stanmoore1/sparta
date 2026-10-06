@@ -665,13 +665,24 @@ void FixAveHisto::end_of_step()
         else bin_one(fix->compute_vector(j-1));
 
       } else if (kind == GLOBAL && mode == VECTOR) {
-        if (j == 0) {
-          int n = fix->size_vector;
-          for (int k = 0; k < n; k++) bin_one(fix->compute_vector(k));
-        } else {
-          int n = fix->size_array_rows;
-          for (int k = 0; k < n; k++) bin_one(fix->compute_array(k,j-1));
+
+        // copy fix values into local vector and bin them via bin_vector()
+        //   so fix ave/histo/weight pairs each value with its own weight,
+        //   bin_one() would use the global scalar weight
+
+        int n;
+        if (j == 0) n = fix->size_vector;
+        else n = fix->size_array_rows;
+        if (n > maxvector) {
+          memory->destroy(vector);
+          maxvector = n;
+          memory->create(vector,maxvector,"ave/histo:vector");
         }
+        if (j == 0)
+          for (int k = 0; k < n; k++) vector[k] = fix->compute_vector(k);
+        else
+          for (int k = 0; k < n; k++) vector[k] = fix->compute_array(k,j-1);
+        bin_vector(n,vector,1);
 
       } else if (kind == PERPARTICLE) {
         if (j == 0) bin_particles(fix->vector_particle,1);

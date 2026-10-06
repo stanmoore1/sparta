@@ -19,6 +19,7 @@
 #include "compute_dt_grid.h"
 #include "update.h"
 #include "grid.h"
+#include "particle.h"
 #include "domain.h"
 #include "modify.h"
 #include "fix.h"
@@ -578,6 +579,12 @@ void ComputeDtGrid::compute_per_grid()
         wsq[i] = array[i][index];
     }
   }
+
+  // the per-cell particle counts used below are set by the last particle sort
+  // particles are only sorted during a run when collisions are enabled,
+  //   and not yet at the setup of a run, so re-sort if unsorted
+
+  if (!particle->sorted) particle->sort();
 
   // calculate per grid cell timestep for cells in group
   // set timestep = 0. for cells not in group and for cells with problematic input data

@@ -720,7 +720,7 @@ void Comm::ring(int n, int nper, void *inbuf, int messtag,
   char *buf,*bufcopy;
   memory->create(buf,maxbytes,"comm:buf");
   memory->create(bufcopy,maxbytes,"comm:bufcopy");
-  memcpy(buf,inbuf,nbytes);
+  if (nbytes) memcpy(buf,inbuf,nbytes);
 
   int next = me + 1;
   int prev = me - 1;
@@ -733,12 +733,12 @@ void Comm::ring(int n, int nper, void *inbuf, int messtag,
       MPI_Send(buf,nbytes,MPI_CHAR,next,messtag,world);
       MPI_Wait(&request,&status);
       MPI_Get_count(&status,MPI_CHAR,&nbytes);
-      memcpy(buf,bufcopy,nbytes);
+      if (nbytes) memcpy(buf,bufcopy,nbytes);
     }
     if (self || loop != nprocs-1) callback(nbytes/nper,buf,ptr);
   }
 
-  if (outbuf) memcpy(outbuf,buf,nbytes);
+  if (outbuf && nbytes) memcpy(outbuf,buf,nbytes);
 
   memory->destroy(buf);
   memory->destroy(bufcopy);
