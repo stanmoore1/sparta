@@ -22,3 +22,4 @@
 - 2026-10-06 02:15 UTC: session limit killed AB2/3/5/8/9; relaunched (MPI builds now done). FX-followups fixer launched for FU-1..6.
 - 2026-10-06: AB11 complete (FU-3b, FU-13, FU-18 NECESSARY+COMPLETE). Found stale fix_emit_surf.cpp.o in spa_C3_opt (built concurrently with edit); clean rebuild of all changed files -> spa_C4_opt / spa_C4_mpi. Report generator: .kokkos-review/make_report.py -> publish as artifact when AB12-mpi completes.
 - 2026-10-06 GPU-sim: bsync_A/B built (src/spa_), poison builds compiling; agents GS-autosync (handoff auto_sync), GS-fixes (gpu-only fixes A/B), GS-sweep (examples under detectors). R2-3 committed; R2-1 moving fix into Grid::collate_*_implicit; R2-2 remap running.
+- 2026-10-06 20:55 UTC: session limit + disk full (cleaned obsolete binaries/objects/dumps; 15G free). Relaunched R2-2, GS-fixes, GS-sweep; poison builds rebuilding. Committed so far this round: R2-3, auto_sync handoff, R2-1.
