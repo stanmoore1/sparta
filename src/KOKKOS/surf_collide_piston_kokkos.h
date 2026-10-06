@@ -159,8 +159,9 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
     // ip = NULL if destroyed by chemistry: no reflection, as in the
     //   diffuse model, but still call the surf_react() fixes below
+    // also skip reflection if reaction already reset post-collision velocity
 
-    if (ip) {
+    if (ip && !velreset) {
       // norm will be in single coordinate direction
       // dir = 0,1,2 for wall (or surface) with norm parallel to x,y,z
       // which = 0/1 for wall (or surface) with +/- normal (lo/hi wall)

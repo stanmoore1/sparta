@@ -126,15 +126,19 @@ void CreateParticlesKokkos::create_local(bigint np)
   // loop over procs insures sum of nme = Np
 
   bigint nstart,nstop;
-  if (me > 0) nstart = static_cast<bigint> (np * (vols[me-1]/vols[nprocs-1]));
-  else nstart = 0;
-  nstop = static_cast<bigint> (np * (vols[me]/vols[nprocs-1]));
+  if (vols[nprocs-1] == 0.0) nstart = nstop = 0;
+  else {
+    if (me > 0) nstart = static_cast<bigint> (np * (vols[me-1]/vols[nprocs-1]));
+    else nstart = 0;
+    nstop = static_cast<bigint> (np * (vols[me]/vols[nprocs-1]));
+  }
   bigint nme = nstop-nstart;
 
   memory->destroy(vols);
 
   // nfix_update_custom = # of fixes with update_custom() method
 
+  particle->error_custom();
   modify->list_init_fixes();
   int nfix_update_custom = modify->n_update_custom;
 

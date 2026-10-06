@@ -61,6 +61,10 @@ void boundary_tally_kk(double dtremain,
                        Particle::OnePart *jp,
                        const double* norm) const
 {
+  // skip if no original particle, e.g. on-surf reaction by SurfReactAdsorb
+
+  if (!iorig) return;
+
   // skip if species not in mixture group
 
   int origspecies = iorig->ispecies;

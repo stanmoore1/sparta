@@ -161,8 +161,10 @@ void SurfCollideDiffuseKokkos::dynamic()
   if (tmode == VAREQUAL) {
 
     // only evaluate variable if timestep is multiple of tfreq
+    // also evaluate at first step of a run so tsurf is always set
 
-    if (update->ntimestep % tfreq) return;
+    if (update->ntimestep % tfreq &&
+        update->ntimestep != update->firststep) return;
     tsurf = input->variable->compute_equal(tindex_var);
     if (tsurf <= 0.0) error->all(FLERR,"Surf_collide tsurf <= 0.0");
 
@@ -173,9 +175,12 @@ void SurfCollideDiffuseKokkos::dynamic()
   } else if (tmode == VARSURF) {
 
     // only evaluate variable if timestep is multiple of tfreq
+    // also evaluate at first step of a run (same on all procs),
+    //   so t_owned/t_persurf are always allocated and set
 
     int spreadflag = 0;
-    if (update->ntimestep % tfreq == 0) {
+    if (update->ntimestep % tfreq == 0 ||
+        update->ntimestep == update->firststep) {
       if (n_owned != surf->nown) {
         memory->destroy(t_owned);
         n_owned = surf->nown;

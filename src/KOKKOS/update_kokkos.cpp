@@ -916,6 +916,16 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
       pstart = pstop;
       pstop = particle->nlocal;
       continue_loop_flag = 1;
+
+      // newly created particles may also need to migrate
+      // each moved particle adds at most one mlist entry, so extend the
+      //   migration list if necessary, keeping the nmigrate entries
+      //   already recorded in this iteration (the device copy is current)
+
+      if (nmigrate + (pstop-pstart) > maxmigrate) {
+        maxmigrate = MAX(particle->maxlocal,nmigrate + (pstop-pstart));
+        memoryKK->grow_kokkos(k_mlist,mlist,maxmigrate,"particle:mlist");
+      }
       continue;
     }
 

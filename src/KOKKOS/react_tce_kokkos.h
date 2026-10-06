@@ -200,8 +200,10 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
        else if (vibstyle == DISCRETE) {
             //Instantaneous z for diatomic molecules
             if (d_species[isp].nvibmode == 1) {
+                // discrete evib = level*boltz*vibtemp, round to nearest
+                //   so roundoff does not drop a level
                 avei = static_cast<int>
-                        (ievib / (boltz * d_species[isp].vibtemp[0]));
+                        (ievib / (boltz * d_species[isp].vibtemp[0]) + 0.5);
                 if (avei > 0) zi = 2.0 * avei * log(1.0 / avei + 1.0);
                 else zi = 0.0;
             } else if (d_species[isp].nvibmode > 1) {
@@ -214,8 +216,10 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
             } else zi = 0.0;
 
             if (d_species[jsp].nvibmode == 1) {
+                // discrete evib = level*boltz*vibtemp, round to nearest
+                //   so roundoff does not drop a level
                 avej = static_cast<int>
-                        (jevib / (boltz * d_species[jsp].vibtemp[0]));
+                        (jevib / (boltz * d_species[jsp].vibtemp[0]) + 0.5);
                 if (avej > 0) zj = 2.0 * avej * log(1.0 / avej + 1.0);
                 else zj = 0.0;
             } else if (d_species[jsp].nvibmode > 1) {

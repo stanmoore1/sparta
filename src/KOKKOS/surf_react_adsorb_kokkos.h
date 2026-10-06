@@ -264,13 +264,15 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
 
     double sum_prob = 0.0;
     double scatter_prob = 0.0, correction = 1.0;
-    int coeff_val = 1;
 
     rand_type rand_gen = rand_pool.get_state();
 
     for (int i = 0; i < n; i++) {
       int j = d_list(ip->ispecies,i);
 
+      // coeff_val is per reaction, as in SurfReactAdsorb::react()
+
+      int coeff_val = 1;
       if (d_style(j) == SRA_KK::ARRHENIUS) coeff_val = 3;
 
       double surf_cover,S_theta,K_ads;
