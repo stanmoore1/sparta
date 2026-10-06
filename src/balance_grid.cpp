@@ -278,11 +278,13 @@ void BalanceGrid::command(int narg, char **arg, int outflag)
     delete random;
 
   } else if (bstyle == PROC) {
+    // same random draw on all procs, offset by proc ID, so each proc
+    //   starts its round-robin assignment at a different proc
+
     int newproc;
-    double seed = update->ranmaster->uniform();
-    RanKnuth *random = new RanKnuth(seed);
-    random->reset(seed,comm->me,100);
-    newproc = nprocs * random->uniform();
+    RanKnuth *random = new RanKnuth(update->ranmaster->uniform());
+    newproc = static_cast<int> (nprocs * random->uniform());
+    newproc = (newproc + comm->me) % nprocs;
 
     for (int icell = 0; icell < nglocal; icell++) {
       if (cells[icell].nsplit <= 0) continue;

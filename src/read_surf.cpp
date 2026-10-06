@@ -2251,9 +2251,10 @@ void ReadSurf::open(char *file)
   if (!compressed) fp = fopen(file,"r");
   else {
 #ifdef SPARTA_GZIP
-    char gunzip[128];
-    snprintf(gunzip,128,"gunzip -c %s",file);
+    char *gunzip = new char[strlen(file) + 16];
+    sprintf(gunzip,"gunzip -c %s",file);
     fp = popen(gunzip,"r");
+    delete [] gunzip;
 #else
     error->one(FLERR,"Cannot open gzipped file");
 #endif

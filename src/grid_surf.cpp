@@ -1022,7 +1022,16 @@ void Grid::surf2grid_split(int subflag, int outflag)
 
   for (int icell = 0; icell < ncurrent; icell++) {
     if (cells[icell].nsplit <= 0) continue;
-    if (cinfo[icell].type != OVERLAP) continue;
+
+    // in read_restart (subflag = 0) a cell stored as split must still
+    //   overlap surfs, else restart file and surfs are inconsistent
+
+    if (cinfo[icell].type != OVERLAP) {
+      if (!subflag && cells[icell].nsplit > 1)
+        error->one(FLERR,
+                   "Inconsistent surface to grid mapping in read_restart");
+      continue;
+    }
 
     surfmap = csplits->vget();
     c = &cells[icell];

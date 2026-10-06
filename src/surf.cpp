@@ -32,6 +32,18 @@
 #include "error.h"
 
 using namespace SPARTA_NS;
+
+/* ----------------------------------------------------------------------
+   hash N coords to pick a rendezvous proc
+   add 0.0 so -0.0 and 0.0 (equal via ==) hash identically
+------------------------------------------------------------------------- */
+
+static uint32_t hash_coords(const double *x, int n)
+{
+  double tmp[6];
+  for (int i = 0; i < n; i++) tmp[i] = x[i] + 0.0;
+  return hashlittle(tmp,n*sizeof(double),0);
+}
 using namespace MathConst;
 
 enum{TALLYAUTO,TALLYREDUCE,TALLYRVOUS};         // same as Update
@@ -1204,12 +1216,12 @@ void Surf::check_watertight_2d_distributed()
   int nrvous = 0;
   for (int i = 0; i < n; i++) {
     if (lines_rvous[i].transparent) continue;
-    proclist[nrvous] = hashlittle(lines_rvous[i].p1,2*sizeof(double),0) % nprocs;
+    proclist[nrvous] = hash_coords(lines_rvous[i].p1,2) % nprocs;
     inpoint[nrvous].x[0] = lines_rvous[i].p1[0];
     inpoint[nrvous].x[1] = lines_rvous[i].p1[1];
     inpoint[nrvous].which = 1;
     nrvous++;
-    proclist[nrvous] = hashlittle(lines_rvous[i].p2,2*sizeof(double),0) % nprocs;
+    proclist[nrvous] = hash_coords(lines_rvous[i].p2,2) % nprocs;
     inpoint[nrvous].x[0] = lines_rvous[i].p2[0];
     inpoint[nrvous].x[1] = lines_rvous[i].p2[1];
     inpoint[nrvous].which = 2;
@@ -1469,7 +1481,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p1,nbytes);
     memcpy(&edge[3],p2,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p1,nbytes);
     memcpy(inedge[nrvous].x2,p2,nbytes);
     inedge[nrvous].which = 1;
@@ -1477,7 +1489,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p2,nbytes);
     memcpy(&edge[3],p1,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p2,nbytes);
     memcpy(inedge[nrvous].x2,p1,nbytes);
     inedge[nrvous].which = 2;
@@ -1485,7 +1497,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p2,nbytes);
     memcpy(&edge[3],p3,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p2,nbytes);
     memcpy(inedge[nrvous].x2,p3,nbytes);
     inedge[nrvous].which = 1;
@@ -1493,7 +1505,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p3,nbytes);
     memcpy(&edge[3],p2,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p3,nbytes);
     memcpy(inedge[nrvous].x2,p2,nbytes);
     inedge[nrvous].which = 2;
@@ -1501,7 +1513,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p3,nbytes);
     memcpy(&edge[3],p1,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p3,nbytes);
     memcpy(inedge[nrvous].x2,p1,nbytes);
     inedge[nrvous].which = 1;
@@ -1509,7 +1521,7 @@ void Surf::check_watertight_3d_distributed()
 
     memcpy(&edge[0],p1,nbytes);
     memcpy(&edge[3],p3,nbytes);
-    proclist[nrvous] = hashlittle(edge,2*nbytes,0) % nprocs;
+    proclist[nrvous] = hash_coords(edge,6) % nprocs;
     memcpy(inedge[nrvous].x1,p1,nbytes);
     memcpy(inedge[nrvous].x2,p3,nbytes);
     inedge[nrvous].which = 2;

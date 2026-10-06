@@ -44,7 +44,9 @@ DumpMovie::DumpMovie(SPARTA *sparta, int narg, char **arg) :
 
 DumpMovie::~DumpMovie()
 {
-  if ((comm->me == 0) && (fp != NULL)) {
+  // use Dump::me, comm may already be deleted when output is destroyed
+
+  if ((me == 0) && (fp != NULL)) {
 #if defined(_WIN32)
     _pclose(fp);
 #else

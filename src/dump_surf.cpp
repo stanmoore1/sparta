@@ -26,6 +26,7 @@
 #include "variable.h"
 #include "memory.h"
 #include "error.h"
+#include "output.h"
 
 using namespace SPARTA_NS;
 
@@ -233,6 +234,15 @@ void DumpSurf::init_style()
       error->all(FLERR,"Could not find dump surf compute ID");
     compute[i] = modify->compute[icompute];
   }
+
+  // dump_modify every may have changed the dump frequency stored by Output
+  // refresh nevery so the fix compatibility check uses the current value
+
+  for (int idump = 0; idump < output->ndump; idump++)
+    if (strcmp(id,output->dump[idump]->id) == 0) {
+      if (output->every_dump[idump] > 0) nevery = output->every_dump[idump];
+      break;
+    }
 
   int ifix;
   for (int i = 0; i < nfix; i++) {

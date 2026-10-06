@@ -406,9 +406,10 @@ void Dump::openfile()
       sprintf(filecurrent,"%s" BIGINT_FORMAT "%s",
               filestar,update->ntimestep,ptr+1);
     else {
-      char bif[8],pad[16];
+      // pad holds "%s%0<padflag><bigint fmt>%s", padflag can be any int
+      char bif[8],pad[40];
       strcpy(bif,BIGINT_FORMAT);
-      sprintf(pad,"%%s%%0%d%s%%s",padflag,&bif[1]);
+      snprintf(pad,sizeof(pad),"%%s%%0%d%s%%s",padflag,&bif[1]);
       sprintf(filecurrent,pad,filestar,update->ntimestep,ptr+1);
     }
     *ptr = '*';

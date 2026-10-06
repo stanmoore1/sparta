@@ -2128,7 +2128,8 @@ void Update::global(int narg, char **arg)
         error->all(FLERR,
                    "Cannot set global surfmax when surfaces already exist");
       grid->maxsurfpercell = atoi(arg[iarg+1]);
-      if (grid->maxsurfpercell <= 0) error->all(FLERR,"Illegal global command");
+      if (grid->maxsurfpercell <= 0 || grid->maxsurfpercell > MAXSMALLINT/100)
+        error->all(FLERR,"Illegal global command");
       // reallocate paged data structs for variable-length surf info
       grid->allocate_surf_arrays();
       iarg += 2;
@@ -2138,7 +2139,8 @@ void Update::global(int narg, char **arg)
         error->all(FLERR,
                    "Cannot set global splitmax when surfaces already exist");
       grid->maxsplitpercell = atoi(arg[iarg+1]);
-      if (grid->maxsplitpercell <= 0) error->all(FLERR,"Illegal global command");
+      if (grid->maxsplitpercell <= 0 || grid->maxsplitpercell > MAXSMALLINT/100)
+        error->all(FLERR,"Illegal global command");
       // reallocate paged data structs for variable-length cell info
       grid->allocate_surf_arrays();
       iarg += 2;

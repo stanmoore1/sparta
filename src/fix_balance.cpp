@@ -120,8 +120,15 @@ FixBalance::FixBalance(SPARTA *sparta, int narg, char **arg) :
   random = NULL;
   rcb = NULL;
 
+  // RANDOM: per-proc RNG stream, as in balance_grid
+  // PROC: same stream on all procs, start is offset by proc ID
+
   if (bstyle == RANDOM || bstyle == PROC)
     random = new RanKnuth(update->ranmaster->uniform());
+  if (bstyle == RANDOM) {
+    double seed = update->ranmaster->uniform();
+    random->reset(seed,comm->me,100);
+  }
   if (bstyle == BISECTION) rcb = new RCB(sparta);
 
   // compute initial outputs
@@ -222,7 +229,8 @@ void FixBalance::end_of_step()
     }
 
   } else if (bstyle == PROC) {
-    int newproc = nprocs * random->uniform();
+    int newproc = static_cast<int> (nprocs * random->uniform());
+    newproc = (newproc + comm->me) % nprocs;
     for (int icell = 0; icell < nglocal; icell++) {
       if (cells[icell].nsplit <= 0) continue;
       if (newproc != cells[icell].proc) nmigrate++;

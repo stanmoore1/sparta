@@ -43,6 +43,8 @@ FixEmit::FixEmit(SPARTA *sparta, int narg, char **arg) :
   size_vector = 2;
   global_freq = 1;
   gridmigrate = 1;
+  region = NULL;
+  idregion = NULL;
 
   // RNG
 

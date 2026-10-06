@@ -554,6 +554,12 @@ void CollideVSS::EEXCHANGE_NonReactingEDisposal(Particle::OnePart *ip,
                                  (1.5 - params[ip->ispecies][jp->ispecies].omega));
               } while (State_prob < random->uniform());
               E_Dispose -= p->evib;
+
+              // keep fix vibmode level consistent with evib
+
+              if (index_vibmode >= 0)
+                particle->eiarray[particle->ewhich[index_vibmode]]
+                  [p - particle->particles][0] = ivib;
             }
 
           } else if (vibdof > 2) {
@@ -815,6 +821,12 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
         } while (State_prob < random->uniform());
         E_Dispose -= p->evib;
         remaining_dof -= zeta;
+
+        // keep fix vibmode level consistent with evib
+
+        if (index_vibmode >= 0)
+          particle->eiarray[particle->ewhich[index_vibmode]]
+            [p - particle->particles][0] = ivib;
 
       } else if (vibdof == 2 && vibstyle == SMOOTH) {
         double b_vib = (1.5 - aveomega) + 0.5 * (remaining_dof - vibdof);

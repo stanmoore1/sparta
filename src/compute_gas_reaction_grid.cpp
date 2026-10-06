@@ -114,7 +114,10 @@ ComputeGasReactionGrid::~ComputeGasReactionGrid()
 
 void ComputeGasReactionGrid::init()
 {
-  if (react && react->nlist != nlist_react)
+  // EVERY/SELECT columns are sized by reaction count at creation
+  // ALL mode has one column, so a new react command is fine
+
+  if (mode != ALL && react && react->nlist != nlist_react)
     error->all(FLERR,"Number of reactions for compute gas/reaction/grid "
                "has changed");
 
