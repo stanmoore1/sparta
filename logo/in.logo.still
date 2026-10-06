@@ -1,0 +1,53 @@
+################################################################################
+# SPARTA logo: high resolution stills of the undisturbed emblem
+#
+# run 0, so nothing moves - this is the emblem exactly as create_particles lays
+# it down, rendered at 2000 px.
+#
+# Run twice, for a grain comparison:
+#   spa_serial -in in.logo.still
+#     the animations' own density, 1.4e5 particles at pdiam 0.9
+#   spa_serial -in in.logo.still -var fnumval 5.25e15 -var pdiamval 0.25 -var tag dense
+#     16x the particles at a quarter the diameter, which is what it takes for
+#     2000 px to read as solid colour rather than as scattered dots
+################################################################################
+
+variable            fnumval index 8.4e16
+variable            pdiamval index 0.9
+variable            tag index asis
+
+dimension           2
+seed                12345
+global              gridcut 0.0 comm/sort yes
+boundary            rr rr p
+
+create_box          -600e-1 600e-1 -600e-1 600e-1 -0.5 0.5
+create_grid         100 100 1
+balance_grid        rcb cell
+
+include             emblem.regions
+
+species             logo.species N O B Nh Oh Nm Om
+global              fnum ${fnumval}
+
+mixture             gold N nrho 1.17e18 temp 0.001
+mixture             red  O nrho 1.17e18 temp 0.001
+
+create_particles    gold n 0 region goldletters
+create_particles    gold n 0 region swirlsIn
+create_particles    gold n 0 region outerring
+create_particles    gold n 0 region innerring
+create_particles    red  n 0 region redcenter
+create_particles    red  n 0 region redband
+
+timestep            1.0e-4
+stats               1
+
+dump                3 image all 1 still_${tag}.*.ppm type type pdiam ${pdiamval} &
+                    box no 1 size 2000 2000 &
+                    view 0 0 center s 0.5 0.5 0.5 zoom 1.98
+dump_modify         3 pad 5 backcolor white &
+                    color shieldred 0.75 0 0 color shieldgold 0.95 0.75 0.05 &
+                    pcolor 1 shieldgold pcolor 2 shieldred
+
+run                 0
