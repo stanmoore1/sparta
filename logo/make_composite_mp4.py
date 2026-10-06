@@ -17,7 +17,7 @@ FPS  = 25
 DUR  = 4                                    # frames held per animation step
 HOLD = 25                                   # frames held on the crisp emblem
 
-SEGMENTS = [('slam', NF, True), ('bs', NF, True), ('exp', NF, True), ('rec', 100, False)]
+SEGMENTS = [('slam', NF, True), ('bs', NF, True), ('exp', NF, True), ('rec', 90, False)]
 
 os.makedirs(TMP, exist_ok=True)
 for f in glob.glob(TMP + '*.png'): os.remove(f)
@@ -37,6 +37,11 @@ exe = imageio_ffmpeg.get_ffmpeg_exe()
 out = D + 'logo_composite.mp4'
 subprocess.run([exe, '-y', '-loglevel', 'error', '-framerate', str(FPS),
                 '-i', TMP + 'f%06d.png',
-                '-c:v', 'libx264', '-preset', 'slow', '-crf', '18',
+                # Particle noise is expensive to encode.  crf 18 put this at
+                # 41 MB; 28 is visually indistinguishable here at a third of it.
+                # The lever that actually matters is the number of DISTINCT
+                # frames - the repeats that carry the timing cost almost
+                # nothing, being identical.
+                '-c:v', 'libx264', '-preset', 'slow', '-crf', '28',
                 '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out], check=True)
 print(f'{n} frames at {FPS} fps = {n/FPS:.1f}s, {Q}x{Q} -> {os.path.getsize(out)/1e6:.2f} MB')
