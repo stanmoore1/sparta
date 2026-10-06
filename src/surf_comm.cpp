@@ -87,11 +87,11 @@ void Surf::redistribute_surfs(int n, Line *newlines, Tri *newtris,
     if (dim == 2) {
       lines_contig = (Line *)
 	memory->smalloc(bbytes,"surf:lines_contig");
-      memset(lines_contig,0,bbytes);
+      if (bbytes) memset(lines_contig,0,bbytes);
     } else {
       tris_contig = (Tri *)
 	memory->smalloc(bbytes,"surf:tris_contig");
-      memset(tris_contig,0,bbytes);
+      if (bbytes) memset(tris_contig,0,bbytes);
     }
   }
 
@@ -582,7 +582,7 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
     bigint bbytes = (bigint) nlocal * n * sizeof(int);
 
     memory->create(myvec,nlocal*n,"surf/spread:myvec");
-    memset(myvec,0,bbytes);
+    if (bbytes) memset(myvec,0,bbytes);
 
     if (n == 1) {
       for (i = 0; i < nown; i++) {
@@ -613,7 +613,7 @@ void Surf::spread_own2local_reduce(int n, int type, void *in, void *out)
     bigint bbytes = (bigint) nlocal * n * sizeof(double);
 
     memory->create(myvec,nlocal*n,"surf/spread:myvec");
-    memset(myvec,0,bbytes);
+    if (bbytes) memset(myvec,0,bbytes);
 
     if (n == 1) {
       for (i = 0; i < nown; i++) {
@@ -930,7 +930,7 @@ int Surf::rendezvous_unique(int n, char *inbuf,
   // count duplicates of each owned surf
 
   bigint bbytes = (bigint) nown * sizeof(int);
-  memset(duplicates,0,bbytes);
+  if (bbytes) memset(duplicates,0,bbytes);
 
   int *in_rvous = (int *) inbuf;
   int index;
@@ -951,7 +951,7 @@ int Surf::rendezvous_unique(int n, char *inbuf,
   // recount to find selected duplicate of each owned surf
   // send ownflag datum back to owner of that duplicate
 
-  memset(duplicates,0,bbytes);
+  if (bbytes) memset(duplicates,0,bbytes);
 
   k = 0;
   m = 0;

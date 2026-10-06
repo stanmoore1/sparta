@@ -737,7 +737,7 @@ bigint Custom::set_particle(Mixture *mixture, Region *region,
 
   int *choose;
   memory->create(choose,nlocal,"set:choose");
-  memset(choose,0,nlocal*sizeof(int));
+  if (nlocal) memset(choose,0,nlocal*sizeof(int));
 
   int flag;
 
@@ -837,7 +837,7 @@ bigint Custom::set_grid(int groupbit, Region *region,
 
   int *choose;
   memory->create(choose,nglocal,"set:choose");
-  memset(choose,0,nglocal*sizeof(int));
+  if (nglocal) memset(choose,0,nglocal*sizeof(int));
 
   int flag;
   double point[3];
@@ -957,7 +957,7 @@ bigint Custom::set_surf(int groupbit, Region *region,
   int nsown = surf->nown;
   int *choose;
   memory->create(choose,nsown,"set:choose");
-  memset(choose,0,nsown*sizeof(int));
+  if (nsown) memset(choose,0,nsown*sizeof(int));
 
   int flag;
   double point[3];
@@ -1233,6 +1233,11 @@ bigint Custom::read_file(int mode, int colcount,
         }
         index = (*hash)[id];
 
+        // assign values to ghost cells too, but only count owned cells
+        //   so the reported total does not depend on # of procs
+
+        if (index < grid->nlocal) count += colcount;
+
       // surf ID will only match for the owning proc
 
       } else if (mode == SURF) {
@@ -1247,6 +1252,7 @@ bigint Custom::read_file(int mode, int colcount,
           continue;
         }
         index = (id-1) / nprocs;
+        count += colcount;
       }
 
       // assign all attribute values for this grid cell or surf
@@ -1265,7 +1271,6 @@ bigint Custom::read_file(int mode, int colcount,
         }
       }
 
-      count += colcount;
       buf = next + 1;
     }
 
@@ -1401,6 +1406,8 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
     ncoarse_me += npoints;
   }
 
+  delete [] line;
+
   // check that each coarse point is inside or on simulation box
 
   double *boxlo = domain->boxlo;
@@ -1421,6 +1428,8 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
   MPI_Allreduce(&count,&count_all,1,MPI_INT,MPI_SUM,world);
 
   if (count_all) {
+    memory->destroy(xyz_coarse_me);
+    memory->destroy(values_coarse_me);
     char str[128];
     snprintf(str,sizeof(str),"%d coarse grid points are outside simulation box",count_all);
     error->all(FLERR,str);
@@ -1472,7 +1481,6 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
 
   // clean up
 
-  delete [] line;
   memory->destroy(recvcounts);
   memory->destroy(displs);
   memory->destroy(xyz_coarse_me);

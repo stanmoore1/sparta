@@ -1672,6 +1672,8 @@ int Particle::unpack_restart(char *buf)
   char *ptr = buf;
   int *ibuf = (int *) buf;
   nlocal_restart = *ibuf;
+  if (nlocal_restart < 0)
+    error->one(FLERR,"Invalid particle count in restart file");
   ptr += sizeof(int);
   ptr = ROUNDUP(ptr);
 
@@ -1679,7 +1681,8 @@ int Particle::unpack_restart(char *buf)
     memory->smalloc((bigint) nlocal_restart*nbytes,
                     "particle:particle_restart");
 
-  memcpy(particle_restart,ptr,(bigint) nlocal_restart*nbytes);
+  if (nlocal_restart)
+    memcpy(particle_restart,ptr,(bigint) nlocal_restart*nbytes);
   ptr += (bigint) nlocal_restart * nbytes;
   ptr = ROUNDUP(ptr);
 
@@ -1704,6 +1707,8 @@ void Particle::unpack_restart(char *buf, int &nlocal_restart, int step, int pass
   if (pass == 0) {
     int *ibuf = (int *) buf;
     nlocal_restart = *ibuf;
+    if (nlocal_restart < 0)
+      error->one(FLERR,"Invalid particle count in restart file");
     ptr += sizeof(int);
     ptr = ROUNDUP(ptr);
   }
@@ -1715,7 +1720,7 @@ void Particle::unpack_restart(char *buf, int &nlocal_restart, int step, int pass
   particle_restart = (char *)
     memory->smalloc((bigint) step*nbytes,"particle:particle_restart");
 
-  memcpy(particle_restart,ptr,(bigint) step*nbytes);
+  if (step) memcpy(particle_restart,ptr,(bigint) step*nbytes);
 
   this->nlocal_restart = step;
 }

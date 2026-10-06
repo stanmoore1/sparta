@@ -931,7 +931,7 @@ void MarchingCubes::cleanup()
 
   if (!grid->hashfilled) grid->rehash();
 
-  qsort(dellist,ndelete,sizeof(int),compare_indices);
+  if (ndelete) qsort(dellist,ndelete,sizeof(int),compare_indices);
 
   tris = surf->tris;
   int nslocal = surf->nlocal;

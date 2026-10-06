@@ -4387,7 +4387,7 @@ double *Variable::add_storage(double *cvec)
     memory->create(vec_storage[nvec_storage],n,"variable:vec_storage");
   }
 
-  memcpy(vec_storage[nvec_storage],cvec,n*sizeof(double));
+  if (n) memcpy(vec_storage[nvec_storage],cvec,n*sizeof(double));
   nvec_storage++;
 
   return vec_storage[nvec_storage-1];

@@ -493,7 +493,7 @@ void SurfReactAdsorb::create_per_surf_state()
 
   // clear mark vector
 
-  memset(mark,0,nall*sizeof(int));
+  if (nall) memset(mark,0,nall*sizeof(int));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1257,7 +1257,7 @@ void SurfReactAdsorb::grid_changed()
 
   memory->destroy(mark);
   memory->create(mark,nall,"react/adsorb:mark");
-  memset(mark,0,nall*sizeof(int));
+  if (nall) memset(mark,0,nall*sizeof(int));
 
   // inverse spread of tau from local to owned custom values
   // needed because local unique surfs have been performing PS chem

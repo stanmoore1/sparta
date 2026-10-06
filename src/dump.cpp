@@ -73,6 +73,12 @@ Dump::Dump(SPARTA *sparta, int, char **arg) : Pointers(sparta)
   format_int_user = NULL;
   format_bigint_user = NULL;
 
+  // set by child class constructors, init here since ~Dump() uses them
+  //   if a child class constructor exits with an error before setting them
+
+  size_one = 0;
+  format_column_user = NULL;
+
   clearstep = 0;
   append_flag = 0;
   buffer_allow = 0;

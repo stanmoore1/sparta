@@ -154,8 +154,10 @@ DumpParticle::DumpParticle(SPARTA *sparta, int narg, char **arg) :
   for (int i = 0; i < size_one; i++) format_column_user[i] = NULL;
 
   // setup column string
+  // n = 1 for trailing NULL, nfield = 0 is possible for dump image/movie
+  //   (they error on it afterwards)
 
-  int n = 0;
+  int n = 1;
   for (int iarg = 0; iarg < nfield; iarg++) n += strlen(earg[iarg]) + 2;
   columns = new char[n];
   columns[0] = '\0';

@@ -312,7 +312,7 @@ void ReadGrid::create_cells(int n, char *buf)
       if (level < 0) error->one(FLERR,"Cell ID in grid file exceeds maxlevel");
       grid->id_lohi(id,level,boxlo,boxhi,lo,hi);
       grid->add_child_cell(id,level,lo,hi);
-      add_custom(custom);
+      if (ncustom) add_custom(custom);
     }
 
     whichproc++;

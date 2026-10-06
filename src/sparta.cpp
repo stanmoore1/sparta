@@ -463,7 +463,6 @@ SPARTA::~SPARTA()
 
   if (world != universe->uworld) MPI_Comm_free(&world);
 
-  delete python;
   delete kokkos;
   delete [] suffix;
 
@@ -589,6 +588,8 @@ void SPARTA::destroy()
   delete react;
   delete output;
   delete timer;
+  delete python;   // create() allocates a new one, e.g. after clear command
+  python = NULL;
 }
 
 /* ----------------------------------------------------------------------
