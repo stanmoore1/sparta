@@ -544,7 +544,7 @@ index 601d0d52..8ecc97c1 100644
    int maxcell;             // size of cells
    int maxsplit;            // size of sinfo
 diff --git a/src/grid_collate.cpp b/src/grid_collate.cpp
-index 61517468..2110e30b 100644
+index 61517468..de269aa0 100644
 --- a/src/grid_collate.cpp
 +++ b/src/grid_collate.cpp
 @@ -18,6 +18,8 @@
@@ -803,7 +803,7 @@ index 61517468..2110e30b 100644
      if (icell >= nlocal) {
        proclist[nsend] = cells[icell].proc;
        in_rvous[m++] = ubuf(ids[i]).d;
-@@ -219,9 +216,131 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+@@ -219,9 +216,132 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
        out[icell][j] += out_rvous[m++];
    }
  
@@ -902,16 +902,17 @@ index 61517468..2110e30b 100644
 +void Grid::collate_vector_implicit(int n, cellint *ids,
 +                                   double *in, double *out)
 +{
-+  double **inrow,**outrow;
-+  memory->create(inrow,MAX(n,1),"grid:inrow");
-+  memory->create(outrow,MAX(nlocal,1),"grid:outrow");
++  double **inrow = (double **)
++    memory->smalloc((bigint) MAX(n,1)*sizeof(double *),"grid:inrow");
++  double **outrow = (double **)
++    memory->smalloc((bigint) MAX(nlocal,1)*sizeof(double *),"grid:outrow");
 +  for (int i = 0; i < n; i++) inrow[i] = &in[i];
 +  for (int i = 0; i < nlocal; i++) outrow[i] = &out[i];
 +
 +  collate_implicit(n,1,ids,inrow,outrow);
 +
-+  memory->destroy(inrow);
-+  memory->destroy(outrow);
++  memory->sfree(inrow);
++  memory->sfree(outrow);
 +}
 +
 +/* ----------------------------------------------------------------------
