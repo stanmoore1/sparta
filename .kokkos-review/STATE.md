@@ -19,3 +19,4 @@
 - Phase 6 (A/B every fix, user request 2026-10-05): protocol AB_PROTOCOL.md, clusters AB_CLUSTERS.md, results ab/AB1..AB9.md.
   9 agents launched. MPI+boundscheck builds of base/fixed compiling in scratchpad/bmpi_{base,fixed}. Then: write report (artifact).
   To resume: relaunch any ABn without "## STATUS: COMPLETE" with the same prompt (protocol resumes).
+- 2026-10-06 02:15 UTC: session limit killed AB2/3/5/8/9; relaunched (MPI builds now done). FX-followups fixer launched for FU-1..6.
