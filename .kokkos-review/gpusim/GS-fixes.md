@@ -22,6 +22,7 @@ positive control: A_sync np1 watch/stale/strict: `[stale] particle:ewhich: devic
 negative control: labels common to A and B (noise, same counts): particle:darray/ivector <- ParticleKokkos::grow_custom (host read during resize), particle:particles <- ParticleKokkos::grow (3 times). Stats/observables: A and B differ from step 50 on (before any removal; A and B differ in other fixed code paths), both statistically equal to CPU (step 300 np A 78050 / B 78067 / CPU see log.cpu, sum c 2115/2135). The stale ewhich did not change the observables in this deck (the collide kernel only consults ewhich for vibmode/custom copy, absent here), so wrongness is shown by the detector, not by output.
 necessary: YES (detector-shown under split memory: device collide kernel reads stale ewhich)
 complete: YES for the particle side (no remaining ewhich/eicol/edcol report in B); see FU-9 for the grid side.
+np4: A `particle:ewhich <- CollideVSSKokkos::collisions_one<0,0>` on all 4 ranks; B absent; common labels identical; step 300 A == B (np 77813, sum c 2101).
 verdict: NECESSARY (detector) + COMPLETE
 artifacts: $S/gpusim/GS-fixes/F-G13-4
 
