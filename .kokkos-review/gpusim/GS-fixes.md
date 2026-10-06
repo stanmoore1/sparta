@@ -127,3 +127,16 @@ complete: YES (B correct and detector-clean, np1/np4)
 verdict: NECESSARY+COMPLETE (split-memory clean)
 artifacts: $S/gpusim/GS-fixes/F-G18-1
 
+### F-G17-3 — compute surf/kk & isurf/grid/kk reallocate() mid-step recreated surf2tally (re-check under split memory)
+decks: AB5 F-G17-3/in.base (2d circle, compute surf n press, fix move/surf every 10 with zero displacement, NEV=10) np1; AB5 MPI in.exp_cs (explicit/distributed, fix balance 10 rcb part) np4; in.imp_igu (implicit ablate surfs, compute isurf/grid, fix balance 10, THR=180.5) np4. watch/stale/strict, label diff.
+positive control: A_sync: compute tallies 0 on every reallocate step: base np1 c_r = 0 0 at steps 70..100 while nscoll 48/50/43/66; exp_cs np4 c_cs 0 vs nscoll 88/100/114/147; imp_igu np4 c_ig 0 vs nscoll 185/186/172/163. B_sync: tally == nscoll on every line (base press 4.57e-20..6.26e-20). REPRODUCED (cpu-observable, also under split memory).
+detector: no A-only labels. B-only labels, all on the tally DualViews and all at allocation/teardown time:
+  compute surf/kk (base np1, exp_cs np4): `surf:array_surf_tally` and `surf:tally2surf`: device side read while host side is newer, from ~ComputeSurfKokkos() only.
+  compute isurf/grid/kk (imp_igu np4): `isurf/grid:array_surf_tally`/`tally2surf`: host-side and device-side reads of the stale side from ComputeISurfGridKokkos::init_normflux() (the grow_kokkos/DualView::resize B now does instead of re-creating the views, plus taking d_ handles right after it) and from the destructor.
+  Trace of surf:array_surf_tally in B (base): each step goes modify_device (kernel) -> resize (device newer, so resized on the device) -> sync_host -> modify_host (host-side post-processing) -> clear_sync_state at the next step. The kernel writes only after clear_sync_state, so no stale data reaches a consumer, and the outputs are exact (tally == nscoll on every line). These are benign accessor-order reports from B's resize-in-place design (A re-created the views, so it never had a pair that had diverged). Optional cleanup: take the d_ handles after the sync, and skip the host-newer state in the destructor.
+negative control: common label sets (grow/irregular noise) identical; non-reallocate output lines A == B.
+necessary: YES
+complete: YES (B correct on np1 and np4 for both computes); only benign B-only detector notes, listed above
+verdict: NECESSARY+COMPLETE (benign resize/destructor detector notes in B)
+artifacts: $S/gpusim/GS-fixes/F-G17-3
+
