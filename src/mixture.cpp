@@ -35,14 +35,16 @@ Mixture::Mixture(SPARTA *sparta, char *userid) : Pointers(sparta)
 {
   // mixture ID must be all alphanumeric chars or underscores
 
-  int n = strlen(userid) + 1;
-  id = new char[n];
-  strcpy(id,userid);
+  // check ID before allocating, so an error leaves nothing to free
 
+  int n = strlen(userid) + 1;
   for (int i = 0; i < n-1; i++)
-    if (!isalnum(id[i]) && id[i] != '_')
+    if (!isalnum(userid[i]) && userid[i] != '_')
       error->all(FLERR,
                  "Mixture ID must be alphanumeric or underscore characters");
+
+  id = new char[n];
+  strcpy(id,userid);
 
   // special default mixtures
 

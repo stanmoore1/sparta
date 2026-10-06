@@ -680,6 +680,24 @@ void FixEmitSurf::create_task(int icell)
 
 void FixEmitSurf::perform_task()
 {
+  // if global timestep was reset since tasks were created (e.g. fix dt/reset),
+  //   rescale non-subsonic FLOW insertion counts which are proportional to dt
+  // for n = constant or variable, ntarget is an area fraction, not dt dependent
+
+  if (!subsonic && npmode == FLOW && update->dt != dt) {
+    double dtratio = update->dt / dt;
+    for (int i = 0; i < ntask; i++) {
+      tasks[i].ntarget *= dtratio;
+      if (perspecies)
+        for (int isp = 0; isp < nspecies; isp++)
+          tasks[i].ntargetsp[isp] *= dtratio;
+      if (tasks[i].ntarget >= MAXSMALLINT)
+        error->one(FLERR,"Fix emit/surf insertion count exceeds 32-bit int");
+    }
+  }
+
+  dt = update->dt;
+
   if (!twopass) perform_task_onepass();
   else perform_task_twopass();
 }

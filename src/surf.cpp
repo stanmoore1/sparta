@@ -312,13 +312,27 @@ void Surf::init()
 
   bigint flag,allflag;
 
+  // scan each surf element exactly once across procs, so error counts are
+  //   not inflated by copies of distributed surfs in several procs' cells
+  // explicit distributed: mylines/mytris = surfs this proc uniquely owns
+  // all or implicit: lines/tris 0 to nlocal-1
+
+  Line *clines = lines;
+  Tri *ctris = tris;
+  int ncheck = nlocal;
+  if (distributed && !implicit) {
+    clines = mylines;
+    ctris = mytris;
+    ncheck = nown;
+  }
+
   flag = 0;
   if (domain->dimension == 2) {
-    for (int i = 0; i < nlocal; i++)
-      if (lines[i].type <= 0) flag++;
+    for (int i = 0; i < ncheck; i++)
+      if (clines[i].type <= 0) flag++;
   } else {
-    for (int i = 0; i < nlocal; i++)
-      if (tris[i].type <= 0) flag++;
+    for (int i = 0; i < ncheck; i++)
+      if (ctris[i].type <= 0) flag++;
   }
 
   if (distributed)
@@ -338,11 +352,11 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (lines[i].isc < 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (clines[i].isc < 0) flag++;
     } else {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (tris[i].isc < 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (ctris[i].isc < 0) flag++;
     }
 
     if (distributed)
@@ -363,11 +377,11 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (lines[i].isr >= 0 && sc[lines[i].isc]->allowreact == 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (clines[i].isr >= 0 && sc[clines[i].isc]->allowreact == 0) flag++;
     } else {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (tris[i].isr >= 0 && sc[tris[i].isc]->allowreact == 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (ctris[i].isr >= 0 && sc[ctris[i].isc]->allowreact == 0) flag++;
     }
 
     if (distributed)
@@ -388,14 +402,14 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++) {
-        if (!lines[i].transparent) continue;
-        if (!sc[lines[i].isc]->transparent) flag++;
+      for (int i = 0; i < ncheck; i++) {
+        if (!clines[i].transparent) continue;
+        if (!sc[clines[i].isc]->transparent) flag++;
       }
     } else {
-      for (int i = 0; i < nlocal+nghost; i++) {
-        if (!tris[i].transparent) continue;
-        if (!sc[tris[i].isc]->transparent) flag++;
+      for (int i = 0; i < ncheck; i++) {
+        if (!ctris[i].transparent) continue;
+        if (!sc[ctris[i].isc]->transparent) flag++;
       }
     }
 
@@ -2883,13 +2897,13 @@ int Surf::add_group(const char *id)
     error->all(FLERR,"Cannot have more than 32 surface groups");
 
   int n = strlen(id) + 1;
-  gnames[ngroup] = new char[n];
-  strcpy(gnames[ngroup],id);
-
   for (int i = 0; i < n-1; i++)
     if (!isalnum(id[i]) && id[i] != '_')
       error->all(FLERR,"Group ID must be alphanumeric or "
                  "underscore characters");
+
+  gnames[ngroup] = new char[n];
+  strcpy(gnames[ngroup],id);
 
   ngroup++;
   return ngroup-1;

@@ -95,6 +95,11 @@ int FixAdapt::setmask()
 
 void FixAdapt::init()
 {
+  // see doc/read_isurf.txt: implicit surf simulations cannot adapt the grid
+
+  if (surf->exist && surf->implicit)
+    error->all(FLERR,"Cannot use fix adapt with implicit surfaces");
+
   // re-check args in case computes or fixes changed
 
   adapt->check_args(nevery);

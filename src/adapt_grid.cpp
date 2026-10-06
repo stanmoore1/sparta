@@ -85,6 +85,11 @@ void AdaptGrid::command(int narg, char **arg)
   if (!grid->exist)
     error->all(FLERR,"Cannot adapt grid when grid is not defined");
 
+  // see doc/read_isurf.txt: implicit surf simulations cannot adapt the grid
+
+  if (surf->exist && surf->implicit)
+    error->all(FLERR,"Cannot adapt grid with implicit surfaces");
+
   if (narg < 1) error->all(FLERR,"Illegal adapt_grid command");
 
   // process command-line args
