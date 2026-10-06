@@ -125,3 +125,4 @@
 | FU-3b, FU-18 | emit (CPU+kk), compute_dt_grid.cpp | f9743740 |
 | R2-3 (FU-14) | compute_react_surf.cpp, surf.cpp | 8df7d59e |
 | auto_sync handoff | particle/grid/surf_kokkos.cpp | cc4ae24f |
+| R2-1 (FU-21) | grid_collate.cpp, grid.h, compute_(react_)isurf_grid | e7d8acdb |
