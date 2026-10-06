@@ -221,7 +221,7 @@ o.append('''<section style="display:flex;flex-direction:column;gap:12px"><h2>Met
 <div><h3>Builds</h3><p>A: commit e071055f. B: all review fixes. C: B plus follow-ups. Each as an OpenMP build with MPI stubs, and as a real-MPI build with Kokkos <code>DEBUG_BOUNDS_CHECK</code> so out-of-bounds view accesses abort.</p></div>
 <div><h3>Controls</h3><p>Positive control: an input on the buggy path where A fails (wrong value vs CPU or analytic, crash, bounds abort, NaN, hang, leak). Negative control: same code path without the trigger; A and B must agree.</p></div>
 <div><h3>Coverage</h3><p>Kernel paths (atomic, duplicated, sorted), 1 and 4 threads, 1 to 4 MPI ranks, 2D and 3D, each surface collision model. Standalone unit drivers for unreachable or library-only paths.</p></div>
-<div><h3>Regression</h3><p>All 141 example inputs with Kokkos on: thermo output identical between A and B except ambi, which now runs further; identical between B and C (141/141).</p></div>
+<div><h3>Regression</h3><p>All 141 example inputs with Kokkos on: thermo output identical between A and B except ambi, which now runs further; identical between B and the final build with all follow-up fixes (141/141).</p></div>
 <div><h3>Limits</h3><p>No GPU on the test machine, so bugs that need separate host and device memory cannot fail here. No <code>SPARTA_KOKKOS_EXACT</code> build was made.</p></div>
 <div><h3>Records</h3><p>Per-fix evidence: <code>.kokkos-review/ab/AB*.md</code>. Fix list and commits: <code>.kokkos-review/FIXES.md</code>.</p></div>
 </div></section>
