@@ -14,10 +14,29 @@ index c6d81de1..bc661346 100644
  
    // if using collective and the comm ring list is empty create
 diff --git a/src/KOKKOS/grid_kokkos.cpp b/src/KOKKOS/grid_kokkos.cpp
-index 7750e96a..339355f4 100644
+index 7750e96a..207d7276 100644
 --- a/src/KOKKOS/grid_kokkos.cpp
 +++ b/src/KOKKOS/grid_kokkos.cpp
-@@ -354,8 +354,23 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
+@@ -346,16 +346,40 @@ void GridKokkos::resync_after_host_change()
+ 
+ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
+ {
++  // before wrap_kokkos() the cell arrays are plain memory and there is
++  //   nothing to sync, but the custom vectors are DualViews from the start.
++  //   Let a host sync of those through: reallocate_custom() and
++  //   allocate_custom() claim the host before resizing so the resize happens
++  //   on the host.  Dropping that claim left the resize on the device, which
++  //   marks the device modified, and the restart values then written to the
++  //   host were never claimed -- the first sync(Device,CUSTOM_MASK) after the
++  //   wrap either aborted or, with the auto_sync refresh below, discarded them
++
+   if (sparta->kokkos->prewrap) {
+     if (space == Device)
+       error->one(FLERR,"Sync Device before wrap");
+-    else
+-      return;
++    mask &= CUSTOM_MASK;
++    if (!mask) return;
    }
  
    if (space == Device) {
@@ -42,6 +61,22 @@ index 7750e96a..339355f4 100644
      if (mask & CELL_MASK) k_cells.sync_device();
      if (mask & CINFO_MASK) k_cinfo.sync_device();
      if (mask & PCELL_MASK) k_pcells.sync_device();
+@@ -410,11 +434,13 @@ void GridKokkos::sync(ExecutionSpace space, unsigned int mask)
+ 
+ void GridKokkos::modify(ExecutionSpace space, unsigned int mask)
+ {
++  // as in sync(): before wrap only the custom vectors have a host side to claim
++
+   if (sparta->kokkos->prewrap) {
+     if (space == Device)
+       error->one(FLERR,"Modify Device before wrap");
+-    else
+-      return;
++    mask &= CUSTOM_MASK;
++    if (!mask) return;
+   }
+ 
+   if (space == Device) {
 diff --git a/src/KOKKOS/particle_kokkos.cpp b/src/KOKKOS/particle_kokkos.cpp
 index 8c47a14c..4f92b6a6 100644
 --- a/src/KOKKOS/particle_kokkos.cpp
