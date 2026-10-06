@@ -110,3 +110,16 @@ necessary: NOT shown (latent invariant/hygiene fix; no reachable failure).
 complete: both missing types (coll_tally, react_tally) get placeholders per the diff; not compiled/run with FIXED_LISTS here (fixer reports compile OK with -DSPARTA_KOKKOS_FIXED_LISTS).
 verdict: NOT-SHOWN-NECESSARY (unreachable / build-flag-only, latent); negative control passes
 artifacts: $S/ab/AB2/F-G06-1
+
+### F-G05-1 — Serial-only Kokkos build with `-k on t N>1`: move() read counters from the never-filled `reduce` struct (dispatch always uses ATOMIC_REDUCTION=0 for Serial)
+class: cpu-observable (Serial-only Kokkos build)
+builds: Serial-only Kokkos (KOKKOS_ENABLE_SERIAL only) from HEAD tree = spa_B_serial; spa_A_serial = identical tree with only the fix's Serial override line removed from update_kokkos.cpp (isolates F-G05-1)
+positive control: examples/circle (2d, 500 steps, stats ntouch ncomm nbound nexit nscheck nscoll) with -k on t 2 / t 4 | A t2,t4: ntouch nbound nexit nscheck nscoll all 0 every step (np 41032 correct) | B t2,t4: 46623 182 196 8208 205, full stats tables byte-identical to B t1 (= A t1); CPU ref 46907 200 207 8208 181 (same magnitude, different RNG) | REPRODUCED
+  also: 2d circle + surf_react prob (N->O p=0.5), 300 steps: A t4 ntouch/nexit/nscoll 0, B t4 == B t1 (42169 163 186); 3d examples/sphere 200 steps: A t4 all 0, B t4 == B t1 (96241 1083 613 31696 229; CPU 96085 1116 632 31509 257); 2d axisymmetric examples/axi 300 steps: A t4 all 0, B t4 == B t1 (35082 107 133 6213 94; CPU 35024 92 160 6244 104)
+negative control: Serial build t1 (A vs B identical, all 4 decks); CPU styles (identical); OpenMP builds A_opt vs B_opt t1 and t4 (identical stats tables, use_reduce path unchanged); A_mpi vs B_mpi -np 2 t 2 (identical; ncomm 80 nonzero)
+necessary: yes - A reports zero for every move counter whenever t>1 on a Serial-only build (2d, 2d+react, 3d, axi).
+complete: B matches its own t1 results exactly on 2d / 2d+surf_react / 3d / axi kernels at t2 and t4; counter zeroing and read-back both use use_reduce. nstuck/naxibad share the same read-back block (not triggered here). Siblings: other need_atomics/atomic_reduction users (compute_*_grid_kokkos sorted path, collide, comm, emit) pick kernel and output using the same condition with no Serial-specific dispatch override, so no other dispatch/read-back mismatch (grep: update_kokkos.cpp is the only file with a Serial dispatch special case).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G05-1 (spa_{A,B}_serial, r.sh, in.pos, in.react, sph/, axi/, omp.*, mpi.*)
+
+## STATUS: COMPLETE

@@ -6,3 +6,5 @@
 - FU-5 (from AB7, CPU): src/fix_ave_histo_weight.cpp:412 with region and no mix reads uninitialized mixture index -> segfault.
 - FU-6 (from AB1, perf regression caused by F-G21V-1): with react/retry yes, B no longer pads (correct per docs) but each retry grows plist by only DELTACELLCOUNT=2 -> many retries; B ~6x slower than A on heavy-growth case (in.one2 t1 0.22s vs 1.35s). Use geometric growth (e.g. max(+DELTA, 1.5x)) in retry grow requests.
 - FU-7 (from AB1, low): kk TCE prob>1 warning fires 25/30 seeds vs CPU 16/30 (p~0.02); same formula -> possible high-energy collision sampling difference kk vs CPU. Investigate only.
+- FU-8 (from AB2, F-G09-4a INCOMPLETE): src/KOKKOS/compute_surf_kokkos.cpp ~189/201 exact-name match "global"/"prob" for surf_react; explicit prob/kk or global/kk + compute surf -> "Unknown Kokkos surface reaction method" (line 214). Test deck: scratchpad/ab/AB2/F-G09-4/in.sr_kk.
+- FU-9 (from AB2, latent): GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) lacks the device sync of ewhich/eicol/edcol like F-G13-4.
