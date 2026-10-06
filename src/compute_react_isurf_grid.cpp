@@ -144,12 +144,10 @@ void ComputeReactISurfGrid::init()
   bigint flag = 0;
   if (dim == 2) {
     for (int i = 0; i < nslocal; i++) {
-      if (!(lines[i].mask & groupbit)) continue;
       if (lines[i].isr != isr) flag++;
     }
   } else {
     for (int i = 0; i < nslocal; i++) {
-      if (!(tris[i].mask & groupbit)) continue;
       if (tris[i].isr != isr) flag++;
     }
   }
@@ -222,14 +220,12 @@ void ComputeReactISurfGrid::surf_tally(double dtremain,
   if (reaction == 0) return;
   reaction--;
 
-  // skip if isurf not in surface group
-  // or if this surf's reaction model is not a match
+  // skip if this surf's reaction model is not a match
+  // groupbit is a grid group, applied to cells in post_process_grid()
 
   if (dim == 2) {
-    if (!(lines[isurf].mask & groupbit)) return;
     if (lines[isurf].isr != isr) return;
   } else {
-    if (!(tris[isurf].mask & groupbit)) return;
     if (tris[isurf].isr != isr) return;
   }
 
