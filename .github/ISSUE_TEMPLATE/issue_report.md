@@ -1,3 +1,8 @@
+---
+name: Bug Report or Enhancement Suggestion
+about: Report a bug in SPARTA or suggest an enhancement
+---
+
 ## Summary
 
 _Please provide a brief description of the issue_

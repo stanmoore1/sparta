@@ -77,6 +77,21 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Modules)
 set(SPARTA_CMAKE_COMMON_DIR ${SPARTA_CMAKE_DIR}/common)
 # ######### END   SET COMMON DIRS ##########
 
+# compiling, installing, or running SPARTA as superuser (root) is strongly
+# discouraged. warn about it.
+if(CMAKE_HOST_UNIX)
+  execute_process(COMMAND id -u OUTPUT_VARIABLE _SPARTA_USER_ID
+                  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(_SPARTA_USER_ID STREQUAL "0")
+    message(
+      WARNING
+        "SPARTA is being configured as superuser (root).  Compiling, "
+        "installing, or running SPARTA as superuser is strongly discouraged.\n"
+        "For more information see "
+        "https://github.com/sparta/sparta/blob/master/SECURITY.md")
+  endif()
+endif()
+
 # ######### BEGIN CHECK BUILD DIRECTORY ##########
 # Refuse to generate into the SPARTA source tree.
 #

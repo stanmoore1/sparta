@@ -12,6 +12,10 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# the jobs only need to read the repository contents
+permissions:
+  contents: read
+
 # Define jobs: mpi, mpi-stubs, mpi-kokkos-exact, and bigbig
 # Each jobs runs on ubuntu-22.04 and uses the cmake build system. All jobs
 # enable the FFT package (PKG_FFT). All jobs except for bigbig run ctest.
@@ -24,6 +28,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     # Make the apt download cache writable so actions/cache can restore .deb
     # files into it before "apt install" runs. libvtk9-dev pulls in a large
@@ -79,6 +85,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     - name: Configure
       run: |
@@ -110,6 +118,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     - name: Install Dependencies
       run: sudo apt install openmpi-bin libopenmpi-dev
@@ -149,6 +159,8 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: false
 
     - name: Install Dependencies
       run: sudo apt install openmpi-bin libopenmpi-dev
