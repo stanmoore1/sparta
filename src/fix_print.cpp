@@ -21,6 +21,7 @@
 #include "variable.h"
 #include "memory.h"
 #include "error.h"
+#include "sparta_masks.h"
 
 using namespace SPARTA_NS;
 
@@ -89,6 +90,13 @@ FixPrint::FixPrint(SPARTA *sparta, int narg, char **arg) :
   }
 
   delete [] title;
+
+  // printing touches no particle data, so the Kokkos wrapper around this fix
+  //   need not push particles back to the device afterwards.  datamask_read
+  //   stays ALL_MASK: the format string may contain an equal-style variable
+  //   that references a host compute over particles
+
+  datamask_modify = EMPTY_MASK;
 }
 
 /* ---------------------------------------------------------------------- */

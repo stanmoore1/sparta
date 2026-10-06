@@ -245,7 +245,7 @@ class Surf : protected Pointers {
   virtual void grow(int);
   virtual void grow_own(int);
 
-  bigint memory_usage();
+  virtual bigint memory_usage();
 
   // surf_collate.cpp
   // including callback functions

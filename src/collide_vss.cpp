@@ -984,7 +984,7 @@ void CollideVSS::read_param_file(char *fname)
   FILE *fp = fopen(fname,"r");
   if (fp == NULL) {
     char str[128];
-    sprintf(str,"Cannot open VSS parameter file %s",fname);
+    snprintf(str,sizeof(str),"Cannot open VSS parameter file %s",fname);
     error->one(FLERR,str);
   }
 
@@ -1070,7 +1070,7 @@ void CollideVSS::read_param_file(char *fname)
 
     if (params[i][i].diam < 0.0) {
       char str[128];
-      sprintf(str,"Species %s did not appear in VSS parameter file",
+      snprintf(str,sizeof(str),"Species %s did not appear in VSS parameter file",
               particle->species[i].id);
       error->one(FLERR,str);
     }

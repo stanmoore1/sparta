@@ -1416,7 +1416,7 @@ void Custom::read_coarse_files(char *fname, int numfile, int colcount)
 
   if (count_all) {
     char str[128];
-    sprintf(str,"%d coarse grid points are outside simulation box",count_all);
+    snprintf(str,sizeof(str),"%d coarse grid points are outside simulation box",count_all);
     error->all(FLERR,str);
   }
 

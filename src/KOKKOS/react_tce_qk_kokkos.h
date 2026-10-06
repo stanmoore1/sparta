@@ -119,11 +119,16 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
               eccq = pre_etrans + ip->evib;
               maxlev = static_cast<int> (eccq * inverse_kT);
               if (eccq > r->d_coeff[1]) {
+                // sample into a local prob, not react_prob: react_prob feeds
+                //   the "fired" test below, and a rejected draw must not leave
+                //   a fractional value in it.  Mirrors ReactTCEQK::attempt()
+                double prob = 0.0;
                 do {
                   iv = static_cast<int> (rand_gen.drand()*(maxlev+0.99999999));
                   double evib = static_cast<double> (iv / inverse_kT);
-                  if (evib < eccq) react_prob = pow(1.0-evib/eccq,1.5-omega);
-                } while (rand_gen.drand() < react_prob);
+                  if (evib < eccq) prob = pow(1.0-evib/eccq,1.5-omega);
+                  else prob = 0.0;
+                } while (rand_gen.drand() < prob);
                 ilevel = static_cast<int> (fabs(r->d_coeff[4]) * inverse_kT);
                 if (iv >= ilevel) react_prob = 1.0;
               }
@@ -138,6 +143,7 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                 iv = rand_gen.drand()*(maxlev+0.99999999);
                 double evib = static_cast<double> (iv * boltz*d_species[mspec].vibtemp[0]);
                 if (evib < eccq) prob = pow(1.0-evib/eccq,1.5 - r->d_coeff[6]);
+                else prob = 0.0;
               } while (rand_gen.drand() < prob);
               ilevel = static_cast<int> (fabs(r->d_coeff[4]/boltz/d_species[mspec].vibtemp[0]));
               if (iv >= ilevel) react_prob = 1.0;

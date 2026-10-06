@@ -65,11 +65,7 @@ FixEmitFaceKokkos::FixEmitFaceKokkos(SPARTA *sparta, int narg, char **arg) :
             , sparta
 #endif
             ),
-  particle_kk_copy(sparta),
-  regblock_kk_copy(sparta),
-  regcylinder_kk_copy(sparta),
-  regplane_kk_copy(sparta),
-  regsphere_kk_copy(sparta)
+  particle_kk_copy(sparta)
 {
   kokkos_flag = 1;
   execution_space = Device;
@@ -77,6 +73,7 @@ FixEmitFaceKokkos::FixEmitFaceKokkos(SPARTA *sparta, int narg, char **arg) :
   datamask_modify = EMPTY_MASK;
 
   region_flag = 0;
+  nregion_token = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -141,6 +138,11 @@ void FixEmitFaceKokkos::init()
   k_cummulative.modify_host();
   k_mspecies.modify_host();
   k_fraction.modify_host();
+  // the region is fixed for the run; flatten it once here rather than
+  //   rebuilding and re-uploading the token stream in perform_task()
+
+  flatten_region();
+
 }
 
 /* ----------------------------------------------------------------------
@@ -159,6 +161,35 @@ void FixEmitFaceKokkos::create_tasks()
   k_tasks.modify_host();
   if (perspecies) k_ntargetsp.modify_host();
   if (subsonic_style == PONLY) k_vscale.modify_host();
+}
+
+/* ----------------------------------------------------------------------
+   flatten the region to a device-resident postfix token stream, so the
+   emit kernel needs no virtual dispatch and no typed copy per region style.
+   the stream carries each sub-region's interior/exterior sense and the
+   composite's own, so nothing else needs to be passed along.
+   see region_prim_kokkos.h
+
+   a region is fixed for the duration of a run -- Region exposes no move or
+   rotate, and "region" is an input command -- so this runs from init()
+   rather than from perform_task(), which would rebuild the stream on the
+   host and re-upload it every step
+------------------------------------------------------------------------- */
+
+void FixEmitFaceKokkos::flatten_region()
+{
+  region_flag = 0;
+  nregion_token = 0;
+  if (region) {
+    KokkosBase* region_kkbase = dynamic_cast<KokkosBase*>(region);
+    if (!region->kokkos_flag || !region_kkbase)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    nregion_token = region_kkbase->flatten_region_kokkos(k_region_tokens);
+    if (nregion_token <= 0)
+      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+    d_region_tokens = k_region_tokens.view_device();
+    region_flag = 1;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -186,9 +217,14 @@ void FixEmitFaceKokkos::perform_task()
   // ntarget/ninsert is either perspecies or for all species
 
   // copy needed task data to device
+  // the kernels below read d_tasks whether or not perspecies is set, so tasks
+  //   is synced unconditionally and ntargetsp in addition, the same shape as
+  //   the second copy further down this routine.  The if/else this replaces
+  //   left tasks unsynced under perspecies and was only harmless because that
+  //   later copy covered it
 
+  k_tasks.sync_device();
   if (perspecies) k_ntargetsp.sync_device();
-  else k_tasks.sync_device();
 
   auto ninsert_dim1 = perspecies ? nspecies : 1;
   if (d_ninsert.extent(0) < ntask * ninsert_dim1)
@@ -267,31 +303,12 @@ void FixEmitFaceKokkos::perform_task()
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  if (region && !region->kokkos_flag)
-    error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
+  // flatten the region to a device-resident postfix token stream, so the
+  //   kernel below needs no virtual dispatch and no typed copy per region
+  //   style.  the stream carries each sub-region's interior/exterior sense
+  //   and the composite's own, so nothing else needs to be passed along.
+  //   see region_prim_kokkos.h
 
-  region_flag = 0;
-  if (region) {
-    if (strstr(region->style,"block") != NULL) {
-      RegBlockKokkos* region_kk = ((RegBlockKokkos*)region);
-      regblock_kk_copy.copy(region_kk);
-      region_flag = 1;
-    } else if (strstr(region->style,"cylinder") != NULL) {
-      RegCylinderKokkos* region_kk = ((RegCylinderKokkos*)region);
-      regcylinder_kk_copy.copy(region_kk);
-      region_flag = 2;
-    } else if (strstr(region->style,"plane") != NULL) {
-      RegPlaneKokkos* region_kk = ((RegPlaneKokkos*)region);
-      regplane_kk_copy.copy(region_kk);
-      region_flag = 3;
-    } else if (strstr(region->style,"sphere") != NULL) {
-      RegSphereKokkos* region_kk = ((RegSphereKokkos*)region);
-      regsphere_kk_copy.copy(region_kk);
-      region_flag = 4;
-    } else {
-      error->all(FLERR,"KOKKOS package does not (yet) support chosen region style");
-    }
-  }
 
   int nsingle_reduce = 0;
   copymode = 1;
@@ -462,15 +479,9 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
         if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
         else x[2] = 0.0;
 
-        if (region_flag == 1) {
-          if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 2) {
-          if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 3) {
-          if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        } else if (region_flag == 4) {
-          if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-        }
+        if (region_flag &&
+            !region_match_kk(d_region_tokens,nregion_token,
+                             x[0],x[1],x[2])) continue;
 
         nactual++;
         d_keep(cand) = 1;
@@ -523,15 +534,9 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_perform_task, const int &i, in
       if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
       else x[2] = 0.0;
 
-      if (region_flag == 1) {
-        if (!regblock_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 2) {
-        if (!regcylinder_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 3) {
-        if (!regplane_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      } else if (region_flag == 4) {
-        if (!regsphere_kk_copy.obj.match_kokkos(x[0], x[1], x[2])) continue;
-      }
+      if (region_flag &&
+          !region_match_kk(d_region_tokens,nregion_token,
+                           x[0],x[1],x[2])) continue;
 
       nactual++;
       d_keep(cand) = 1;

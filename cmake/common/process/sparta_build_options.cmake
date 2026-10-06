@@ -232,6 +232,16 @@ endif()
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address")
   endif()
+
+  # SPARTA_KOKKOS_FIXED_LISTS restores the fixed-size KKCopy arrays for the
+  # per-type tally compute lists instead of runtime-sized device buffers.  The
+  # buffers lift the instance caps; the arrays keep every compute inside the
+  # kernel functor.  Which performs better is hardware-dependent -- functor
+  # size trades against occupancy and data locality -- so both are buildable.
+  if(SPARTA_KOKKOS_FIXED_LISTS)
+    set(SPARTA_DEFAULT_CXX_COMPILE_FLAGS -DSPARTA_KOKKOS_FIXED_LISTS
+                                         ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+  endif()
   # PKG_KOKKOS depends on BUILD_KOKKOS
   set(BUILD_KOKKOS ON)
 endif()

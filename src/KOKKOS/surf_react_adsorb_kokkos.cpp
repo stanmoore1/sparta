@@ -19,6 +19,7 @@
 #include "update.h"
 #include "collide.h"
 #include "surf.h"
+#include "surf_kokkos.h"
 #include "surf_collide.h"
 #include "random_knuth.h"
 #include "comm.h"
@@ -42,11 +43,6 @@ static void cmodel_sizes(int model, int &nc, int &nf)
   case SRA_KK::TD:        nc = 8; nf = 3; break;
   case SRA_KK::IMPULSIVE: nc = 11; nf = 4; break;
   }
-}
-
-static bool cmodel_unsupported(int m)
-{
-  return (m == SRA_KK::ADIABATIC || m == SRA_KK::IMPULSIVE);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -110,20 +106,15 @@ void SurfReactAdsorbKokkos::init()
 {
   SurfReactAdsorb::init();
 
-  // Kokkos GS adsorb currently supports a restricted feature set;
-  //   error clearly at init rather than silently producing wrong results
+  // SurfReactAdsorb::init()/init_surf() populate the per-surf custom arrays
+  //   (area, weight, tau) on the host through surf->edvec
+  //   (surf_react_adsorb.cpp:551-552, :460-461, :531).  That is a one-time
+  //   setup write and nothing claims it, so the first sync(Device,CUSTOM_MASK)
+  //   copies nothing and the device starts from whatever add_custom() left --
+  //   reported by the watch detector as "surf:dvector ... the device keeps
+  //   stale data" at element 0.
 
-
-  for (int i = 0; i < nlist_gs; i++) {
-    OneReaction_GS *r = &rlist_gs[i];
-    if (!r->active) continue;
-    // post-reaction collision model (cmodel) scatter on device supports
-    //   NOMODEL/SPECULAR/DIFFUSE/CLL/TD; adiabatic/impulsive deferred
-
-    if (cmodel_unsupported(r->cmodel_ip) || cmodel_unsupported(r->cmodel_jp))
-      error->all(FLERR,"Kokkos surf_react adsorb does not yet support reactions with "
-                 "an adiabatic or impulsive post-reaction collision model");
-  }
+  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
 
   Kokkos::deep_copy(d_nsingle,0);
   Kokkos::deep_copy(d_tally_single,0);
@@ -141,6 +132,24 @@ void SurfReactAdsorbKokkos::init()
    cmodel type, each wrapping that cmodel's RanKnuth so the device scatter
    matches the host SurfCollide::wrapper bit-for-bit (EXACT serial)
 ------------------------------------------------------------------------- */
+
+/* ----------------------------------------------------------------------
+   SurfReactAdsorb::grid_changed() re-spreads the per-surf custom values to
+     the local lines/tris on the host (surf_react_adsorb.cpp:1262-1266).  Like
+     init(), nothing claims that write, so the following
+     sync(Device,CUSTOM_MASK) copies nothing and the device keeps the values
+     from before the grid changed.  Reported by the watch detector as
+     "surf/spread:edarray_local_array ... the device keeps stale data" on the
+     three ps and gs_ps adsorb decks.
+------------------------------------------------------------------------- */
+
+void SurfReactAdsorbKokkos::grid_changed()
+{
+  SurfReactAdsorb::grid_changed();
+  ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
+}
+
+/* ---------------------------------------------------------------------- */
 
 void SurfReactAdsorbKokkos::init_cmodels_kokkos()
 {
@@ -199,8 +208,27 @@ void SurfReactAdsorbKokkos::init_reactions_gs_kokkos()
     h_reactions_n(i) = n;
     nmax = MAX(nmax,n);
   }
+
+  // scratch for the per-reaction probability list react_kokkos() builds, in
+  //   whichever of the two representations this build selected (see the
+  //   SRA_KK_MAXPERSPECIES comment in the header)
+
+#ifdef SPARTA_KOKKOS_FIXED_LISTS
   if (nmax > SRA_KK_MAXPERSPECIES)
     error->all(FLERR,"Too many Kokkos surf_react adsorb reactions per species");
+#else
+
+  // one row per concurrent thread, claimed by prob_token.acquire() for the
+  //   duration of a react_kokkos() call.  prob_token.size() is the upper bound
+  //   acquire() can return: max_hardware_threads() on a host backend, but
+  //   maxThreadsPerMultiProcessor*multiProcessorCount on a GPU, so this
+  //   allocation is measured in tens of MB there, not in KB.  MAX(nmax,1)
+  //   keeps the view non-null for a PS-only run (no GS reactions, so
+  //   react_kokkos() returns before it indexes a row)
+
+  d_prob = Kokkos::View<double**,DeviceType>("sra:prob",
+                                             prob_token.size(),MAX(nmax,1));
+#endif
 
   d_list = DAT::t_int_2d("surf_react_adsorb:list",nspecies,MAX(nmax,1));
   auto h_list = Kokkos::create_mirror_view(d_list);
@@ -483,6 +511,23 @@ void SurfReactAdsorbKokkos::tally_update()
   //   (and update_state_surf clears mark)
 
   SurfReactAdsorb::tally_update();
+
+  // update_state_face()/update_state_surf() above rewrite the per-surf custom
+  //   arrays (surf->edvec_local, surf_react_adsorb.cpp:612-613) on the host.
+  //   Nothing here claimed them, so a later SurfKokkos::sync(Device,
+  //   CUSTOM_MASK) finds clean counters, copies nothing, and the device keeps
+  //   the previous step's surface state -- invisible where both sides share
+  //   one allocation, wrong on a GPU.  The watch detector reports it as
+  //   "surf:dvector ... this sync_device has nothing to copy".
+  //   Go through the SurfKokkos wrapper, not the dual views directly, so the
+  //   mask reaches the custom arrays.
+  //   Only on a sync step: SurfReactAdsorb::tally_update() returns at its top
+  //   on every other one (surf_react_adsorb.cpp:1194), so nothing has touched
+  //   the custom arrays and claiming them would make the next
+  //   sync(Device,CUSTOM_MASK) re-upload the owned *and* spread arrays for
+  //   nothing.
+
+  if (sync_step) ((SurfKokkos *) surf)->modify(Host,CUSTOM_MASK);
 
   // PS chemistry may have appended particles on the host
 

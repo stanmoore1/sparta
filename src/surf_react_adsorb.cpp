@@ -1743,7 +1743,7 @@ void SurfReactAdsorb::readfile_gs(char *fname)
     fp = fopen(fname,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open reaction file %s",fname);
+      snprintf(str,sizeof(str),"Cannot open reaction file %s",fname);
       error->one(FLERR,str);
     }
   }
@@ -2515,7 +2515,7 @@ void SurfReactAdsorb::readfile_ps(char *fname)
     fp = fopen(fname,"r");
     if (fp == NULL) {
       char str[128];
-      sprintf(str,"Cannot open reaction file %s",fname);
+      snprintf(str,sizeof(str),"Cannot open reaction file %s",fname);
       error->one(FLERR,str);
     }
   }

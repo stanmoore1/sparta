@@ -174,6 +174,13 @@ int ComputeReactSurfKokkos::tallyinfo(surfint *&ptr)
     tally2surf[istart] = tally2surf[iend];
   }
 
+  // see ComputeSurfKokkos::tallyinfo(): the compression rewrites the host side
+  //   in place and the caller consumes it immediately, so the two sides are
+  //   deliberately apart until the next clear()
+
+  k_tally2surf.clear_sync_state();
+  k_array_surf_tally.clear_sync_state();
+
   return ntally;
 }
 

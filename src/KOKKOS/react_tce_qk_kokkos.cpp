@@ -36,7 +36,11 @@ void ReactTCEQKKokkos::init()
 
   ReactBirdKokkos::init();
 
-  // do not allow recombination reactions (not supported)
+  // these two restrictions mirror the host (react_tce_qk.cpp:44-52) exactly --
+  //   same condition, same message.  They are NOT Kokkos limitations:
+  //   react tce/qk does not support recombination or compute_chem_rates on
+  //   the CPU either, so lifting them here would diverge from the host.
+  //   Only react tce supports both, and react_tce_kokkos.h ports that.
 
   for (int i = 0; i < nlist; i++)
     if (rlist[i].active && rlist[i].type == RECOMBINATION)

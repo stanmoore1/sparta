@@ -34,6 +34,8 @@ class SurfCollideVanishKokkos : public SurfCollideVanish {
   ~SurfCollideVanishKokkos() {}
   void pre_collide();
   void post_collide();
+  void backup();
+  void restore();
 
  private:
 

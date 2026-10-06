@@ -31,6 +31,8 @@
 #include "sparta_masks.h"
 #include "kokkos.h"
 
+#include <type_traits>
+
 using namespace SPARTA_NS;
 using namespace MathConst;
 
@@ -42,7 +44,6 @@ enum{LT,LE,GT,GE,EQ,NEQ,BETWEEN};
 #define DELTA 4
 #define EPSSQ 1.0e-12
 #define BIG 1.0e20
-#define MAXGROUP 32
 
 /* ---------------------------------------------------------------------- */
 
@@ -206,8 +207,8 @@ void SurfKokkos::grow_own(int old)
       if (mylines == NULL)
           surf_kk->k_mylines = tdual_line_1d("surf:mylines",nown);
       else {
-        surf_kk->sync(Host,LINE_MASK);
-        surf_kk->modify(Host,LINE_MASK); // force resize on host
+        surf_kk->sync(Host,MYLINE_MASK);
+        surf_kk->modify(Host,MYLINE_MASK); // force resize on host
         surf_kk->k_mylines.resize(nown);
       }
       mylines = surf_kk->k_mylines.view_host().data();
@@ -215,8 +216,8 @@ void SurfKokkos::grow_own(int old)
       if (mytris == NULL)
           surf_kk->k_mytris = tdual_tri_1d("surf:mytris",nown);
       else {
-        surf_kk->sync(Host,TRI_MASK);
-        surf_kk->modify(Host,TRI_MASK); // force resize on host
+        surf_kk->sync(Host,MYTRI_MASK);
+        surf_kk->modify(Host,MYTRI_MASK); // force resize on host
         surf_kk->k_mytris.resize(nown);
       }
       mytris = surf_kk->k_mytris.view_host().data();
@@ -237,6 +238,8 @@ void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
       modify(Host,mask);
     if (mask & LINE_MASK) k_lines.sync_device();
     if (mask & TRI_MASK) k_tris.sync_device();
+    if (mask & MYLINE_MASK) k_mylines.sync_device();
+    if (mask & MYTRI_MASK) k_mytris.sync_device();
     if (mask & CUSTOM_MASK) {
       if (ncustom) {
         if (ncustom_ivec) {
@@ -271,6 +274,8 @@ void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
   } else {
     if (mask & LINE_MASK) k_lines.sync_host();
     if (mask & TRI_MASK) k_tris.sync_host();
+    if (mask & MYLINE_MASK) k_mylines.sync_host();
+    if (mask & MYTRI_MASK) k_mytris.sync_host();
     if (mask & CUSTOM_MASK) {
       if (ncustom_ivec) {
         for (int i = 0; i < ncustom_ivec; i++) {
@@ -318,6 +323,8 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
   if (space == Device) {
     if (mask & LINE_MASK) k_lines.modify_device();
     if (mask & TRI_MASK) k_tris.modify_device();
+    if (mask & MYLINE_MASK) k_mylines.modify_device();
+    if (mask & MYTRI_MASK) k_mytris.modify_device();
     if (mask & CUSTOM_MASK) {
       if (ncustom) {
         if (ncustom_ivec)
@@ -335,6 +342,27 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
         if (ncustom_darray)
           for (int i = 0; i < ncustom_darray; i++)
             k_edarray.view_host()[i].k_view.modify_device();
+
+        // sync() reads the spread (_local) views under this same mask, so a
+        //   claim that marked only the owned ones could never be matched: a
+        //   host write to a spread array stayed unclaimed and the following
+        //   sync_device copied nothing.  Mark both halves.
+
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec_local.view_host()[i].k_view.modify_device();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray_local.view_host()[i].k_view.modify_device();
       }
     }
 
@@ -343,6 +371,8 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
   } else {
     if (mask & LINE_MASK) k_lines.modify_host();
     if (mask & TRI_MASK) k_tris.modify_host();
+    if (mask & MYLINE_MASK) k_mylines.modify_host();
+    if (mask & MYTRI_MASK) k_mytris.modify_host();
     if (mask & CUSTOM_MASK) {
       if (ncustom) {
         if (ncustom_ivec)
@@ -360,7 +390,75 @@ void SurfKokkos::modify(ExecutionSpace space, unsigned int mask)
         if (ncustom_darray)
           for (int i = 0; i < ncustom_darray; i++)
             k_edarray.view_host()[i].k_view.modify_host();
+
+        // sync() reads the spread (_local) views under this same mask, so a
+        //   claim that marked only the owned ones could never be matched: a
+        //   host write to a spread array stayed unclaimed and the following
+        //   sync_device copied nothing.  Mark both halves.
+
+        if (ncustom_ivec)
+          for (int i = 0; i < ncustom_ivec; i++)
+            k_eivec_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_iarray)
+          for (int i = 0; i < ncustom_iarray; i++)
+            k_eiarray_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_dvec)
+          for (int i = 0; i < ncustom_dvec; i++)
+            k_edvec_local.view_host()[i].k_view.modify_host();
+
+        if (ncustom_darray)
+          for (int i = 0; i < ncustom_darray; i++)
+            k_edarray_local.view_host()[i].k_view.modify_host();
       }
     }
   }
+}
+
+/* ----------------------------------------------------------------------
+   memory usage of Kokkos-managed data
+   Surf::memory_usage() is deliberately not called: the lines/tris and
+     mylines/mytris counts it computes describe the host mirrors of the
+     DualViews below.  its one non-Kokkos term, the per-surf int array in
+     the all-surfs branch, is carried over here
+------------------------------------------------------------------------- */
+
+bigint SurfKokkos::memory_usage()
+{
+  const bool device_distinct =
+    !std::is_same<DeviceType::memory_space,Kokkos::HostSpace>::value;
+
+  bigint bytes = 0;
+  if (!implicit && !distributed) bytes += (bigint) nlocal * sizeof(int);
+
+  bytes += MemKK::memory_usage(k_lines.view_host());
+  bytes += MemKK::memory_usage(k_tris.view_host());
+  bytes += MemKK::memory_usage(k_mylines.view_host());
+  bytes += MemKK::memory_usage(k_mytris.view_host());
+  for (int i = 0; i < ncustom_ivec; i++)
+    bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_iarray; i++)
+    bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_dvec; i++)
+    bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_host());
+  for (int i = 0; i < ncustom_darray; i++)
+    bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_host());
+
+  if (device_distinct) {
+    bytes += MemKK::memory_usage(k_lines.view_device());
+    bytes += MemKK::memory_usage(k_tris.view_device());
+    bytes += MemKK::memory_usage(k_mylines.view_device());
+    bytes += MemKK::memory_usage(k_mytris.view_device());
+    for (int i = 0; i < ncustom_ivec; i++)
+      bytes += MemKK::memory_usage(k_eivec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_iarray; i++)
+      bytes += MemKK::memory_usage(k_eiarray.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_dvec; i++)
+      bytes += MemKK::memory_usage(k_edvec.view_host()[i].k_view.view_device());
+    for (int i = 0; i < ncustom_darray; i++)
+      bytes += MemKK::memory_usage(k_edarray.view_host()[i].k_view.view_device());
+  }
+
+  return bytes;
 }

@@ -459,7 +459,7 @@ void Stats::modify_params(int narg, char **arg)
           error->all(FLERR,
                      "Stats_modify int format does not contain d character");
         char str[8];
-        sprintf(str,"%s",BIGINT_FORMAT);
+        snprintf(str,sizeof(str),"%s",BIGINT_FORMAT);
         *ptr = '\0';
         sprintf(format_bigint_user,"%s%s%s",format_int_user,&str[1],ptr+1);
         *ptr = 'd';

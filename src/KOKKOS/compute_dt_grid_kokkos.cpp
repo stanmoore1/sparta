@@ -108,6 +108,9 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
     if (!ftau->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute dt/grid/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(ftau);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (tau_index == 0)
       d_tau_vector = computeKKBase->d_vector_grid;
     else {
@@ -141,6 +144,9 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
     if (!ftemp->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute dt/grid/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(ftemp);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (temp_index == 0)
       d_temp_vector = computeKKBase->d_vector_grid;
     else {
@@ -174,6 +180,9 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
     if (!fusq->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute dt/grid/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(fusq);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (usq_index == 0)
       d_usq_vector = computeKKBase->d_vector_grid;
     else {
@@ -207,6 +216,9 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
     if (!fvsq->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute dt/grid/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(fvsq);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (vsq_index == 0)
       d_vsq_vector = computeKKBase->d_vector_grid;
     else {
@@ -240,6 +252,9 @@ void ComputeDtGridKokkos::compute_per_grid_kokkos()
     if (!fwsq->kokkos_flag)
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute dt/grid/kk");
     KokkosBase* computeKKBase = dynamic_cast<KokkosBase*>(fwsq);
+    // a fix keeps its per-grid output between invocations and grid migration
+    // can leave it current on the host alone, so ask for the device copy
+    if (computeKKBase) computeKKBase->sync_pergrid_device_kokkos();
     if (wsq_index == 0)
       d_wsq_vector = computeKKBase->d_vector_grid;
     else {

@@ -207,6 +207,9 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
       Fix *fix = modify->fix[vidx];
 
       KokkosBase* fixKKBase = dynamic_cast<KokkosBase*>(fix);
+      // a fix keeps its per-grid output between invocations and grid migration
+      // can leave it current on the host alone, so ask for the device copy
+      if (fixKKBase) fixKKBase->sync_pergrid_device_kokkos();
 
       if (!fixKKBase || !fix->kokkos_flag || !fix->per_grid_flag)
         error->all(FLERR,"Unsupported fix used by compute fft/grid/kk");
@@ -526,7 +529,13 @@ void ComputeFFTGridKokkos::fft_create()
 
   // create FFT plan
 
-  int collective_flag = 0; // not yet supported in Kokkos version
+  // collective remap is not implemented in the Kokkos remap (see the comment
+  //   in RemapKokkos2d::remap_2d_kokkos).  this matches the host on every
+  //   platform that is not Blue Gene: ComputeFFTGrid sets collective_flag
+  //   from #ifdef __bg__ and uses 0 otherwise, so there is no user-visible
+  //   setting being dropped here
+
+  int collective_flag = 0;
   int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
 
   int tmp;
@@ -710,7 +719,7 @@ void ComputeFFTGridKokkos::print_FFT_info()
 {
   if (comm->me == 0) {
     char str[64];
-    sprintf(str,"Using " SPARTA_FFT_PREC " precision " SPARTA_FFT_KOKKOS_LIB " for FFTs\n");
+    snprintf(str,sizeof(str),"Using " SPARTA_FFT_PREC " precision " SPARTA_FFT_KOKKOS_LIB " for FFTs\n");
     if (screen) fprintf(screen,"%s",str);
     if (logfile) fprintf(logfile,"%s",str);
   }

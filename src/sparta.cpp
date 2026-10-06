@@ -282,7 +282,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       if (partscreenflag == 0)
        if (screenflag == 0) {
          char str[32];
-         sprintf(str,"screen.%d",universe->iworld);
+         snprintf(str,sizeof(str),"screen.%d",universe->iworld);
          screen = fopen(str,"w");
          if (screen == NULL) error->one(FLERR,"Cannot open screen file");
        } else if (strcmp(arg[screenflag],"none") == 0)
@@ -306,7 +306,7 @@ SPARTA::SPARTA(int narg, char **arg, MPI_Comm communicator)
       if (partlogflag == 0)
        if (logflag == 0) {
          char str[32];
-         sprintf(str,"log.sparta.%d",universe->iworld);
+         snprintf(str,sizeof(str),"log.sparta.%d",universe->iworld);
          logfile = fopen(str,"w");
          if (logfile == NULL) error->one(FLERR,"Cannot open logfile");
        } else if (strcmp(arg[logflag],"none") == 0)

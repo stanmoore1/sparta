@@ -945,7 +945,7 @@ void ComputeFFTGrid::print_FFT_info()
 {
   if (comm->me == 0) {
     char str[64];
-    sprintf(str,"Using " SPARTA_FFT_PREC " precision " SPARTA_FFT_LIB " for FFTs\n");
+    snprintf(str,sizeof(str),"Using " SPARTA_FFT_PREC " precision " SPARTA_FFT_LIB " for FFTs\n");
     if (screen) fprintf(screen,"%s",str);
     if (logfile) fprintf(logfile,"%s",str);
   }
