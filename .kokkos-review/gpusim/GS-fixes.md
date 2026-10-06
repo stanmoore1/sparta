@@ -85,3 +85,14 @@ complete: YES for the outside-cell branch exercised; the single sync(Host,PARTIC
 verdict: NECESSARY+COMPLETE (fault-injected)
 artifacts: $S/gpusim/GS-fixes/F-G22-5 (build/fgc_{A,B}.cpp, os.*, o.*)
 
+### FU-10 — GridKokkos first allocation (realloc_kokkos, NoInit) memset only on the host side
+question here: under split memory, is the device copy of the first cells/cinfo/sinfo allocation ever read before it is initialized?
+deck: $S/gpusim/GS-fixes/FU-10/in.f (2d 20x20, circle surf, emit/face, vss, run 100), np1, GLIBC_TUNABLES=glibc.malloc.perturb=171 (non-zero garbage in fresh allocations), SPARTA_KOKKOS_VERIFY=grid: WATCH=grid: STALE=grid: STALE_STRICT=1, plus TRACE=grid:cells.
+result: A and B both silent (no verify/watch/stale report for any grid array); step 100 np 47148 in both. Trace (A and B identical): the first operations on grid:cells are `modify_host` then `sync_device` with flags (1,0) — a whole-span host->device copy — before any device access; so in B the host memset reaches the device at the first sync and the device tail is never read uninitialized; in A the same copy carries the host garbage, which nothing reads (as AB10 found).
+positive control: none (no reader of the uninitialized tail on either side; the device side is never read before the first full sync).
+negative control: A vs B identical (np 47148), no reports.
+necessary: NOT shown (hygiene / CPU parity, as in AB10)
+complete: YES under split memory: the host-only memset is sufficient because GridKokkos::sync(Device) with auto_sync claims the host and copies the whole span on first use; no explicit device memset needed. (sinfo not exercised here: no split cells in this deck; same allocation/sync pattern by source.)
+verdict: NOT-SHOWN-NECESSARY (hygiene); device-copy concern from AB10 resolved: COMPLETE
+artifacts: $S/gpusim/GS-fixes/FU-10
+
