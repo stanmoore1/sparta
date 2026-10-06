@@ -3,7 +3,7 @@ Binaries: A_mpi = $S/bmpi_base/src/spa_kokkos_omp (e071055f), C_mpi = $S/spa_C3_
 Runner: $S/ab/AB12/r.sh <A|C> <np> <kk1|kk2|kk4|cpu> <deck> <log>  (mpirun --allow-run-as-root --oversubscribe, timeout 90 s, ulimit -v 8 GB). Work dirs $S/ab/AB12/<ID>/.
 
 ### F-G00-1 (MPI/bounds addendum to AB6)
-binary: C_mpi = spa_C3_mpi (PROVISIONAL: emit objects may be stale in C3; re-run with spa_C4_mpi below)
+binary: C_mpi = spa_C3_mpi, every C run re-done with spa_C4_mpi (clean rebuild) -> identical results (see "C4 re-run" at the end)
 class: mpi + bounds-check
 positive control: AB6 decks, emit/surf normal yes perspecies no twopass custom fractions (0.9 N / rest O), 2d circle 100 steps: in.pos; in.bal (+ fix balance 10 rcb part -> grid_changed re-run with changed nslocal); in.dist (+ global surfs explicit/distributed); in.splitno (per-surf file 1-25 N, 26-50 O, perspecies no, dump at step 5); in.3d (sphere 1200 tris, run 10 + adapt_grid + run 10) | A_mpi kk: rc 134 bounds abort "out of bounds access label=(**UNMANAGED**) indices [0,0] extents [0,0]" (addr2line: host write into never-allocated k_cummulative_custom in grid_changed, called from FixEmitSurfKokkos::init) on EVERY variant: np1, np2, np4 (pos/bal/dist), np4 split, np4 3d, np2 t2 | C_mpi kk: rc 0 everywhere, no bounds errors | REPRODUCED
   N fraction at step 100 (CPU ref = same binary, identical A_mpi/C_mpi): pos np2 C-kk 0.904 / cpu 0.900; pos np4 0.897 / 0.900; bal np2 0.904 / 0.900; bal np4 0.898 / 0.901; dist np2 0.903 / 0.901; dist np4 0.900 / 0.898; pos np2 t2 6867 np (0.897); pos np1 t1/t4 0.909/0.895 (== AB6 values). split np4 step 5: C-kk N 169 O 153 wrong-half 0, CPU N 169 O 154 wrong-half 0. 3d np4: C-kk step 20 np 9855 N 0.896 vs CPU 9673 N 0.893.
@@ -14,7 +14,7 @@ verdict: NECESSARY+COMPLETE (was NECESSARY, COMPLETENESS-PARTIAL)
 artifacts: $S/ab/AB12/F-G00-1
 
 ### F-G11-3 (MPI/bounds addendum to AB6)
-binary: C_mpi = spa_C3_mpi (PROVISIONAL, see C4 re-run below)
+binary: C_mpi = spa_C3_mpi, C runs re-done with spa_C4_mpi -> identical (see "C4 re-run" at the end)
 class: bounds-check
 positive control: full-SPARTA DEBUG_BOUNDS_CHECK runs of the F-G00-1 decks (custom fractions + perspecies no = the path where the fixed kernel line used to evaluate &d_cummulative_mix[0] on the 0-extent mix view) | A_mpi: aborts earlier in init() on F-G00-1 (host k_cummulative_custom), so the kernel line cannot be reached in an unmodified A build (as in AB6) | C_mpi: 13 bounds-checked runs (np1 t1/t4, np2 t1/t2, np4 t1; pos/bal/dist/split/3d), all rc 0, no "out of bounds" message, correct species fractions (see F-G00-1) | n/a (necessity isolated at unit level in AB6)
 negative control: in.neg (mix path, allocated mix view) np4 | A_mpi vs C_mpi identical
@@ -24,7 +24,7 @@ verdict: NECESSARY+COMPLETE (unit-level necessity; was NECESSARY, COMPLETENESS-P
 artifacts: $S/ab/AB12/F-G00-1 (logs *.C.*)
 
 ### F-G12-2 (MPI/bounds addendum to AB6)
-binary: C_mpi = spa_C3_mpi (PROVISIONAL, see C4 re-run below)
+binary: C_mpi = spa_C3_mpi, C runs re-done with spa_C4_mpi -> identical (see "C4 re-run" at the end)
 class: cpu-observable + mpi
 positive control: AB6 decks with two identical subsonic PONLY emit fixes per step (stats np, f_in1[2], f_in2[2] cumulative; stale list signature = in1 == in2 exactly), np 2 and 4, kk t1, bounds-checked:
   emit/face (in.face2, 200 steps): A np2 82940 39874 = 39874, np4 80593 38674 = 38674 | C-kk np2 85211 40742/41293, np4 90158 43143/43834 | CPU np2 87188 41711/42320, np4 92050 44092/44735
@@ -156,3 +156,54 @@ complete: YES on N ranks - retry growth correct and bounds-clean on 2 and 4 rank
 verdict: NECESSARY+COMPLETE (perf; MPI correctness/bounds gap closed, MPI perf necessity not re-measured)
 artifacts: $S/ab/AB12/FU-6
 
+### FU-3 / FU-3b (MPI/bounds addendum to AB10 / AB11)
+binary: C = spa_C4_mpi (clean rebuild, HEAD f9743740; == bmpi_fixed/src/spa_kokkos_omp built 03:43). A = A_mpi (e071055f, no cold-cell guard at all).
+class: cpu-observable (CPU and Kokkos) + mpi
+positive control: AB10 FU-3 decks (2d 10x10, 4000 particles prefilled from a temp-0 "still" mixture with vstream VS -> roundoff-only thermal energy, PONLY emit air T=10 1.38e-22 NULL, 5 steps), np2 and np4, CPU and kk t1, ulimit 3 GB/rank, timeout 60 s:
+  A_mpi np4: face VS 1/10 and face/file VS 1/10: CPU "subsonic insertion count exceeds 32-bit int", kk abort rc 134 (same check); surf normal no VS 10: CPU "Failed to reallocate 2.8 GB particle:particles", kk Kokkos BadAlloc; surf normal no VS 3.3: CPU and kk run but insert NOTHING (f_in 0)
+  C4 np2 / np4, f_in cumulative CPU | kk: face VS1 116 112 | 110 112 ; face VS10 116 114 | 112 112 ; face/file VS1 116 112 | 110 112 ; face/file VS10 116 114 | 112 112 ; surf normal-no VS10 130 109 | 139 117 ; VS3.3 126 108 | 140 121 ; VS1 126 107 | 141 123 (np2 CPU, np2 kk | np4 CPU, np4 kk). All 28 runs rc 0, no bounds errors, values match AB11 np1 (face 115/113, surf VS10 134/155 CPU/kk) - CPU/kk consistent | REPRODUCED
+negative control: surf in.neg (warm subsonic emit/surf, 300 steps) np4 | A vs C4 stats identical except the CPU-time column (kk: step 300 np 37755 ... 42810; CPU: 37523 ... 42756)
+necessary: YES - A errors / OOMs / inserts nothing on 4 ranks in every style, CPU and kk.
+complete: YES - all 3 styles x CPU/kk run with physical insertion counts on 2 and 4 ranks with the correctly built binary (per-cell local test; same arithmetic as np1). Build note: spa_C3_mpi CPU surf VS10 np4 also ran (rc 0) - not used for the verdict.
+verdict: FU-3b NECESSARY+COMPLETE incl. MPI (FU-3's AB10 INCOMPLETE is closed by FU-3b on 1, 2, 4 ranks)
+artifacts: $S/ab/AB12/FU-3b/{face,file,surf} (log.<deck>.<A|C4>.<mode>.np<N>)
+
+### C4 re-run (coordinator: spa_C3_mpi may hold stale emit objects)
+spa_C4_mpi (clean rebuild of every file changed since e071055f; differs from spa_C3_mpi as a binary) re-ran every emit-related C run of this file:
+- F-G00-1 / F-G11-3: pos/bal/dist np2+np4 kk1, split np4, 3d np4, np1 t4, np2 t2, neg np4, CPU pos np4 -> final stats IDENTICAL to C3 run for run (e.g. pos np4 6684/5994/690, 3d np4 step 20 9855/8835/1020, split 169/153 wrong-half 0); no bounds errors.
+- F-G12-2: face2/file2/surf2 x np2/np4 x kk1/cpu (12 runs) -> IDENTICAL to C3 (e.g. surf2 np4 kk 77286 19512/50852).
+- F-G14-5 (emit/face as source): pos np4 kk -> IDENTICAL (33023, c_r == np).
+- FU-13 balance-step tally misplacement (the only unexpected C result): reproduced IDENTICALLY with C4 (cpu cell 11554 at step 40; kk cells 1 and 79) -> genuine pre-existing behaviour, not a build artefact.
+- FU-3b was run with C4 only.
+Conclusion: the stale-object issue did not affect any MPI result above (the stale CPU fix_emit_surf.cpp object only changes the subsonic cold-cell path, which only FU-3b exercises).
+
+## Not testable here
+- F-G10-5 (AB3) EXACT RanKnuth backups, F-G21-7 (AB9) EXACT+MPI migrate: need a SPARTA_KOKKOS_EXACT build (none of A_opt/B_opt/A_mpi/C3_mpi/C4_mpi is one). Verdicts unchanged.
+- F-G16-6 (AB4) host sync_host/modify_device part, F-G00-2, F-G16-5 (AB4), F-G04-1 (AB1), F-G13-4 (AB2), FU-9 (AB10), F-G00-4 (AB7), F-G22-5 (AB9): gpu-only (separate host/device memory). F-G00-14 (AB4): MPI part closed above, necessity stays gpu-only.
+- F-G20-9 (AB8) 1d_only timing path: no caller in SPARTA (np 1/2/4 already verified in AB8). F-G20-5 (AB8) idle-rank/value-init half: unreachable (create crashes first, deferred F-G20-4).
+- F-G22-1 (AB9): already run on np 2/4 in AB9; end-to-end masked by self-correction (function-level only) - an MPI rerun cannot change that.
+- F-G02-2 (AB1) race, F-G00-17, F-G01-4/F-G02-1 (AB1), F-G17-2 (AB5): race/unreachable on host backends, not MPI-dependent.
+- F-G19-4 (AB8) CPU FFT_SINGLE 2D INCOMPLETE, F-G09-4a (AB2) INCOMPLETE -> fixed by FU-8 (MPI-verified above), F-G00-20 (AB7), G12x-F-G14-1 / G12x-F-G16-2 sibling INCOMPLETEs: not MPI/bounds gaps (resolved by FU-4/FU-1, both MPI-verified above).
+
+## Summary
+| ID (source) | updated verdict |
+|---|---|
+| F-G00-1 (AB6) | NECESSARY+COMPLETE (A bounds-abort np1/2/4; C == CPU N-fraction on np1/2/4, balance, distributed, per-surf, 3d; C3 == C4) |
+| F-G11-3 (AB6) | NECESSARY+COMPLETE (unit-level necessity; bounds-checked full runs of C clean on 13 variants, np1-4, t1/t2/t4) |
+| F-G12-2 (AB6) | NECESSARY+COMPLETE (A in1 == in2 on np2/np4 for face, face/file, surf; C in2 > in1, == CPU distribution) |
+| F-G00-14 (AB4) | NOT-SHOWN-NECESSARY (gpu-only); MPI completeness closed: A == C == CPU with per-step rcb balance on 2-4 ranks, no bounds errors |
+| F-G00-9 (AB4) | NECESSARY+COMPLETE (np2/np4 explicit + distributed: A 198/1200 wrong, C 0) |
+| F-G00-15 (AB1) | NECESSARY+COMPLETE (one_ambipolar + group_ambipolar kernels and tally-forced restore: A inconsistent on np1/2/4 t1/t4, C 0) |
+| F-G04-2 (AB1) | NECESSARY+COMPLETE (subcell + group_ambipolar: A 0 warnings, C == CPU on np1/np4) |
+| F-G14-5 (AB7) | NECESSARY+COMPLETE (A bounds abort np2/np4; C invariant c_r == np, vector/array/balance) |
+| FU-1 (AB10) | NECESSARY+COMPLETE (A segfault np2/np4; C == CPU cell-exact) |
+| FU-4 (AB10) | NECESSARY+COMPLETE (A segfault np4 x6 sites; C clean collective error) |
+| FU-6 (AB10) | NECESSARY+COMPLETE (perf; MPI retry correct + bounds-clean np2/np4; MPI perf necessity not re-measured) |
+| FU-8 (AB10) | NECESSARY+COMPLETE (A "Unknown method" np4; C == plain-name bit-identical) |
+| FU-3 / FU-3b (AB10/AB11) | NECESSARY+COMPLETE incl. MPI (C4: all 3 styles CPU+kk np2/np4 run with physical insertion counts; A errors/OOM/no insertion) |
+| FU-13 (AB11) | NECESSARY+COMPLETE (np4 CPU+kk group masking exact) + NEW pre-existing issue: react/isurf/grid per-cell tally misplaced on fix-balance steps (A and C, CPU and kk; sums still correct) |
+| FU-18 (AB11) | NECESSARY+COMPLETE (A segfault np4 all 5 slots; C byte-identical to reference) |
+
+Housekeeping note: during the F-G00-15 runs a `pkill -f spa_kokkos_omp` / `pkill -f spa_C3_mpi` (~03:12) was issued to stop a stuck background loop of this agent; it may also have killed concurrent runs of other agents using those binary names.
+
+## STATUS: COMPLETE

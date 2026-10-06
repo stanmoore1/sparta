@@ -23,3 +23,4 @@
 - Notes (not fixed): adsorb + compute surf/kk unsupported (feature gap, clean error in A and C); FU-10 memset zeroes host only (device copy of first allocation not zeroed on GPU, hygiene); Kokkos emit/face low seed-to-seed variance = Kokkos RNG fixed seed 12345+rank ignores user seed (package design, see F-G04-4 REFUTED-design).
 - FU-19 (note): PONLY subsonic emit with a mixture temp 0 and nonzero vstream -> soundspeed_mixture 0 -> divide by 0 for fallback cells (pre-existing, user input edge case). Not fixed; suggest error in FixEmit*::init.
 - FU-20 (note): CPU compute dt/grid at run 0 returns 0 for all cells (cinfo count 0 before first sort) while kk gives values; pre-existing CPU/kk difference.
+- FU-21 (from AB12, pre-existing CPU+kk, NOT FIXED): compute react/isurf/grid with fix balance: on a step where cells migrate, that step's per-cell tally is attributed to wrong cells (global sums correct). Check compute isurf/grid etc. for the same.
