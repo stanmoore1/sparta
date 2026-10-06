@@ -140,3 +140,16 @@ complete: YES (B correct on np1 and np4 for both computes); only benign B-only d
 verdict: NECESSARY+COMPLETE (benign resize/destructor detector notes in B)
 artifacts: $S/gpusim/GS-fixes/F-G17-3
 
+### F-G00-1 — emit/surf/kk custom fractions: k_cummulative_custom never allocated, d_cummulative_custom never assigned (re-check under split memory)
+decks: AB12 F-G00-1 in.pos (2d circle, emit/surf normal yes perspecies no custom fractions s_fr 0.9/-1) and in.bal (+ fix balance 10 rcb part); np1 and np4; watch/stale/strict.
+positive control: A_sync: SIGSEGV (rc 139) in all 4 runs. B_sync: rc 0, step 100 N fraction pos np1 6143/6760 = 0.909, np4 5994/6684 = 0.897, bal np1 0.909, bal np4 6006/6687 = 0.898 (CPU ref ~0.90, AB12). REPRODUCED.
+detector (B, no A labels since A crashes):
+  `fix/emit/surf:cummulative_custom: device side read while host side is newer, from FixEmitSurfKokkos::grid_changed()` — benign ordering: grid_changed fills the host side, calls modify_host(), then takes d_cummulative_custom = view_device() (the accessor counts as a read) and sync_device() is done before use (perform_task, line ~475). Same allocation, so the handle is valid after the sync.
+  `[watch] surf:darray: the host side was written without a claim and this sync_device has nothing to copy -- the device keeps stale data` (element 0 of 100, from SurfKokkos::sync <- FixEmitSurfKokkos::perform_task / UpdateKokkos::move): the per-surf custom array `fr` written by the `custom surf set` command is never claimed (trace: claims stay (0,0) all run). This is not F-G00-1's code. emit/surf/kk reads the fractions from the host side when it builds cummulative_custom, so the result is correct, but the device copy of the owned surf custom array stays at its initial values. See side finding SF-2.
+  others: surf:darray <- ~SurfKokkos, grid:cells <- UpdateKokkos::move (SF-1), irregular noise.
+negative control: in.neg not re-run (AB12: A == C identical); no-crash B outputs equal CPU fractions.
+necessary: YES (A crashes, 1 and 4 ranks)
+complete: YES (B correct on np1/np4 with and without rebalance); F-G00-1's own arrays are detector-clean except the benign handle-order note.
+verdict: NECESSARY+COMPLETE (side finding SF-2: `custom surf set` leaves the surf custom DualView unclaimed)
+artifacts: $S/gpusim/GS-fixes/F-G00-1
+
