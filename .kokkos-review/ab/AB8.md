@@ -11,7 +11,8 @@ positive control: fft of c_A only, t 4. 3D 14^3: A run1 0, run2 c1 4.8e-2 / c2 1
 negative control: 16^3 and 16x16 (radices 2/4 only), t 4: A = B = CPU bit-identical
 necessary: yes - A t4 wrong by up to 34% of max|F| with prime factors 7/11/13 (2D+3D), t1 correct -> race
 complete: B bit-identical to CPU (3 repeats each, t4) on: 14^3, 14x22x26 (radices 7,11,13 on fast/mid/slow axes, all three KISS call sites in fft3d), 14x14, 22x14, 98x98, 154x26 (2D fast+slow sites), sum mode, 3 inputs per compute; direct-API harness (fftharness/, FFT3dKokkos/FFT2dKokkos vs CPU FFT3d/FFT2d) forward AND backward, permute 0/1/2, scaled 0/1, t1/t4, 14x22x26/16x12x10/22x14/16x10: B 0 diff in all 40 cases (A: e.g. 14x22x26 t4 fwd 3.8e-2). Not exercised: fft_*_1d_only_kokkos (timing1d only, no caller in SPARTA); multi-proc (MPI builds not finished at time of writing, see later note if added)
-verdict: NECESSARY, COMPLETENESS-PARTIAL (1d_only timing path unreachable; np>1 pending)
+np>1 addendum (MPI+bounds-check builds, fftharness/fftmpi_{A,B}, sweep_mpi_{A,B}_t2.txt): np 2/4 x t 2, 3D 16^3 + 14x22x26 and 2D 16x16 + 22x14, in slab/fast-split, out same/target/slab, all permutes, fwd+bwd | A: 14x22x26 wrong in 16 configs (np4 up to FWD 0.64 / BWD 0.97 of max), 22x14 np4 FWD 0.50 | B: 240/240 cases bit-identical to CPU (scaled 0/1), no bounds aborts
+verdict: NECESSARY, COMPLETENESS-PARTIAL (only the 1d_only timing path, which has no caller, not executed; np 1/2/4 x t1/t2/t4 all verified)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/G20-9, /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/fftharness
 
 ### F-G00-8 / F-G19-2 — compute fft/grid/kk array/variable inputs read a stale d_ingrid (previous vector input) instead of their own data
@@ -60,8 +61,9 @@ class: unreachable (compute uses permute=0)
 positive control: fftharness np=1, permute=1 (2D) / permute=2 (3D) with out = final FFT layout (post_plan == nullptr) | A: FWD maxdiff/max 0.95-1.04 and BWD 0.94-1.0 (2D 16x16, 22x14, 16x10; 3D 16^3, 14x22x26, 16x12x10) | B: 0 diff (bit-identical to CPU) in all, scaled 0/1, t1/t4 | REPRODUCED
 negative control: permute 0 / (3D) permute 1 (post_plan exists): A = B = CPU (0 diff, unscaled)
 necessary: yes (via direct API)
-complete: 2D and 3D sites both verified; np>1 post-null case pending MPI build (see later note if added)
-verdict: NECESSARY, COMPLETENESS-PARTIAL (np>1 not yet run)
+np>1 addendum (sweep_mpi_{A,B}_t1.txt, np 2/4, t1): A: 3D permute=2 out=target (and in=fast out=same) FWD 0.95/1.01, BWD 0.94-1.0; 2D permute=1 out same/target/slab FWD 0.96-1.0 (16x16, 22x14) | B: all 0 diff, bounds check clean
+complete: 2D and 3D sites both verified at np 1/2/4, t1/t2/t4, scaled 0/1, both sizes incl. mixed radix
+verdict: NECESSARY+COMPLETE (via direct API; unreachable from compute fft/grid/kk)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/fftharness
 
 ### F-G19-9 — unpack_2d_functor wrote data->buf with swapped indices (direction reversed)
@@ -69,8 +71,9 @@ class: unreachable (needs a permute=0 2D remap: pre_plan with fast-axis-split in
 positive control: packunit unpack_2d (nqty=2, nstride=nqty*isize padded, offsets 3/5) | A: data 24 entries differ from CPU unpack_2d and 24 buf entries overwritten (with unpadded buffers A aborts "double free or corruption (out)" = OOB heap write) | B: identical to CPU, buf untouched | REPRODUCED
 negative control: unpack_2d_permute_1/_2/_n (same file): A = B = CPU
 necessary: yes (unit level)
-complete: B unpack_2d matches CPU at unit level; end-to-end FFT2dKokkos path through it requires np>1 (pending MPI build)
-verdict: NECESSARY, COMPLETENESS-PARTIAL (no end-to-end np>1 run yet)
+np>1 end-to-end (MPI + Kokkos DEBUG_BOUNDS_CHECK, sweep_mpi_{A,B}_t1.txt/_t2.txt): FFT2dKokkos with fast-axis-split input (pre_plan -> unpack_2d), 16x16 and 22x14, np 2/4, out same/target/slab, permute 0/1, scaled 0/1 | A: 48/48 abort "Kokkos::View ERROR: out of bounds access ... indices [330] but extents [308]" (np2 22x14; np4 [146] vs [140]; 16x16 [256] vs [256]) | B: 48/48 bit-identical to CPU FFT2d fwd+bwd, also at t2
+complete: yes - unit level + end-to-end at np 2/4, all 2D out layouts/permutes
+verdict: NECESSARY+COMPLETE (via direct API; unreachable from compute fft/grid/kk)
 artifacts: /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad/ab/AB8/packunit
 
 ### F-G20-6 — unpack_3d_permute1_n used in = instart + nqty*fast*nstride_plane (nstride already nqty-scaled)

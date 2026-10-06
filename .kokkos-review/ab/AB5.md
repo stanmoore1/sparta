@@ -7,7 +7,7 @@ class: cpu-observable
 positive control: 3d box 4^3 cells, 1000 Ar, mixture vstream 1 0 0 temp 0 (all v identical), fix temp/rescale 1 300 300 ave no, run 3 | A: kk c_temp/c_ke = -nan from step 1 (t1 and t4); A cpu = 0.0016006965 / 3.315e-23 | B: kk = 0.0016006965 / 3.315e-23 == CPU ref (t1, t4) | REPRODUCED
 negative control: temp 300 gas, temp/rescale 1 600 600 ave no | A vs B: identical (kk t1/t4 and cpu, T=634.68801 at step 3)
 necessary: yes — A-kk NaN in every particle velocity on cold cells (t1, t4); CPU ref finite.
-complete: fix covers both kk sites (per-cell kernel line 140 and ave path line 215, see F-G18-3); B==CPU ref bit-identical at t1 and t4. Sibling search: only other `sqrt(t_target/t_current)` is fix temp/global/rescale(/kk), which already returns when t_current==0 and has t_target>=0 -> not a sibling bug. Not run with N MPI ranks (per-cell kernel has no communication).
+complete: fix covers both kk sites (per-cell kernel line 140 and ave path line 215, see F-G18-3); B==CPU ref bit-identical at t1 and t4. Sibling search: only other `sqrt(t_target/t_current)` is fix temp/global/rescale(/kk), which already returns when t_current==0 and has t_target>=0 -> not a sibling bug. 4-rank MPI run (A_mpi/B_mpi, see F-G18-3 addendum): pos cell A-kk -nan, B-kk == cpu 0.0016006965; neg cell all 631.41428.
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB5/F-G00-16 (in.base, run.sh, run4.sh, log.{t4_,}pos_cell.*, log.{t4_,}neg_cell.*)
 
@@ -16,9 +16,9 @@ class: cpu-observable
 positive control: cold gas (vstream 1 0 0 temp 0), fix temp/rescale 1 0 0 ave yes (t_one=t_target=0 everywhere) | A: kk -nan from step 1 (t1, t4); cpu 0.0016006965 | B: kk 0.0016006965 == CPU ref (t1, t4) | REPRODUCED
 negative control: temp 300 gas, temp/rescale 1 600 600 ave yes (t1, t4), and 1 0 0 ave yes on warm gas | A vs B: identical (kk and cpu; T=635.29137 resp. 16.558581 at step 3)
 necessary: yes — A-kk NaN at t1 and t4.
-complete: ave path is the only site; B==CPU ref at t1/t4. Multi-rank (MPI_Allreduce of t_current) not run: MPI builds were not available; the guard is applied after the Allreduce so rank count cannot change it.
-verdict: NECESSARY, COMPLETENESS-PARTIAL (N-rank MPI run not done; MPI builds still compiling)
-artifacts: $S/ab/AB5/F-G00-16 (log.{t4_,}pos_ave.*, log.{t4_,}neg_ave.*, log.pos_ave_warm.*)
+complete: ave path is the only site; B==CPU ref at t1/t4. MPI addendum (A_mpi/B_mpi, 4 ranks, balance_grid rcb cell, t1): pos ave (cold, 0 0 yes): A-kk -nan, A-cpu/B-cpu/B-kk 0.0016006965 / 3.315e-23; pos cell (0 gas, 300 no): A-kk -nan, B-kk == cpu 0.0016006965; neg ave (300->600 yes): all four 639.65247; neg cell: all four 631.41428 -> guard after the Allreduce is correct on N ranks.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB5/F-G00-16 (log.{t4_,}pos_ave.*, log.{t4_,}neg_ave.*, log.pos_ave_warm.*), $S/ab/AB5/F-G00-16/mpi (np4: log.{pos,neg}_{ave,cell}.{A,B}.{kk,cpu})
 
 ### F-G00-16-note — temp/rescale ave mode: t_current/=n_current with n_current==0 (CPU + kk)
 class: unreachable
@@ -54,9 +54,11 @@ positive control: (a) 2d circle, 50 lines, surf_react 2 on ids 1-25, surf_react 
   (c) implicit 2d (ablation binary.101x101, 150^2 grid) and 3d (binary.21x21x21), surf group sg = half-domain region, sg react 3, rest react 2, compute react/isurf/grid inner 2 | A (cpu, kk): no warning | B: "3986/4020 surfs (2d), 10842/10498 surfs (3d) are not assigned" warning, cpu and kk | REPRODUCED
 negative control: group containing lines[0]/tris[0] (g = 1:50, 1:1200) | A vs B: identical stats and warnings (cpu and kk, 2d and 3d)
 necessary: yes — A skips the warning and leaves stale tallies after re-init on all four CPU loops (react/surf lines+tris, react/isurf/grid lines+tris), visible in both CPU and kk runs.
-complete: all 4 changed loops exercised (2d+3d x explicit+implicit), CPU and kk t1; B==reference in each. The multi-rank deadlock aspect (one rank returning before the collective MPI_Allreduce) not run: MPI builds ($S/bmpi_*) still compiling (26%) at test time.
-verdict: NECESSARY, COMPLETENESS-PARTIAL (N-rank deadlock variant not run, MPI builds unavailable)
-artifacts: $S/ab/AB5/F-G17-5 (2d explicit), F-G17-5/3d, F-G17-5/isurf, F-G17-5/isurf3d
+complete: all 4 changed loops exercised (2d+3d x explicit+implicit), CPU and kk t1; B==reference in each.
+MPI addendum (A_mpi/B_mpi, 4 ranks): (d) explicit/distributed 2d circle (global surfs explicit/distributed + balance_grid rcb cell), g = 2:50 | A cpu and kk: HANG (timeout 60 s, rc=124); A-cpu printed a garbage warning count "4627448617123184654 surfs are not assigned" before hanging (mismatched collectives) | B cpu and kk: run completes (both runs), stats identical to the g=1:50 reference. (e) implicit 2d (binary.101x101, 150^2, fnum 0.1), sg = y 0..75 | A cpu and kk: HANG (rc=124) | B cpu and kk: complete, warning "3986 surfs" (same count as 1 rank). Negative (g=1:50; implicit sg = whole domain): A vs B identical (cpu and kk, incl. warnings 28 / 8006). Also seen: g=26:50 on 4 ranks, A gives no warning and no hang (every rank returns early).
+Sibling (NOT fixed, pre-existing, also in B): in explicit/distributed mode init() loops lines[0..nlocal) instead of the owned mylines, so the warning count depends on rank count: g=1:50 -> 25 (np1), 26 (np2), 28 (np4); and g=26:50 (25 surfs) -> 28 at np4. Warning text only, no tally impact.
+verdict: NECESSARY+COMPLETE (deadlock and warning/clear fixed on 1 and 4 ranks, cpu+kk, explicit+implicit); sibling warning-count bug noted above
+artifacts: $S/ab/AB5/F-G17-5 (2d explicit), F-G17-5/3d, F-G17-5/isurf, F-G17-5/isurf3d, F-G17-5/mpi (distributed: log.{pos,neg,np1,np2,np4g26}.*), F-G17-5/mpi_isurf (implicit np4)
 
 ### F-G18-2 — compute gas/reaction/grid(/kk): column map sized from react->nlist at definition; re-issued `react` (more reactions) or `react none` -> OOB / NULL deref (kk + CPU)
 class: cpu-observable
@@ -76,6 +78,48 @@ positive control: 2d circle, emit/face flow, compute surf all all n press, fix m
   variant consumer fix ave/surf (every 1, running ave over 10, defined after move/surf): A-kk running mean n = 9.76 at step 100 vs B-kk 12.86, CPU ref 13.28 (A drops each move-step tally, ~1/10 of samples) | REPRODUCED
 negative control: same decks with move/surf Nevery=1000 (never fires in 100 steps) | A vs B: identical (kk and cpu; n==nscoll e.g. 148 at step 100 kk), incl. the ave/surf variant
 necessary: yes for compute surf/kk (A-kk zero tallies on reallocate steps, t1 and t4).
-complete: compute surf/kk verified with two consumers (compute reduce at output, fix ave/surf end_of_step), t1+t4, invariant n==nscoll holds in B. Not yet covered: compute isurf/grid/kk (implicit surfs reallocate only via fix balance -> needs real MPI; fix ablate's own reallocate is masked by combined=1) and the grow branch (nsurf increasing, needs distributed surfs on >1 rank). See MPI addendum below if present.
-verdict: NECESSARY, COMPLETENESS-PARTIAL (isurf/grid/kk + grow branch need MPI build)
-artifacts: $S/ab/AB5/F-G17-3 (in.base.orig, in.ave, run.sh, log.{pos,pos_t4,neg,ave_pos,ave_neg}.*)
+complete: compute surf/kk verified with two consumers (compute reduce at output, fix ave/surf end_of_step), t1+t4, invariant n==nscoll holds in B.
+MPI addendum (A_mpi/B_mpi, 4 ranks, kk t1, fix balance NEV rcb part, stats every 10 = balance steps):
+  (f) explicit/distributed 2d circle, compute surf n only (in.exp_cs, NEV=10; surfs per rank change 14 -> 0..33, i.e. shrink AND grow branch) | A-kk: c_cs sum = 0 on every balance step (nscoll 5..147) | B-kk: c_cs == nscoll on all 10 lines | REPRODUCED
+  (g) compute isurf/grid/kk, implicit circle, uniform fill (create_particles) so no rank drops to 0 surfs (in.imp_igu, NEV=10, surfs/rank 630..3404) | A-kk: c_ig sum = 0 on every balance step (nscoll 526..163) | B-kk: c_ig == nscoll on all 10 lines | REPRODUCED
+  (with emit-only flow (in.imp_ig) A-kk aborts first on the F-G00-19 bounds error; B-kk: c_ig == nscoll, also on 2 ranks)
+negative (MPI): NEV=1000 (balance never fires): in.exp (cs+rs), in.imp (ig+rg), in.imp_igu, kk and cpu | A vs B: identical, invariants hold in both. 1-rank in.exp NEV=10 (balance no-op): A==B.
+complete: both reallocate sites (compute surf/kk explicit, isurf/grid/kk implicit), shrink + grow, 1 and 2/4 ranks, t1/t4 (t4 only 1 rank) -> B satisfies the invariant everywhere.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB5/F-G17-3 (in.base.orig, in.ave, run.sh, log.{pos,pos_t4,neg,ave_pos,ave_neg}.*), $S/ab/AB5/MPI (run.sh, in.exp*, in.imp*, log.{exp_pos,exp_neg,exp_neg1,cs_pos,ig_pos,ig2_pos,igu_pos,igu_neg,imp_neg}.*)
+
+### F-G17-4 — compute react/surf/kk tallyinfo(): scans current nlocal+nghost instead of tally allocation (surf count changed by fix balance between tally and consumer)
+class: mpi + bounds-check
+positive control: 2d circle, global surfs explicit/distributed, 4 ranks, compute react/surf all 2 (+ compute surf), fix balance 10 1.00001 rcb part, compute reduce at stats every 10 (in.exp, NEV=10); A_mpi/B_mpi kk t1 | A-kk: abort rc=134, "Kokkos::View ERROR: out of bounds access label=("react/surf:surf2tally") with indices [52] but extents [14]" (grew) plus [-1] (rank left with 0 surfs, F-G00-19 pattern) | B-kk: runs; c_rs sum == nsreact on all 10 stats lines (5, 7, 15, 25, 32, 28, 28, 31, 36 ...) incl. ranks that shrank to 0 surfs | REPRODUCED
+  react/surf only deck (in.exp_rs): A-kk abort (react/surf:surf2tally [-1], extents [14]); B-kk c_rs == nsreact on every line | REPRODUCED
+negative control: same deck with NEV=1000 (no rebalance), kk and cpu, 4 ranks; and NEV=10 on 1 rank | A vs B: identical (c_rs == nsreact in both)
+necessary: yes — A-kk host OOB read (bounds abort) on 4 ranks when the surf count changes between tally and tallyinfo().
+complete: grow and shrink-to-zero branches both exercised; B satisfies the invariant on every balance step. CPU base uses a hash (no dependence on nsurf) -> CPU ref not affected (A-cpu/B-cpu identical, invariant holds). Only 4 ranks, t1 tested with MPI (thread count irrelevant: host-side scan).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB5/MPI (in.exp, in.exp_rs, out./log.{exp_pos,rs_pos,exp_neg,exp_neg1}.*)
+
+### F-G17-6 — compute react/isurf/grid/kk tallyinfo(): same scan-length bug (implicit surfs migrate with cells in fix balance)
+class: mpi + bounds-check
+positive control: implicit 2d circle (binary.101x101, threshold 180.5, 150^2 grid), compute react/isurf/grid all 2 feeding fix ablate and compute reduce, fix balance 10 rcb part, 4 ranks kk t1 | in.imp_rg (emit flow): A-kk abort, "react/isurf/grid:surf2tally indices [2961] but extents [1968]" and "[2906] extents [2009]"; in.imp_rgu (uniform fill, no rank at 0 surfs): A-kk abort, indices [2042]/[2061]/[2113] vs extents [1968]/[2052]/[2009]; 2 ranks: [5986] vs [3977] | B-kk: runs; c_rg sum == nsreact on all stats lines (e.g. 65,56,60,55,53 at steps 60-100 for rgu; 2-rank 4..28) | REPRODUCED
+negative control: NEV=1000 (in.imp, in.imp_rgu), 4 ranks, kk and cpu | A vs B: identical; c_rg == nsreact in both
+necessary: yes — A-kk OOB host read of surf2tally on every balance-before-consumer variant (2 and 4 ranks).
+complete: grow branch (bounds abort in A) and shrink branch (rank losing surfs; B invariant holds on all ranks) both covered; consumer = compute reduce after balance on the same step (post_process_isurf_grid -> tallyinfo, the same path fix ablate uses). Ablation outcome not compared to CPU (kk RNG differs); invariant used instead.
+Sibling (NOT fixed, pre-existing upstream, CPU + kk): compute react/isurf/grid uses a GRID group bitmask (grid->bitmask) but tests it against SURF masks (lines[i].mask/tris[i].mask in init() and surf_tally(), src/compute_react_isurf_grid.cpp:147,152,229,232 and KOKKOS/compute_react_isurf_grid_kokkos.h:62,66). With any grid group other than "all", tallies are silently zero (or follow an unrelated surf group with the same bit): 1 rank, same deck, group all -> c_rg = 13 (cpu) / 28 (kk) == nsreact; group inner (contains every surf cell) -> 0 / 0. Evidence: $S/ab/AB5/sibling_gridgroup/log.{all,inner}.{cpu,kk}.
+verdict: NECESSARY+COMPLETE (fix); unfixed sibling grid-group/surf-mask bug reported above
+artifacts: $S/ab/AB5/MPI (in.imp, in.imp_rg, in.imp_rgu, log/out.{imp_pos,rg_pos,rg2_pos,rgu_pos,rgu_neg,imp_neg}.*), $S/ab/AB5/sibling_gridgroup
+
+### F-G00-19 — isurf/grid/kk and react/isurf/grid/kk (and react/surf/kk) tallyinfo(): `h_surf2tally[iend]==-1 && iend>0` reads index -1 on a rank with no surfs
+class: mpi + bounds-check
+positive control: implicit circle in a 400x150 domain, 4 ranks, balance_grid rcb cell -> 2 ranks own 0 surfs from the start, NO fix balance (in.imp0, NEV=1000) | A-kk: abort rc=134 "isurf/grid:surf2tally indices [-1] but extents [0]"; react/isurf/grid-only deck (in.imp0_rg): A-kk abort "react/isurf/grid:surf2tally indices [-1] but extents [1]" | B-kk: runs, c_ig == nscoll and c_rg == nsreact on all lines (e.g. step 100: 74/74, 28/28) | REPRODUCED
+  react/surf/kk site (explicit distributed, rank emptied by fix balance, in.exp_rs): A-kk abort "react/surf:surf2tally [-1] extents [14]"; B-kk correct (see F-G17-4) | REPRODUCED
+  isurf/grid/kk after balance to 0 surfs (in.imp_ig 4 and 2 ranks): A-kk "[-1] extents [0]"; B-kk c_ig == nscoll | REPRODUCED
+negative control: in.imp 4 and 8 ranks without balance (every rank owns surfs, min 446/1968) | A vs B: identical (kk), cpu A==B; and in.imp0 cpu A==B (CPU uses hashes, unaffected)
+necessary: yes — A-kk bounds abort at all three sites (isurf/grid, react/isurf/grid, react/surf) on ranks with 0 surfs.
+complete: all three tallyinfo() loops exercised with a 0-surf rank, static (no balance) and after balance; compute surf/kk already had the safe operand order (grep: all four kk tallyinfo loops now `iend > 0 && ...`). No other `surf2tally[iend]` sites in src/KOKKOS.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB5/MPI (in.imp0, in.imp0_rg, log/out.{zero_neg,zero_rg,zero8,ig_pos,ig2_pos,rs_pos}.*)
+
+### Notes (outside AB5 scope)
+- A_mpi CPU run of in.exp on 4 ranks (exp_pos A cpu) finished all 100 steps with correct stats but exited rc=1 ("process rank 2 exited improperly", no error message); B_mpi rc=0. Not related to the AB5 fixes (different commit); not investigated further. $S/ab/AB5/MPI/out.exp_pos.A.cpu
+
+## STATUS: COMPLETE

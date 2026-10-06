@@ -13,3 +13,5 @@
 - FU-12 (from AB9, F-G18-2 gap): react re-issued with same count but different reactions passes the nlist check (CPU+kk), no OOB; documented limitation, not fixed.
 - Install.sh: kokkos token at end-of-line not stripped (A and B identical; out of scope), not fixed.
 - FU-1..6, FU-8, FU-9: FIXED (see FIXES.md). FU-7: investigated, no code difference found (fixes/FX-followups.md).
+- FU-13 (from AB5, CPU+kk): compute react/isurf/grid tested a GRID group bitmask against SURF masks -> any grid group other than all gives zero tallies. FIXED: drop surf-mask tests; grid group already applied per cell in post_process_grid (same as compute isurf/grid). Evidence deck: $S/ab/AB5/sibling_gridgroup.
+- FU-14 (from AB5, CPU, warning text only): compute react/surf init() warning count loops lines[0..nlocal) so count depends on #ranks with distributed surfs. Not fixed (cosmetic).

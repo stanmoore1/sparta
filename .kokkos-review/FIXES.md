@@ -121,3 +121,4 @@
 | FU-8 | follow-up (A/B) | b56ae3c8 |
 | FU-9 | follow-up (A/B) | b56ae3c8 |
 | FU-10 | grid_kokkos.cpp | 1bb317c3 |
+| FU-13 | compute_react_isurf_grid (CPU+kk) | 5f379276 |
