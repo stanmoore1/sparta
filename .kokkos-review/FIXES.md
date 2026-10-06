@@ -123,3 +123,4 @@
 | FU-10 | grid_kokkos.cpp | 1bb317c3 |
 | FU-13 | compute_react_isurf_grid (CPU+kk) | 5f379276 |
 | FU-3b, FU-18 | emit (CPU+kk), compute_dt_grid.cpp | f9743740 |
+| R2-3 (FU-14) | compute_react_surf.cpp, surf.cpp | 8df7d59e |
