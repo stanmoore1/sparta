@@ -117,3 +117,13 @@ complete: YES (both SURF and FACE adsorb modes)
 verdict: NECESSARY+COMPLETE (perf-only)
 artifacts: $S/gpusim/GS-fixes/F-G10-6
 
+### F-G18-1 — device species2group table built only at first run (re-check under split memory)
+deck: AB2 F-G18-1 in.regroup (`mixture air O group two` between runs, compute grid + reduce) and in.regroup2 (beam + circle, regroup, compute surf + compute boundary per group); np1 and np4; watch/stale/strict; label diff A vs B keyed on array <- routine (script $S/gpusim/GS-fixes/bin/ab.sh).
+positive control: regroup step 20: A groups (10000, 0) vs B (6928, 3072) np1 = CPU (6928, 3072); np4 A (10000,0) vs B (6932,3068). regroup2 step 300: A surf (755.24, 0), boundary (382.08, 0) vs B (530.94, 224.3)/(267.77, 114.31) np1 [CPU 529.87/225, 264.11/113.96]; np4 A (758.26,0)/(379.57,0) vs B (533.87,224.39)/(266.43,113.14). REPRODUCED (same as CPU-memory A/B: cpu-observable).
+detector: no A-only and no B-only labels in any of the 4 runs (common labels only: the known particle grow/grow_custom and irregular noise). The species2group refresh in B introduces no stale access or unclaimed write under split memory.
+negative control: label sets A == B; run-1 lines identical.
+necessary: YES (wrong group tallies; independent of memory model)
+complete: YES (B correct and detector-clean, np1/np4)
+verdict: NECESSARY+COMPLETE (split-memory clean)
+artifacts: $S/gpusim/GS-fixes/F-G18-1
+
