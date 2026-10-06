@@ -114,9 +114,10 @@ void GridKokkos::grow_cells(int n, int m)
     if (nlocal+nghost+n >= maxcell) {
       const int oldmax = maxcell;
       while (maxcell < nlocal+nghost+n) maxcell += DELTA;
-      if (cells == NULL)
+      if (cells == NULL) {
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
-      else {
+        memset(k_cells.view_host().data(),0,maxcell*sizeof(ChildCell));
+      } else {
         this->sync(Device,CELL_MASK); // force resize on device
         Kokkos::resize(k_cells,maxcell);
         this->modify(Device,CELL_MASK); // needed for auto sync
@@ -128,9 +129,10 @@ void GridKokkos::grow_cells(int n, int m)
 
     if (nlocal+m >= maxlocal) {
       while (maxlocal < nlocal+m) maxlocal += DELTA;
-      if (cinfo == NULL)
+      if (cinfo == NULL) {
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
-      else {
+        memset(k_cinfo.view_host().data(),0,maxlocal*sizeof(ChildInfo));
+      } else {
         this->sync(Device,CINFO_MASK); // force resize on device
         Kokkos::resize(k_cinfo,maxlocal);
         this->modify(Device,CINFO_MASK); // needed for auto sync
@@ -175,9 +177,10 @@ void GridKokkos::grow_sinfo(int n)
 
     if (nsplitlocal+nsplitghost+n >= maxsplit) {
       while (maxsplit < nsplitlocal+nsplitghost+n) maxsplit += DELTA;
-      if (sinfo == NULL)
+      if (sinfo == NULL) {
         MemKK::realloc_kokkos(k_sinfo,"grid:sinfo",maxsplit);
-      else {
+        memset(k_sinfo.view_host().data(),0,maxsplit*sizeof(SplitInfo));
+      } else {
         this->sync(Device,SINFO_MASK); // force resize on device
         Kokkos::resize(k_sinfo,maxsplit);
         this->modify(Device,SINFO_MASK); // needed for auto sync
