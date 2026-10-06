@@ -993,8 +993,23 @@ void ParticleKokkos::update_species2group()
 void ParticleKokkos::sync(ExecutionSpace space, unsigned int mask)
 {
   if (space == Device) {
-    if (sparta->kokkos->auto_sync)
+    if (sparta->kokkos->auto_sync) {
+      // Automatic syncing exists because non-Kokkos code may have written the
+      // host side through the plain pointers, so the host is declared modified
+      // and copied down.  Declaring it while the device still holds a claim is
+      // both a lie -- the host copy is the older one -- and fatal: Kokkos
+      // aborts a DualView claimed on both sides at once.  A device claim
+      // survives into an auto_sync region without any modify(Device) call:
+      // grow_custom() resizes each custom vector on the device, which leaves
+      // it claimed there, so the next sync(Device,CUSTOM_MASK) -- the next
+      // grow_custom() of the same grow(), or UpdateKokkos::setup() -- aborted
+      // after any particle growth between runs with custom attributes.
+      // Refresh the host first, as AtomKokkos::sync() does in LAMMPS and
+      // CollideVSSKokkos::sync() does here: a no-op when the device is clean,
+      // and the copy the host is owed when it is not.
+      sync(Host,mask);
       modify(Host,mask);
+    }
     if (mask & PARTICLE_MASK) k_particles.sync_device();
     if (mask & SPECIES_MASK) k_species.sync_device();
     if (mask & CUSTOM_MASK) {
