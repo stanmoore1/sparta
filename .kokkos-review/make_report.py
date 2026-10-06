@@ -21,7 +21,7 @@ RESOLVED_BY = {
 }
 
 def cat(v):
-  v = v.upper()
+  v = re.sub(r'^(FU|F-G)\S*\s+', '', v.upper())
   if v.startswith('NECESSARY+COMPLETE'): return 'nc'
   if 'COMPLETENESS-PARTIAL' in v: return 'np'
   if v.startswith('INCOMPLETE') or 'INCOMPLETE' in v.split('(')[0]: return 'inc'
@@ -80,18 +80,19 @@ for cl, ents, st in clusters:
     if ad: final = ad['verdict']
     c = cat(final)
     res = RESOLVED_BY.get(e['id'])
-    if c == 'inc' and res and 'accepted' not in res: c = 'res'
+    if c == 'inc' and res: c = 'acc' if 'accepted' in res else 'res'
     counts[c] += 1
     rows.append((e, final, c, ad, res))
   rows_by_cluster.append((cl, rows, st))
 LABEL['res'] = 'Incomplete, closed by follow-up'
+LABEL['acc'] = 'Behaviour change accepted'
 
 def esc(s): return html.escape(s or '')
 def code(s):  # backticks -> <code>
   return re.sub(r'`([^`]+)`', lambda m: '<code>' + m.group(1) + '</code>', esc(s))
 
 total = sum(counts.values())
-order = ['nc', 'np', 'res', 'inc', 'nsn', 'fail', 'other']
+order = ['nc', 'np', 'res', 'acc', 'inc', 'nsn', 'fail', 'other']
 
 followups = open(os.path.join(ROOT, 'AB_FOLLOWUPS.md'), errors='replace').read()
 fu = re.findall(r'^- (FU-\S+|Install\.sh|Notes|FU-1\.\.6)[^\n]*', followups, re.M)
@@ -133,7 +134,7 @@ code{font:0.88em var(--f-mono);background:var(--na-bg);padding:0 .25em;border-ra
 .chip{display:inline-block;font:500 .72rem var(--f-mono);letter-spacing:.02em;padding:2px 7px;border-radius:999px;white-space:nowrap}
 .c-nc{color:var(--ok);background:var(--ok-bg)} .c-np{color:var(--part);background:var(--part-bg)}
 .c-inc,.c-fail{color:var(--bad);background:var(--bad-bg)} .c-nsn,.c-other{color:var(--na);background:var(--na-bg)}
-.c-res{color:var(--res);background:var(--res-bg)}
+.c-res{color:var(--res);background:var(--res-bg)} .c-acc{color:var(--part);background:var(--part-bg)}
 .tile.k-nc b{color:var(--ok)} .tile.k-np b{color:var(--part)} .tile.k-inc b{color:var(--bad)} .tile.k-nsn b{color:var(--na)} .tile.k-res b{color:var(--res)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .filters button{font:500 .8rem var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer}
