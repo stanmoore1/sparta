@@ -15,3 +15,6 @@
 - FU-1..6, FU-8, FU-9: FIXED (see FIXES.md). FU-7: investigated, no code difference found (fixes/FX-followups.md).
 - FU-13 (from AB5, CPU+kk): compute react/isurf/grid tested a GRID group bitmask against SURF masks -> any grid group other than all gives zero tallies. FIXED: drop surf-mask tests; grid group already applied per cell in post_process_grid (same as compute isurf/grid). Evidence deck: $S/ab/AB5/sibling_gridgroup.
 - FU-14 (from AB5, CPU, warning text only): compute react/surf init() warning count loops lines[0..nlocal) so count depends on #ranks with distributed surfs. Not fixed (cosmetic).
+- FU-15 (from AB8, F-G19-4 CPU side): with FFT_SINGLE the CPU remap2d rejects precision=1 ("Single precision not supported"); before the fix the swapped args made it accept and move half the data (silently wrong). Now an explicit error. Decision: keep (explicit unsupported > silent wrong); report as behavior change.
+- FU-16 (from AB8, kk, unreachable from compute fft/grid): remap3d_kokkos collective plan, rank with no data -> send_size[] unallocated write at :689 (A and B). Remainder of deferred F-G20-4.
+- FU-17 (from AB8, CPU+kk, collective plans only): MPI_Comm_group/MPI_Group_incl groups never freed (remap3d_kokkos.cpp:789-793, src/FFT/remap3d.cpp:609-613), 144 B/plan.
