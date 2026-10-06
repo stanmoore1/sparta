@@ -52,6 +52,8 @@ enum{IGNORE,END,EXTRA};
 #define INVOKED_PER_PARTICLE 8
 #define INVOKED_PER_GRID 16
 
+#define BIG 1.0e20
+
 /* ---------------------------------------------------------------------- */
 
 FixAveHistoKokkos::FixAveHistoKokkos(SPARTA *spa, int narg, char **arg) :
@@ -104,6 +106,13 @@ void FixAveHistoKokkos::init()
       if (icompute < 0)
         error->all(FLERR,"Compute ID for fix ave/histo/kk does not exist");
       value2index[i] = icompute;
+
+      // per-grid inputs are read through KokkosBase device views;
+      //   some kokkos_flag computes (e.g. isurf/grid/kk) are not KokkosBase
+
+      if (kind == PERGRID &&
+          !dynamic_cast<KokkosBase*>(modify->compute[icompute]))
+        error->all(FLERR,"Fix ave/histo/kk does not (yet) support this compute");
 
     } else if (which[i] == FIX) {
       int ifix = modify->find_fix(ids[i]);
@@ -164,6 +173,8 @@ void FixAveHistoKokkos::end_of_step()
     k_bin.sync_device();
 
     minmax_type(minmax).init(minmax);
+    minmax.min_val = BIG;
+    minmax.max_val = -BIG;
   }
 
   minmax_type reducer(mm_scratch);
@@ -200,14 +211,14 @@ void FixAveHistoKokkos::end_of_step()
             compute->compute_scalar();
             compute->invoked_flag |= INVOKED_SCALAR;
           }
-          bin_one(minmax, compute->scalar);
+          bin_scalar(reducer, compute->scalar);
         } else {
           error->all(FLERR,"Compute kind not compatible with fix ave/histo/kk");
           if (!(compute->invoked_flag & INVOKED_VECTOR)) {
             compute->compute_vector();
             compute->invoked_flag |= INVOKED_VECTOR;
           }
-          bin_one(minmax, compute->vector[j-1]);
+          bin_scalar(reducer, compute->vector[j-1]);
         }
       } else if (kind == GLOBAL && mode == VECTOR) {
           error->all(FLERR,"Compute kind not compatible with fix ave/histo/kk");
@@ -277,20 +288,20 @@ void FixAveHistoKokkos::end_of_step()
 
       if (kind == GLOBAL && mode == SCALAR) {
         if (j == 0) {
-          bin_one(minmax, fix->compute_scalar());
+          bin_scalar(reducer, fix->compute_scalar());
         }
         else {
           error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
-          bin_one(minmax, fix->compute_vector(j-1));
+          bin_scalar(reducer, fix->compute_vector(j-1));
         }
       } else if (kind == GLOBAL && mode == VECTOR) {
         error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
         if (j == 0) {
           int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_one(minmax, fix->compute_vector(i));
+          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_vector(i));
         } else {
           int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_one(minmax, fix->compute_array(i,j-1));
+          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_array(i,j-1));
         }
 
       } else if (kind == PERPARTICLE) {
@@ -316,7 +327,7 @@ void FixAveHistoKokkos::end_of_step()
 
     } else if (which[i] == VARIABLE) {
       if (kind == GLOBAL && mode == SCALAR) {
-        bin_one(minmax,input->variable->compute_equal(m));
+        bin_scalar(reducer,input->variable->compute_equal(m));
 
       } else if (which[i] == VARIABLE && kind == PERPARTICLE) {
         if (particle->maxlocal > maxvector) {
@@ -618,6 +629,20 @@ void FixAveHistoKokkos::bin_particles(
 }
 
 /* ----------------------------------------------------------------------
+   bin a single global value
+   d_bin/d_stats are device views, so bin on the device with a
+   single-iteration kernel instead of calling bin_one() on the host
+------------------------------------------------------------------------- */
+void FixAveHistoKokkos::bin_scalar(minmax_type& reducer, double value)
+{
+  minmax_reset();
+  scalar_value = value;
+  auto policy = Kokkos::RangePolicy<TagFixAveHisto_BinScalar,DeviceType>(0, 1);
+  Kokkos::parallel_reduce(policy, *this, reducer);
+  minmax_fold();
+}
+
+/* ----------------------------------------------------------------------
    bin a per-grid vector of values with stride
 ------------------------------------------------------------------------- */
 void FixAveHistoKokkos::bin_grid_cells(
@@ -634,6 +659,7 @@ void FixAveHistoKokkos::bin_grid_cells(
   if (groupflag) {
     GridKokkos* grid_kk = (GridKokkos*) grid;
     grid_kk->sync(Device, CINFO_MASK);
+    d_cinfo = grid_kk->k_cinfo.view_device();
     auto policy = RangePolicy<TagFixAveHisto_BinGridCells1,DeviceType>(0, n);
     Kokkos::parallel_reduce(policy, *this, reducer);
   } else {
@@ -670,6 +696,15 @@ FixAveHistoKokkos::operator()(TagFixAveHisto_BinVector, const int i,
                               minmax_type::value_type& lminmax) const
 {
   bin_one(lminmax, d_values(i));
+}
+
+/* ------------------------------------------------------------------------- */
+KOKKOS_INLINE_FUNCTION
+void
+FixAveHistoKokkos::operator()(TagFixAveHisto_BinScalar, const int,
+                              minmax_type::value_type& lminmax) const
+{
+  bin_one(lminmax, scalar_value);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -722,7 +757,7 @@ void
 FixAveHistoKokkos::operator()(TagFixAveHisto_BinGridCells1, const int i,
                               minmax_type::value_type& lminmax) const
 {
-  if (grid_kk->k_cinfo.view_device()[i].mask & groupbit) {
+  if (d_cinfo[i].mask & groupbit) {
     bin_one(lminmax, d_values(i));
   }
 }

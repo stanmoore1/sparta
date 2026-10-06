@@ -346,6 +346,17 @@ void GridKokkos::remove_custom(int index)
   k_eiarray.sync_device();
   k_edvec.sync_device();
   k_edarray.sync_device();
+
+  // ewhich,eicol,edcol were compacted above on the host, so sync here
+
+  k_ewhich.modify_host();
+  k_ewhich.sync_device();
+
+  k_eicol.modify_host();
+  k_eicol.sync_device();
+
+  k_edcol.modify_host();
+  k_edcol.sync_device();
 }
 
 /* ----------------------------------------------------------------------

@@ -133,6 +133,8 @@ UpdateKokkos::UpdateKokkos(SPARTA *sparta) : Update(sparta),
   , tmp_compute_isurf_grid_kk(sparta)
   , tmp_compute_react_isurf_grid_kk(sparta)
   , tmp_compute_react_surf_kk(sparta)
+  , tmp_compute_surf_coll_tally_kk(sparta)
+  , tmp_compute_surf_react_tally_kk(sparta)
 #endif
 {
   nslist_surf = nslist_isurf = nslist_react_isurf = nslist_react_surf = 0;
@@ -365,6 +367,11 @@ void UpdateKokkos::setup()
 
     sparta->kokkos->prewrap = 0;
   } else {
+
+    // mixtures/species may have changed since the last run
+
+    particle_kk->update_species2group();
+
     grid_kk->modify(Host,ALL_MASK);
     grid_kk->update_hash();
 
@@ -548,6 +555,15 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   int pstart,pstop,entryexit,any_entryexit;
   int continue_loop_flag = 0;
 
+  // whether the move kernel accumulates counters via parallel_reduce
+  //   (ATOMIC_REDUCTION = -1) rather than into d_scalars, must mirror the
+  //   kernel dispatch below
+
+  bool use_reduce = sparta->kokkos->need_atomics && !sparta->kokkos->atomic_reduction;
+#if !defined SPARTA_KOKKOS_GPU && defined KOKKOS_ENABLE_SERIAL
+  if constexpr(std::is_same<DeviceType,Kokkos::Serial>::value) use_reduce = false;
+#endif
+
   // extend migration list if necessary
 
   int maxlocal = particle->maxlocal;
@@ -566,7 +582,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   nscheck_one = nscollide_one = 0;
   surf->nreact_one = 0;
 
-  if (!sparta->kokkos->need_atomics || sparta->kokkos->atomic_reduction) {
+  if (!use_reduce) {
     h_ntouch_one() = 0;
     h_nexit_one() = 0;
     h_nboundary_one() = 0;
@@ -855,7 +871,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
 
     int error_flag;
 
-    if (!sparta->kokkos->need_atomics || sparta->kokkos->atomic_reduction) {
+    if (!use_reduce) {
       ntouch_one += h_ntouch_one();
       nexit_one += h_nexit_one();
       nboundary_one += h_nboundary_one();
@@ -1223,6 +1239,22 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   if (pflag == PDONE) {
     pflag = particle_i.flag = PKEEP;
     if (niterate > 1) return;
+  }
+
+  // a reaction product discarded during a surface collision earlier in
+  //   this move (e.g. by fix ambipolar or piston) is not moved, but it must
+  //   go on the migrate list, since migration is what deletes it
+
+  if (pflag == PDISCARD) {
+    int indx;
+    if (ATOMIC_REDUCTION == 0) {
+      indx = d_nmigrate();
+      d_nmigrate()++;
+    } else {
+      indx = Kokkos::atomic_fetch_add(&d_nmigrate(),1);
+    }
+    k_mlist.view_device()[indx] = i;
+    return;
   }
 
   x = particle_i.x;
@@ -2105,6 +2137,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         }
         bflag = SURFACE;
       } else {
+        jpart = NULL;   // as in Domain::collide(), no product particle here
         bflag = domain_kk_copy.obj.collide_kokkos(ipart,outface,lo,hi,xnew/*,dtremain*/,reaction);
       }
 
@@ -2580,6 +2613,8 @@ void UpdateKokkos::setup_surf_tally_copies()
   for (int i = nisurf; i < KOKKOS_MAX_SLIST; i++) slist_active_isurf_copy[i].copy(&tmp_compute_isurf_grid_kk);
   for (int i = nrisurf; i < KOKKOS_MAX_SLIST; i++) slist_active_react_isurf_copy[i].copy(&tmp_compute_react_isurf_grid_kk);
   for (int i = nrsurf; i < KOKKOS_MAX_SLIST; i++) slist_active_react_surf_copy[i].copy(&tmp_compute_react_surf_kk);
+  for (int i = nct; i < KOKKOS_MAX_SLIST; i++) slist_active_coll_tally_copy[i].copy(&tmp_compute_surf_coll_tally_kk);
+  for (int i = nrt; i < KOKKOS_MAX_SLIST; i++) slist_active_react_tally_copy[i].copy(&tmp_compute_surf_react_tally_kk);
 #else
   tally_buf_sync(k_slist_isurf,d_slist_isurf);
   tally_buf_sync(k_slist_react_isurf,d_slist_react_isurf);
@@ -2690,19 +2725,30 @@ namespace {
   }
 }
 
+/* ----------------------------------------------------------------------
+   true if style is base or base + "/kk" (explicit Kokkos style name)
+------------------------------------------------------------------------- */
+
+static int sc_style_is(const char *style, const char *base)
+{
+  const size_t n = strlen(base);
+  if (strncmp(style,base,n) != 0) return 0;
+  return (style[n] == '\0' || strcmp(&style[n],"/kk") == 0);
+}
+
 /* ---------------------------------------------------------------------- */
 
 int UpdateKokkos::surf_collide_style_tag(SurfCollide *sc)
 {
-  if (strcmp(sc->style,"specular") == 0) return SC_SPECULAR;
-  if (strcmp(sc->style,"diffuse") == 0) return SC_DIFFUSE;
-  if (strcmp(sc->style,"vanish") == 0) return SC_VANISH;
-  if (strcmp(sc->style,"piston") == 0) return SC_PISTON;
-  if (strcmp(sc->style,"transparent") == 0) return SC_TRANSPARENT;
-  if (strcmp(sc->style,"adiabatic") == 0) return SC_ADIABATIC;
-  if (strcmp(sc->style,"impulsive") == 0) return SC_IMPULSIVE;
-  if (strcmp(sc->style,"td") == 0) return SC_TD;
-  if (strcmp(sc->style,"cll") == 0) return SC_CLL;
+  if (sc_style_is(sc->style,"specular")) return SC_SPECULAR;
+  if (sc_style_is(sc->style,"diffuse")) return SC_DIFFUSE;
+  if (sc_style_is(sc->style,"vanish")) return SC_VANISH;
+  if (sc_style_is(sc->style,"piston")) return SC_PISTON;
+  if (sc_style_is(sc->style,"transparent")) return SC_TRANSPARENT;
+  if (sc_style_is(sc->style,"adiabatic")) return SC_ADIABATIC;
+  if (sc_style_is(sc->style,"impulsive")) return SC_IMPULSIVE;
+  if (sc_style_is(sc->style,"td")) return SC_TD;
+  if (sc_style_is(sc->style,"cll")) return SC_CLL;
   return -1;
 }
 

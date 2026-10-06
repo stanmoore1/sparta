@@ -265,15 +265,18 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         break;
       }
 
-      //if (react_prob < 0) error->warning(FLERR,"Negative reaction probability");
-      //else if (react_prob > 1) error->warning(FLERR,"Reaction probability greater than 1");
-
     default:
       //error->one(FLERR,"Unknown outcome in reaction");
       //d_error_flag() = 1;
       Kokkos::abort("ReactTCEKokkos: Unknown outcome in reaction\n");
       break;
     }
+
+    // sum of reaction probabilities should be < 1 for a valid TCE scheme
+    // flag it for a once-per-run host warning, see react_tce.cpp
+
+    if (react_prob < 0.0) Kokkos::atomic_or(&d_prob_warn(),1);
+    else if (react_prob > 1.0) Kokkos::atomic_or(&d_prob_warn(),2);
 
     // test against random number to see if this reaction occurs
     // if it does, reset species of I,J and optional K to product species

@@ -1,0 +1,771 @@
+diff --git a/src/FFT/remap3d.cpp b/src/FFT/remap3d.cpp
+index c6d81de1..ed56ffd2 100644
+--- a/src/FFT/remap3d.cpp
++++ b/src/FFT/remap3d.cpp
+@@ -611,6 +611,8 @@ struct remap_plan_3d *remap_3d_create_plan(
+     MPI_Group_incl(orig_group, plan->commringlen,
+                    plan->commringlist, &new_group);
+     MPI_Comm_create(comm, new_group, &plan->comm);
++    MPI_Group_free(&new_group);
++    MPI_Group_free(&orig_group);
+   }
+ 
+   // if using collective and the comm ring list is empty create
+diff --git a/src/KOKKOS/remap2d_kokkos.cpp b/src/KOKKOS/remap2d_kokkos.cpp
+index d10bf2a2..31403041 100644
+--- a/src/KOKKOS/remap2d_kokkos.cpp
++++ b/src/KOKKOS/remap2d_kokkos.cpp
+@@ -224,7 +224,7 @@ struct remap_plan_2d_kokkos<DeviceType>* RemapKokkos2d<DeviceType>::remap_2d_cre
+ 
+   // allocate memory for plan data struct
+ 
+-  plan = new struct remap_plan_2d_kokkos<DeviceType>;
++  plan = new struct remap_plan_2d_kokkos<DeviceType>();
+   if (plan == nullptr) return nullptr;
+   plan->usecollective = usecollective;
+   plan->usegpu_aware = usegpu_aware;
+@@ -452,9 +452,9 @@ void RemapKokkos2d<DeviceType>::remap_2d_destroy_plan_kokkos(struct remap_plan_2
+   if (plan == nullptr) return;
+ 
+   // free MPI communicator
++  // 2d remap has no collective implementation, comm is always MPI_Comm_dup'd
+ 
+-  if (!((plan->usecollective) && (plan->commringlen == 0)))
+-    MPI_Comm_free(&plan->comm);
++  MPI_Comm_free(&plan->comm);
+ 
+   // free internal arrays
+ 
+diff --git a/src/KOKKOS/remap3d_kokkos.cpp b/src/KOKKOS/remap3d_kokkos.cpp
+index fc02411d..7a3c3ee1 100644
+--- a/src/KOKKOS/remap3d_kokkos.cpp
++++ b/src/KOKKOS/remap3d_kokkos.cpp
+@@ -591,14 +591,18 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+     // because of the Alltoallv, both send and recv have to be initialized even if
+     // only one of those is performed
+ 
++    // a rank with no data to send or recv in this plan is not in commringlist,
++    // its plan arrays are not allocated and it does not take part in the Alltoallv
++
++    plan->selfcommringloc = -1;
++    plan->selfnsendloc = -1;
++    plan->selfnrecvloc = -1;
++    plan->self = 0;
++
+     if (nsend || nrecv) {
+ 
+       // send space
+ 
+-      plan->selfcommringloc = -1;
+-      plan->selfnsendloc = -1;
+-      plan->selfnrecvloc = -1;
+-
+       plan->nsend = nsend;
+       plan->pack = PackKokkos3d<DeviceType>::pack_3d;
+ 
+@@ -654,121 +658,121 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+       if (plan->recv_offset == nullptr || plan->recv_size == nullptr ||
+           plan->rcvcnts == nullptr || plan->rdispls == nullptr ||
+           plan->unpackplan == nullptr) return nullptr;
+-    }
+ 
+-    // store send info, with self as last entry
++      // store send info, with self as last entry
+ 
+-    nsend = 0;
+-    ibuf = 0;
+-    int total_send_size = 0;
+-    for (i = 0; i < plan->commringlen; i++) {
+-      iproc = plan->commringlist[i];
+-      if (iproc == me) {
+-        plan->selfcommringloc = i;
+-        plan->selfnsendloc = nsend;
+-      }
+-      if (remap_3d_collide(&in,&outarray[iproc],&overlap)) {
+-        //plan->send_proc[nsend] = i;
+-        // number of entries required for this pack's 3-d coords
+-        plan->send_offset[nsend] = nqty *
+-          ((overlap.klo-in.klo)*in.jsize*in.isize +
+-            ((overlap.jlo-in.jlo)*in.isize + overlap.ilo-in.ilo));
+-        plan->packplan[nsend].nfast = nqty*overlap.isize;
+-        plan->packplan[nsend].nmid = overlap.jsize;
+-        plan->packplan[nsend].nslow = overlap.ksize;
+-        plan->packplan[nsend].nstride_line = nqty*in.isize;
+-        plan->packplan[nsend].nstride_plane = nqty*in.jsize*in.isize;
+-        plan->packplan[nsend].nqty = nqty;
+-        // total amount of overlap
+-        plan->send_size[i] = nqty*overlap.isize*overlap.jsize*overlap.ksize;
+-        plan->sendcnts[i] = plan->send_size[i];
+-        plan->sdispls[i] = ibuf;
+-        ibuf += plan->send_size[i];
+-        nsend++;
+-      } else {
+-        plan->send_size[i] = 0;
+-        plan->sdispls[i] = ibuf;
+-        plan->sendcnts[i] = 0;
++      nsend = 0;
++      ibuf = 0;
++      int total_send_size = 0;
++      for (i = 0; i < plan->commringlen; i++) {
++        iproc = plan->commringlist[i];
++        if (iproc == me) {
++          plan->selfcommringloc = i;
++          plan->selfnsendloc = nsend;
++        }
++        if (remap_3d_collide(&in,&outarray[iproc],&overlap)) {
++          //plan->send_proc[nsend] = i;
++          // number of entries required for this pack's 3-d coords
++          plan->send_offset[nsend] = nqty *
++            ((overlap.klo-in.klo)*in.jsize*in.isize +
++              ((overlap.jlo-in.jlo)*in.isize + overlap.ilo-in.ilo));
++          plan->packplan[nsend].nfast = nqty*overlap.isize;
++          plan->packplan[nsend].nmid = overlap.jsize;
++          plan->packplan[nsend].nslow = overlap.ksize;
++          plan->packplan[nsend].nstride_line = nqty*in.isize;
++          plan->packplan[nsend].nstride_plane = nqty*in.jsize*in.isize;
++          plan->packplan[nsend].nqty = nqty;
++          // total amount of overlap
++          plan->send_size[i] = nqty*overlap.isize*overlap.jsize*overlap.ksize;
++          plan->sendcnts[i] = plan->send_size[i];
++          plan->sdispls[i] = ibuf;
++          ibuf += plan->send_size[i];
++          nsend++;
++        } else {
++          plan->send_size[i] = 0;
++          plan->sdispls[i] = ibuf;
++          plan->sendcnts[i] = 0;
++        }
++        total_send_size += plan->send_size[i];
+       }
+-      total_send_size += plan->send_size[i];
+-    }
+ 
+-    if (total_send_size) {
+-      plan->d_sendbuf = typename FFT_AT::t_FFT_SCALAR_1d("remap3d:sendbuf",total_send_size);
+-      if (!plan->d_sendbuf.data()) return nullptr;
+-    }
++      if (total_send_size) {
++        plan->d_sendbuf = typename FFT_AT::t_FFT_SCALAR_1d("remap3d:sendbuf",total_send_size);
++        if (!plan->d_sendbuf.data()) return nullptr;
++      }
+ 
+-    // store recv info, with self as last entry
++      // store recv info, with self as last entry
+ 
+-    ibuf = 0;
+-    nrecv = 0;
++      ibuf = 0;
++      nrecv = 0;
+ 
+-    for (i = 0; i < plan->commringlen; i++) {
+-      iproc = plan->commringlist[i];
+-      if (iproc == me) {
+-        plan->selfnrecvloc = nrecv;
+-      }
+-      if (remap_3d_collide(&out,&inarray[iproc],&overlap)) {
+-
+-        if (permute == 0) {
+-          plan->recv_offset[nrecv] = nqty *
+-            ((overlap.klo-out.klo)*out.jsize*out.isize +
+-              (overlap.jlo-out.jlo)*out.isize + (overlap.ilo-out.ilo));
+-          plan->unpackplan[nrecv].nfast = nqty*overlap.isize;
+-          plan->unpackplan[nrecv].nmid = overlap.jsize;
+-          plan->unpackplan[nrecv].nslow = overlap.ksize;
+-          plan->unpackplan[nrecv].nstride_line = nqty*out.isize;
+-          plan->unpackplan[nrecv].nstride_plane = nqty*out.jsize*out.isize;
+-          plan->unpackplan[nrecv].nqty = nqty;
++      for (i = 0; i < plan->commringlen; i++) {
++        iproc = plan->commringlist[i];
++        if (iproc == me) {
++          plan->selfnrecvloc = nrecv;
+         }
+-        else if (permute == 1) {
+-          plan->recv_offset[nrecv] = nqty *
+-            ((overlap.ilo-out.ilo)*out.ksize*out.jsize +
+-              (overlap.klo-out.klo)*out.jsize + (overlap.jlo-out.jlo));
+-          plan->unpackplan[nrecv].nfast = overlap.isize;
+-          plan->unpackplan[nrecv].nmid = overlap.jsize;
+-          plan->unpackplan[nrecv].nslow = overlap.ksize;
+-          plan->unpackplan[nrecv].nstride_line = nqty*out.jsize;
+-          plan->unpackplan[nrecv].nstride_plane = nqty*out.ksize*out.jsize;
+-          plan->unpackplan[nrecv].nqty = nqty;
+-        }
+-        else {
+-          plan->recv_offset[nrecv] = nqty *
+-            ((overlap.jlo-out.jlo)*out.isize*out.ksize +
+-              (overlap.ilo-out.ilo)*out.ksize + (overlap.klo-out.klo));
+-          plan->unpackplan[nrecv].nfast = overlap.isize;
+-          plan->unpackplan[nrecv].nmid = overlap.jsize;
+-          plan->unpackplan[nrecv].nslow = overlap.ksize;
+-          plan->unpackplan[nrecv].nstride_line = nqty*out.ksize;
+-          plan->unpackplan[nrecv].nstride_plane = nqty*out.isize*out.ksize;
+-          plan->unpackplan[nrecv].nqty = nqty;
++        if (remap_3d_collide(&out,&inarray[iproc],&overlap)) {
++
++          if (permute == 0) {
++            plan->recv_offset[nrecv] = nqty *
++              ((overlap.klo-out.klo)*out.jsize*out.isize +
++                (overlap.jlo-out.jlo)*out.isize + (overlap.ilo-out.ilo));
++            plan->unpackplan[nrecv].nfast = nqty*overlap.isize;
++            plan->unpackplan[nrecv].nmid = overlap.jsize;
++            plan->unpackplan[nrecv].nslow = overlap.ksize;
++            plan->unpackplan[nrecv].nstride_line = nqty*out.isize;
++            plan->unpackplan[nrecv].nstride_plane = nqty*out.jsize*out.isize;
++            plan->unpackplan[nrecv].nqty = nqty;
++          }
++          else if (permute == 1) {
++            plan->recv_offset[nrecv] = nqty *
++              ((overlap.ilo-out.ilo)*out.ksize*out.jsize +
++                (overlap.klo-out.klo)*out.jsize + (overlap.jlo-out.jlo));
++            plan->unpackplan[nrecv].nfast = overlap.isize;
++            plan->unpackplan[nrecv].nmid = overlap.jsize;
++            plan->unpackplan[nrecv].nslow = overlap.ksize;
++            plan->unpackplan[nrecv].nstride_line = nqty*out.jsize;
++            plan->unpackplan[nrecv].nstride_plane = nqty*out.ksize*out.jsize;
++            plan->unpackplan[nrecv].nqty = nqty;
++          }
++          else {
++            plan->recv_offset[nrecv] = nqty *
++              ((overlap.jlo-out.jlo)*out.isize*out.ksize +
++                (overlap.ilo-out.ilo)*out.ksize + (overlap.klo-out.klo));
++            plan->unpackplan[nrecv].nfast = overlap.isize;
++            plan->unpackplan[nrecv].nmid = overlap.jsize;
++            plan->unpackplan[nrecv].nslow = overlap.ksize;
++            plan->unpackplan[nrecv].nstride_line = nqty*out.ksize;
++            plan->unpackplan[nrecv].nstride_plane = nqty*out.isize*out.ksize;
++            plan->unpackplan[nrecv].nqty = nqty;
++          }
++
++          plan->recv_size[i] = nqty*overlap.isize*overlap.jsize*overlap.ksize;
++          plan->rcvcnts[i] = plan->recv_size[i];
++          plan->rdispls[i] = ibuf;
++          ibuf += plan->recv_size[i];
++          nrecv++;
++        } else {
++          plan->recv_size[i] = 0;
++          plan->rcvcnts[i] = 0;
++          plan->rdispls[i] = ibuf;
+         }
++      }
+ 
+-        plan->recv_size[i] = nqty*overlap.isize*overlap.jsize*overlap.ksize;
+-        plan->rcvcnts[i] = plan->recv_size[i];
+-        plan->rdispls[i] = ibuf;
+-        ibuf += plan->recv_size[i];
+-        nrecv++;
+-      } else {
+-        plan->recv_size[i] = 0;
+-        plan->rcvcnts[i] = 0;
+-        plan->rdispls[i] = ibuf;
++      // self data is copied directly, not via the Alltoallv
++
++      if (plan->selfcommringloc >= 0 && plan->sendcnts[plan->selfcommringloc]) {
++        plan->self = 1;
++        plan->sendcnts[plan->selfcommringloc] = 0;
++        plan->rcvcnts[plan->selfcommringloc] = 0;
+       }
++
+     }
+ 
+     // init remaining fields in remap plan
+ 
+     plan->memory = memory;
+ 
+-    if (plan->sendcnts[plan->selfcommringloc]) {
+-      plan->self = 1;
+-      plan->sendcnts[plan->selfcommringloc] = 0;
+-      plan->rcvcnts[plan->selfcommringloc] = 0;
+-    }
+-    else {
+-      plan->self = 0;
+-    }
+-
+ 
+     // if requested, allocate internal scratch space for recvs,
+     // only need it if I will receive any data (including self)
+@@ -791,6 +795,8 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+       MPI_Group_incl(orig_group, plan->commringlen,
+                       plan->commringlist, &new_group);
+       MPI_Comm_create(comm, new_group, &plan->comm);
++      MPI_Group_free(&new_group);
++      MPI_Group_free(&orig_group);
+     }
+ 
+     // if using collective and the comm ring list is empty create
+@@ -798,6 +804,15 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+ 
+     else
+       MPI_Comm_create(comm, MPI_GROUP_EMPTY, &plan->comm);
++
++    // a rank not in commringlist got MPI_COMM_NULL: like the CPU remap,
++    // give it an empty comm ring so it skips the Alltoallv and the comm free
++
++    if (!(nsend || nrecv) && plan->commringlen > 0) {
++      free(plan->commringlist);
++      plan->commringlist = nullptr;
++      plan->commringlen = 0;
++    }
+   }
+ 
+   // free locally malloced space
+diff --git a/src/compute_isurf_grid.cpp b/src/compute_isurf_grid.cpp
+index a56ae019..1b9fedd3 100644
+--- a/src/compute_isurf_grid.cpp
++++ b/src/compute_isurf_grid.cpp
+@@ -25,6 +25,8 @@
+ #include "memory.h"
+ #include "error.h"
+ 
++#include <map>
++
+ using namespace SPARTA_NS;
+ 
+ enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
+@@ -458,8 +460,7 @@ void ComputeISurfGrid::post_process_isurf_grid()
+   //   to my owned grid cells
+   // for implicit surfs, surfIDs are also cellIDs
+ 
+-  grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
+-                               array_surf_tally,array_grid);
++  collate_tallies(sparta,ntally,ntotal,tally2surf,array_surf_tally,array_grid);
+ 
+   // zero out result if icell not in grid group
+   // can't apply until now, b/c tally included surfs in ghost cells and
+@@ -509,6 +510,12 @@ void ComputeISurfGrid::grow_tally()
+ 
+ void ComputeISurfGrid::reallocate()
+ {
++  // the grid changed (e.g. fix balance, adapt) after tallies may have been
++  //   collated: array_grid is in the old cell order, force a re-collate
++  //   from the per-surf tallies (keyed by ID) on the next post-process
++
++  combined = 0;
++
+   // normflux is indexed by surf ID and is sized by the surf count,
+   // not the grid cell count, so it must be reset unconditionally
+   // implicit surfs are re-created by ablation with the grid unchanged
+@@ -534,3 +541,202 @@ bigint ComputeISurfGrid::memory_usage()
+   bytes += maxtally * sizeof(surfint);          // tally2surf
+   return bytes;
+ }
++
++/* ----------------------------------------------------------------------
++   sum per-surf tallies of implicit surfs into owned grid cells
++   shared by compute isurf/grid and compute react/isurf/grid (+ kk styles)
++   nrow tallies, ncol values each, ids = surf IDs = IDs of the owning cells
++   out = per-grid array for nlocal owned cells, zeroed here
++   usual case: every tallied cell is still an owned or ghost cell of this
++     proc, use Grid::collate_array_implicit() directly
++   if the grid changed since the tallies were made (e.g. fix balance
++     migrated cells on the tally step), a tallied cell may be neither owned
++     nor ghost anymore, Grid::collate_array_implicit() cannot route it
++     (it would sum it into owned cell 0), so route those tallies to the
++     cell's current owner via a rendezvous directory of owned cell IDs
++   tallies for cells that no longer exist anywhere (e.g. refined away)
++     are dropped
++------------------------------------------------------------------------- */
++
++namespace {
++  struct RvousTally {
++    Memory *memory;
++    int ncol;
++  };
++
++  union ubufc {
++    double d;
++    int64_t i;
++    ubufc(double arg) : d(arg) {}
++    ubufc(int64_t arg) : i(arg) {}
++  };
++
++  inline int rvous_proc(cellint id, int nprocs)
++  {
++    uint64_t h = (uint64_t) id;
++    h ^= h >> 33;
++    h *= 0xff51afd7ed558ccdULL;
++    h ^= h >> 33;
++    return (int) (h % (uint64_t) nprocs);
++  }
++
++  // input datum = ID, owner proc (-1 for a tally), ncol values
++  // output datum = ID, ncol values, sent to the owner proc
++
++  int rvous_route(int n, char *inbuf, int &flag, int *&proclist,
++                  char *&outbuf, void *ptr)
++  {
++    RvousTally *rt = (RvousTally *) ptr;
++    int ncol = rt->ncol;
++    int insize = ncol + 2;
++    double *in = (double *) inbuf;
++
++    std::map<cellint,int> owner;
++    int ntally = 0;
++    for (int i = 0; i < n; i++) {
++      double *one = &in[(bigint) i*insize];
++      int proc = (int) ubufc(one[1]).i;
++      if (proc >= 0) owner[(cellint) ubufc(one[0]).i] = proc;
++      else ntally++;
++    }
++
++    rt->memory->create(proclist,ntally,"isurf/grid:proclist");
++    double *out = (double *)
++      rt->memory->smalloc((bigint) ntally*(ncol+1)*sizeof(double),
++                          "isurf/grid:outbuf");
++
++    int nout = 0;
++    bigint m = 0;
++    for (int i = 0; i < n; i++) {
++      double *one = &in[(bigint) i*insize];
++      if ((int) ubufc(one[1]).i >= 0) continue;
++      std::map<cellint,int>::iterator it =
++        owner.find((cellint) ubufc(one[0]).i);
++      if (it == owner.end()) continue;
++      proclist[nout++] = it->second;
++      out[m++] = one[0];
++      for (int j = 0; j < ncol; j++) out[m++] = one[2+j];
++    }
++
++    flag = 2;
++    outbuf = (char *) out;
++    return nout;
++  }
++}
++
++void ComputeISurfGrid::collate_tallies(SPARTA *sparta, int nrow, int ncol,
++                                       surfint *ids, double **in,
++                                       double **out)
++{
++  Grid *grid = sparta->grid;
++  Comm *comm = sparta->comm;
++  Memory *memory = sparta->memory;
++
++  if (!grid->hashfilled) grid->rehash();
++  Grid::MyHash *ghash = grid->hash;
++
++  // nunknown = # of my tallies whose cell I neither own nor ghost
++
++  int nunknown = 0;
++  for (int i = 0; i < nrow; i++)
++    if (ghash->find((cellint) ids[i]) == ghash->end()) nunknown++;
++
++  int anyunknown;
++  MPI_Allreduce(&nunknown,&anyunknown,1,MPI_INT,MPI_MAX,sparta->world);
++
++  if (!anyunknown) {
++    grid->collate_array_implicit(nrow,ncol,(cellint *) ids,in,out);
++    return;
++  }
++
++  // split tallies into known (normal collate) and unknown (rendezvous)
++
++  int nknown = nrow - nunknown;
++  cellint *kids;
++  double **kin;
++  memory->create(kids,MAX(nknown,1),"isurf/grid:kids");
++  kin = (double **) memory->smalloc((bigint) MAX(nknown,1)*sizeof(double *),
++                                    "isurf/grid:kin");
++
++  Grid::ChildCell *cells = grid->cells;
++  int nglocal = grid->nlocal;
++  int nprocs = comm->nprocs;
++  int me = comm->me;
++
++  // rendezvous input: directory of my owned cells + my unknown tallies
++
++  int ndir = 0;
++  for (int icell = 0; icell < nglocal; icell++)
++    if (cells[icell].nsplit > 0) ndir++;
++
++  int nsend = ndir + nunknown;
++  int insize = ncol + 2;
++  int *proclist;
++  double *inbuf;
++  memory->create(proclist,MAX(nsend,1),"isurf/grid:proclist");
++  memory->create(inbuf,(bigint) MAX(nsend,1)*insize,"isurf/grid:inbuf");
++
++  int n = 0;
++  bigint m = 0;
++  for (int icell = 0; icell < nglocal; icell++) {
++    if (cells[icell].nsplit <= 0) continue;
++    proclist[n++] = rvous_proc(cells[icell].id,nprocs);
++    inbuf[m++] = ubufc((int64_t) cells[icell].id).d;
++    inbuf[m++] = ubufc((int64_t) me).d;
++    for (int j = 0; j < ncol; j++) inbuf[m++] = 0.0;
++  }
++
++  nknown = 0;
++  for (int i = 0; i < nrow; i++) {
++    if (ghash->find((cellint) ids[i]) != ghash->end()) {
++      kids[nknown] = (cellint) ids[i];
++      kin[nknown++] = in[i];
++      continue;
++    }
++    proclist[n++] = rvous_proc((cellint) ids[i],nprocs);
++    inbuf[m++] = ubufc((int64_t) ids[i]).d;
++    inbuf[m++] = ubufc((int64_t) -1).d;
++    for (int j = 0; j < ncol; j++) inbuf[m++] = in[i][j];
++  }
++
++  // normal collate of known tallies, zeroes out
++
++  grid->collate_array_implicit(nknown,ncol,kids,kin,out);
++
++  memory->destroy(kids);
++  memory->sfree(kin);
++
++  // route unknown tallies to current owners of their cells
++
++  RvousTally rt;
++  rt.memory = memory;
++  rt.ncol = ncol;
++
++  char *buf;
++  int nout = comm->rendezvous(1,nsend,(char *) inbuf,insize*sizeof(double),
++                              0,proclist,rvous_route,
++                              0,buf,(ncol+1)*sizeof(double),(void *) &rt);
++  double *outbuf = (double *) buf;
++
++  memory->destroy(proclist);
++  memory->destroy(inbuf);
++
++  // sum routed tallies into my owned cells
++
++  if (!grid->hashfilled) grid->rehash();
++  ghash = grid->hash;
++
++  m = 0;
++  for (int i = 0; i < nout; i++) {
++    cellint cellID = (cellint) ubufc(outbuf[m++]).i;
++    Grid::MyHash::iterator it = ghash->find(cellID);
++    if (it == ghash->end() || it->second >= nglocal) {
++      m += ncol;
++      continue;
++    }
++    int icell = it->second;
++    for (int j = 0; j < ncol; j++) out[icell][j] += outbuf[m++];
++  }
++
++  memory->sfree(outbuf);
++}
+diff --git a/src/compute_isurf_grid.h b/src/compute_isurf_grid.h
+index 844123d3..732d1850 100644
+--- a/src/compute_isurf_grid.h
++++ b/src/compute_isurf_grid.h
+@@ -41,6 +41,8 @@ class ComputeISurfGrid : public Compute {
+   virtual int tallyinfo(surfint *&);
+   void post_process_isurf_grid();
+   void reallocate();
++  static void collate_tallies(class SPARTA *, int, int, surfint *,
++                              double **, double **);
+   bigint memory_usage();
+ 
+  protected:
+diff --git a/src/compute_react_isurf_grid.cpp b/src/compute_react_isurf_grid.cpp
+index 329c4f57..861f924a 100644
+--- a/src/compute_react_isurf_grid.cpp
++++ b/src/compute_react_isurf_grid.cpp
+@@ -14,6 +14,7 @@
+ 
+ #include "string.h"
+ #include "compute_react_isurf_grid.h"
++#include "compute_isurf_grid.h"
+ #include "particle.h"
+ #include "mixture.h"
+ #include "surf.h"
+@@ -298,8 +299,11 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
+   //   to my owned grid cells
+   // for implicit surfs, surfIDs are also cellIDs
+ 
+-  grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
+-                               array_surf_tally,array_grid);
++  // tallies whose cell migrated since they were made (e.g. fix balance on
++  //   this step) are routed to the cell's current owner
++
++  ComputeISurfGrid::collate_tallies(sparta,ntally,ntotal,tally2surf,
++                                    array_surf_tally,array_grid);
+ 
+   // zero out result if icell not in grid group
+   // can't apply until now, b/c tally included surfs in ghost cells and
+@@ -334,6 +338,18 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
+   }
+ }
+ 
++/* ----------------------------------------------------------------------
++   grid changed (e.g. fix balance, adapt) after tallies may have been
++     collated: array_grid is in the old cell order, so force a re-collate
++     from the per-surf tallies (keyed by ID) on the next post-process
++   array_grid is resized in post_process_isurf_grid()
++------------------------------------------------------------------------- */
++
++void ComputeReactISurfGrid::reallocate()
++{
++  combined = 0;
++}
++
+ /* ---------------------------------------------------------------------- */
+ 
+ void ComputeReactISurfGrid::grow_tally()
+diff --git a/src/compute_react_isurf_grid.h b/src/compute_react_isurf_grid.h
+index 528a739b..a3fe8a4e 100644
+--- a/src/compute_react_isurf_grid.h
++++ b/src/compute_react_isurf_grid.h
+@@ -40,6 +40,7 @@ class ComputeReactISurfGrid : public Compute {
+                           Particle::OnePart *, Particle::OnePart *);
+   virtual int tallyinfo(surfint *&);
+   virtual void post_process_isurf_grid();
++  void reallocate();
+   bigint memory_usage();
+ 
+  protected:
+diff --git a/src/compute_react_surf.cpp b/src/compute_react_surf.cpp
+index 30f137b7..632d60df 100644
+--- a/src/compute_react_surf.cpp
++++ b/src/compute_react_surf.cpp
+@@ -127,25 +127,42 @@ void ComputeReactSurf::init()
+ 
+   // warn if any surfs in group are assigned to different surf react model
+ 
++  // count each surf exactly once, independent of # of procs:
++  //   explicit all: every proc stores all nsurf surfs in lines/tris,
++  //     so count them locally and do not sum across procs
++  //   explicit distributed: lines/tris = nlocal+nghost copies of surfs
++  //     overlapping my owned/ghost cells, so a surf can be stored on
++  //     several procs; instead count mylines/mytris (nown surfs I uniquely
++  //     own, union over procs = all surfs) and sum across procs
++
+   lines = surf->lines;
+   tris = surf->tris;
+-  int nslocal = surf->nlocal;
++  int distributed = surf->distributed;
++
++  Surf::Line *slines = lines;
++  Surf::Tri *stris = tris;
++  int ncount = surf->nlocal;
++  if (distributed) {
++    slines = surf->mylines;
++    stris = surf->mytris;
++    ncount = surf->nown;
++  }
+ 
+   bigint flag = 0;
+   if (dim == 2) {
+-    for (int i = 0; i < nslocal; i++) {
+-      if (!(lines[i].mask & groupbit)) continue;
+-      if (lines[i].isr != isr) flag++;
++    for (int i = 0; i < ncount; i++) {
++      if (!(slines[i].mask & groupbit)) continue;
++      if (slines[i].isr != isr) flag++;
+     }
+   } else {
+-    for (int i = 0; i < nslocal; i++) {
+-      if (!(tris[i].mask & groupbit)) continue;
+-      if (tris[i].isr != isr) flag++;
++    for (int i = 0; i < ncount; i++) {
++      if (!(stris[i].mask & groupbit)) continue;
++      if (stris[i].isr != isr) flag++;
+     }
+   }
+ 
+   bigint flagall;
+-  if (surf->distributed) {
++  if (distributed) {
+     MPI_Allreduce(&flag,&flagall,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+   } else flagall = flag;
+ 
+diff --git a/src/surf.cpp b/src/surf.cpp
+index 1bc836d6..5e50fd9f 100644
+--- a/src/surf.cpp
++++ b/src/surf.cpp
+@@ -295,17 +295,35 @@ void Surf::init()
+     if (comm->me == 0)
+       error->warning(FLERR,"Surfs are distributed with infinite grid cutoff");
+ 
++  // surfs to check, so that each surf is counted exactly once on any # of procs
++  //   explicit all: every proc stores all nsurf surfs in nlocal lines/tris,
++  //     counted locally, not summed across procs
++  //   explicit distributed: nlocal+nghost lines/tris are copies of surfs in
++  //     my owned/ghost cells (a surf can be stored on several procs),
++  //     so check the nown mylines/mytris I uniquely own and sum across procs
++  //   implicit (distributed): nlocal = surfs in my owned cells (each surf
++  //     belongs to one cell), nghost = copies from ghost cells, so check nlocal
++
++  Line *clines = lines;
++  Tri *ctris = tris;
++  int ncheck = nlocal;
++  if (distributed && !implicit) {
++    clines = mylines;
++    ctris = mytris;
++    ncheck = nown;
++  }
++
+   // check that surf element types are all values >= 1
+ 
+   bigint flag,allflag;
+ 
+   flag = 0;
+   if (domain->dimension == 2) {
+-    for (int i = 0; i < nlocal; i++)
+-      if (lines[i].type <= 0) flag++;
++    for (int i = 0; i < ncheck; i++)
++      if (clines[i].type <= 0) flag++;
+   } else {
+-    for (int i = 0; i < nlocal; i++)
+-      if (tris[i].type <= 0) flag++;
++    for (int i = 0; i < ncheck; i++)
++      if (ctris[i].type <= 0) flag++;
+   }
+ 
+   if (distributed)
+@@ -325,11 +343,11 @@ void Surf::init()
+   if (surf_collision_check) {
+     flag = 0;
+     if (domain->dimension == 2) {
+-      for (int i = 0; i < nlocal+nghost; i++)
+-        if (lines[i].isc < 0) flag++;
++      for (int i = 0; i < ncheck; i++)
++        if (clines[i].isc < 0) flag++;
+     } else {
+-      for (int i = 0; i < nlocal+nghost; i++)
+-        if (tris[i].isc < 0) flag++;
++      for (int i = 0; i < ncheck; i++)
++        if (ctris[i].isc < 0) flag++;
+     }
+ 
+     if (distributed)
+@@ -350,11 +368,11 @@ void Surf::init()
+   if (surf_collision_check) {
+     flag = 0;
+     if (domain->dimension == 2) {
+-      for (int i = 0; i < nlocal+nghost; i++)
+-        if (lines[i].isr >= 0 && sc[lines[i].isc]->allowreact == 0) flag++;
++      for (int i = 0; i < ncheck; i++)
++        if (clines[i].isr >= 0 && sc[clines[i].isc]->allowreact == 0) flag++;
+     } else {
+-      for (int i = 0; i < nlocal+nghost; i++)
+-        if (tris[i].isr >= 0 && sc[tris[i].isc]->allowreact == 0) flag++;
++      for (int i = 0; i < ncheck; i++)
++        if (ctris[i].isr >= 0 && sc[ctris[i].isc]->allowreact == 0) flag++;
+     }
+ 
+     if (distributed)
+@@ -375,14 +393,14 @@ void Surf::init()
+   if (surf_collision_check) {
+     flag = 0;
+     if (domain->dimension == 2) {
+-      for (int i = 0; i < nlocal+nghost; i++) {
+-        if (!lines[i].transparent) continue;
+-        if (!sc[lines[i].isc]->transparent) flag++;
++      for (int i = 0; i < ncheck; i++) {
++        if (!clines[i].transparent) continue;
++        if (!sc[clines[i].isc]->transparent) flag++;
+       }
+     } else {
+-      for (int i = 0; i < nlocal+nghost; i++) {
+-        if (!tris[i].transparent) continue;
+-        if (!sc[tris[i].isc]->transparent) flag++;
++      for (int i = 0; i < ncheck; i++) {
++        if (!ctris[i].transparent) continue;
++        if (!sc[ctris[i].isc]->transparent) flag++;
+       }
+     }
+ 

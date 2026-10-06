@@ -300,6 +300,10 @@ void Collide::init()
     if (remainflag)
       memory->create(remain,nglocalmax,ngroups,ngroups,"collide:remain");
 
+    // vremax is uninitialized, so force it to be set on this run
+
+    vre_first = 1;
+
     for (int igroup = 0; igroup < ngroups; igroup++)
       for (int jgroup = 0; jgroup < ngroups; jgroup++)
         vremax_initial[igroup][jgroup] = vremax_init(igroup,jgroup);
@@ -352,7 +356,8 @@ void Collide::init()
 
     int ifix;
     for (ifix = 0; ifix < modify->nfix; ifix++)
-      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
+      if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0 ||
+          strcmp(modify->fix[ifix]->style,"ambipolar/kk") == 0) break;
     if (ifix == modify->nfix)
       error->all(FLERR,"Collision ambipolar without fix ambipolar");
     if (react) react->ambi_check();

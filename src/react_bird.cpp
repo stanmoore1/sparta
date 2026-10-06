@@ -430,7 +430,8 @@ void ReactBird::ambi_check()
 
   int ifix;
   for (ifix = 0; ifix < modify->nfix; ifix++)
-    if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0) break;
+    if (strcmp(modify->fix[ifix]->style,"ambipolar") == 0 ||
+        strcmp(modify->fix[ifix]->style,"ambipolar/kk") == 0) break;
   FixAmbipolar *afix = (FixAmbipolar *) modify->fix[ifix];
   int especies = afix->especies;
   int *ions = afix->ions;

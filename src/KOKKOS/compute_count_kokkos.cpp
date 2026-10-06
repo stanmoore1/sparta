@@ -119,7 +119,7 @@ double ComputeCountKokkos::compute_scalar()
 void ComputeCountKokkos::compute_vector()
 {
   int i,m;
-  invoked_scalar = update->ntimestep;
+  invoked_vector = update->ntimestep;
 
   per_species_tally_kokkos();
   k_count.modify_device();

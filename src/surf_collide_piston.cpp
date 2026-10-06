@@ -117,8 +117,9 @@ collide(Particle::OnePart *&ip, double &dtremain,
     if (reaction) surf->nreact_one++;
   }
 
-  // skip piston reflection if particle was destroyed by chemistry
-  //   or reaction already reset its post-collision velocity
+  // ip = NULL if destroyed by chemistry: no reflection, as in the
+  //   diffuse model, but still call the surf_react() fixes below
+  // also skip reflection if reaction already reset post-collision velocity
 
   if (ip && !velreset) {
     // norm will be in single coordinate direction
@@ -166,6 +167,10 @@ collide(Particle::OnePart *&ip, double &dtremain,
       xprime = 2.0*xwall - xorig + uprime*dt;
       if (xprime <= xwall) {
         ip = NULL;
+        if (jp) {
+          jp = NULL;
+          particle->nlocal--;
+        }
         return NULL;
       }
     } else {
@@ -173,6 +178,10 @@ collide(Particle::OnePart *&ip, double &dtremain,
       xprime = 2.0*xwall - xorig + uprime*dt;
       if (xprime >= xwall) {
         ip = NULL;
+        if (jp) {
+          jp = NULL;
+          particle->nlocal--;
+        }
         return NULL;
       }
     }

@@ -757,8 +757,16 @@ void FixEmitFaceFileKokkos::subsonic_sort()
   //   loop) comes out in INcreasing index.  d_plist is always increasing,
   //   so remember which order to walk it in.
 
+  // like the non-Kokkos subsonic_sort(), which builds private lists and
+  //   leaves Particle::sorted untouched, do not leave sorted_kk set:
+  //   particles this fix then inserts are not in d_plist, so a later
+  //   subsonic fix this step must re-sort (move resets it anyway)
+
   plist_descending = !particle_kk->sorted_kk;
-  if (!particle_kk->sorted_kk) particle_kk->sort_kokkos();
+  if (!particle_kk->sorted_kk) {
+    particle_kk->sort_kokkos();
+    particle_kk->sorted_kk = 0;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -904,11 +912,14 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
       const double ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
       temp_thermal_cell = tprefactor * ke;
+      // thermal ke negligible vs total ke (all particles at COM velocity):
+      // ke is pure roundoff of either sign, treat cell as cold
+      if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
     } else temp_thermal_cell = temp_thermal_mix;
 
     const double press_cell = nrho_cell * boltz * temp_thermal_cell;
     double soundspeed_cell;
-    if (np) {
+    if (np && temp_thermal_cell > 0.0) {
       const double mass_cell = masstot / np;
       const double gamma_cell = gamma / np;
       soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);

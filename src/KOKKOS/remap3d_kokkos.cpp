@@ -292,7 +292,7 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
 
   // allocate memory for plan data struct
 
-  plan = new struct remap_plan_3d_kokkos<DeviceType>;
+  plan = new struct remap_plan_3d_kokkos<DeviceType>();
   if (plan == nullptr) return nullptr;
   plan->usecollective = usecollective;
   plan->usegpu_aware = usegpu_aware;
@@ -833,13 +833,12 @@ void RemapKokkos3d<DeviceType>::remap_3d_destroy_plan_kokkos(struct remap_plan_3
       free(plan->rdispls);
     }
 
-    if (plan->nsend) {
+    // send and recv arrays are allocated together if (nsend || nrecv)
+
+    if (plan->nsend || plan->nrecv) {
       free(plan->send_offset);
       free(plan->send_size);
       free(plan->packplan);
-    }
-
-    if (plan->nrecv) {
       free(plan->recv_offset);
       free(plan->recv_size);
       free(plan->unpackplan);

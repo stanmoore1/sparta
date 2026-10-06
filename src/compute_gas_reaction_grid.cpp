@@ -45,7 +45,7 @@ ComputeGasReactionGrid::ComputeGasReactionGrid(SPARTA *sparta, int narg, char **
 
   selectlist = NULL;
   reaction2col = NULL;
-  nlist_react = react->nlist;
+  nlist_define = react->nlist;
 
   if (strcmp(arg[4],"all") == 0) {
     if (narg != 5) error->all(FLERR,"Illegal compute gas/reaction/grid command");
@@ -114,12 +114,12 @@ ComputeGasReactionGrid::~ComputeGasReactionGrid()
 
 void ComputeGasReactionGrid::init()
 {
-  // EVERY/SELECT columns are sized by reaction count at creation
-  // ALL mode has one column, so a new react command is fine
+  // ncol and reaction2col were sized from react->nlist at construction,
+  //   a re-issued react command would index them out of bounds
 
-  if (mode != ALL && react && react->nlist != nlist_react)
-    error->all(FLERR,"Number of reactions for compute gas/reaction/grid "
-               "has changed");
+  if (mode != ALL && (react == NULL || react->nlist != nlist_define))
+    error->all(FLERR,"Compute gas/reaction/grid reactions changed "
+               "since compute was defined");
 
   reallocate();
 }

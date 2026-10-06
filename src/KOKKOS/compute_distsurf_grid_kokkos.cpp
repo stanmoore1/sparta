@@ -126,6 +126,7 @@ void ComputeDistSurfGridKokkos::compute_per_grid_kokkos()
   //   dist = minimum distance to any eligible surf
   // if assign dist to split cell, also assign dist to all its sub cells
   GridKokkos* grid_kk = ((GridKokkos*)grid);
+  grid_kk->sync(Device,CELL_MASK|CINFO_MASK);
   d_cells = grid_kk->k_cells.view_device();
   d_cinfo = grid_kk->k_cinfo.view_device();
   d_csurfs = grid_kk->d_csurfs;

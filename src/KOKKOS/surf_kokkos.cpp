@@ -179,6 +179,7 @@ void SurfKokkos::grow(int old)
         surf_kk->k_lines.resize(nmax);
       }
       lines = surf_kk->k_lines.view_host().data();
+      if (nmax > old) memset(&lines[old],0,(nmax-old)*sizeof(Line));
     } else {
       if (tris == NULL)
           surf_kk->k_tris = tdual_tri_1d("surf:tris",nmax);
@@ -188,6 +189,7 @@ void SurfKokkos::grow(int old)
         surf_kk->k_tris.resize(nmax);
       }
       tris = surf_kk->k_tris.view_host().data();
+      if (nmax > old) memset(&tris[old],0,(nmax-old)*sizeof(Tri));
     }
   }
 }

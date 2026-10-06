@@ -1,0 +1,26 @@
+# Follow-up fixes found by A/B testing (to fix after A/B completes, then A/B again)
+- FU-1 (from AB4, G12x-F-G16-2 INCOMPLETE): compute sonine/grid/kk and dt/grid/kk reallocate() never create host arrays used by the CPU fallback before first run (sonine: vcom; dt: tau,temp,usq,vsq,wsq) -> segfault with adapt_grid value c_X before first run (compute_sonine_grid.cpp:173, compute_dt_grid.cpp:460).
+- FU-2 (from AB4, F-G16-9 sibling, CPU): src/compute_property_surf.cpp pack_v3y/pack_v3z (~427, ~444) read p1 instead of p3.
+- FU-3 (from AB6, CPU+kk): subsonic pressure-only emit (face/surf) adjacent to a cell with zero thermal energy -> nrho inf/NaN -> int overflow error / huge allocation / OOM in both A and B, CPU and Kokkos. Root cause upstream of F-G11-4/F-G12-1 guards.
+- FU-4 (from AB7, G12x-F-G14-1 INCOMPLETE): compute fft/grid/kk (compute_fft_grid_kokkos.cpp:184) and compute lambda/grid/kk (compute_lambda_grid_kokkos.cpp:142) segfault with an isurf/grid/kk (non-KokkosBase per-grid compute) input; CPU works. Need same error check (or host fallback).
+- FU-5 (from AB7, CPU): src/fix_ave_histo_weight.cpp:412 with region and no mix reads uninitialized mixture index -> segfault.
+- FU-6 (from AB1, perf regression caused by F-G21V-1): with react/retry yes, B no longer pads (correct per docs) but each retry grows plist by only DELTACELLCOUNT=2 -> many retries; B ~6x slower than A on heavy-growth case (in.one2 t1 0.22s vs 1.35s). Use geometric growth (e.g. max(+DELTA, 1.5x)) in retry grow requests.
+- FU-7 (from AB1, low): kk TCE prob>1 warning fires 25/30 seeds vs CPU 16/30 (p~0.02); same formula -> possible high-energy collision sampling difference kk vs CPU. Investigate only.
+- FU-8 (from AB2, F-G09-4a INCOMPLETE): src/KOKKOS/compute_surf_kokkos.cpp ~189/201 exact-name match "global"/"prob" for surf_react; explicit prob/kk or global/kk + compute surf -> "Unknown Kokkos surface reaction method" (line 214). Test deck: scratchpad/ab/AB2/F-G09-4/in.sr_kk.
+- FU-9 (from AB2, latent): GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) lacks the device sync of ewhich/eicol/edcol like F-G13-4.
+- FU-10 (from AB9, F-G22-2 INCOMPLETE): GridKokkos grow_cells/grow_sinfo first allocation (realloc_kokkos, NoInit) left uninitialized -> zero host view like CPU memset. FIXED.
+- FU-11 (from AB9, F-G22-3 sibling): SurfKokkos::grow_own -> NO CHANGE: tdual ctor and DualView::resize value-initialize (only realloc_kokkos/WithoutInitializing don't).
+- FU-12 (from AB9, F-G18-2 gap): react re-issued with same count but different reactions passes the nlist check (CPU+kk), no OOB; documented limitation, not fixed.
+- Install.sh: kokkos token at end-of-line not stripped (A and B identical; out of scope), not fixed.
+- FU-1..6, FU-8, FU-9: FIXED (see FIXES.md). FU-7: investigated, no code difference found (fixes/FX-followups.md).
+- FU-13 (from AB5, CPU+kk): compute react/isurf/grid tested a GRID group bitmask against SURF masks -> any grid group other than all gives zero tallies. FIXED: drop surf-mask tests; grid group already applied per cell in post_process_grid (same as compute isurf/grid). Evidence deck: $S/ab/AB5/sibling_gridgroup.
+- FU-14 (from AB5, CPU, warning text only): compute react/surf init() warning count loops lines[0..nlocal) so count depends on #ranks with distributed surfs. Not fixed (cosmetic).
+- FU-15 (from AB8, F-G19-4 CPU side): with FFT_SINGLE the CPU remap2d rejects precision=1 ("Single precision not supported"); before the fix the swapped args made it accept and move half the data (silently wrong). Now an explicit error. Decision: keep (explicit unsupported > silent wrong); report as behavior change.
+- FU-16 (from AB8, kk, unreachable from compute fft/grid): remap3d_kokkos collective plan, rank with no data -> send_size[] unallocated write at :689 (A and B). Remainder of deferred F-G20-4.
+- FU-17 (from AB8, CPU+kk, collective plans only): MPI_Comm_group/MPI_Group_incl groups never freed (remap3d_kokkos.cpp:789-793, src/FFT/remap3d.cpp:609-613), 144 B/plan.
+- FU-3b: AB10 found FU-3 INCOMPLETE (tiny-positive roundoff ke). Being replaced with relative threshold (FX-followups2).
+- FU-18 (from AB10, CPU): compute dt/grid reads array_grid instead of vector_grid for post-processed compute input -> segfault (compute_dt_grid.cpp:514). Being fixed (FX-followups2).
+- Notes (not fixed): adsorb + compute surf/kk unsupported (feature gap, clean error in A and C); FU-10 memset zeroes host only (device copy of first allocation not zeroed on GPU, hygiene); Kokkos emit/face low seed-to-seed variance = Kokkos RNG fixed seed 12345+rank ignores user seed (package design, see F-G04-4 REFUTED-design).
+- FU-19 (note): PONLY subsonic emit with a mixture temp 0 and nonzero vstream -> soundspeed_mixture 0 -> divide by 0 for fallback cells (pre-existing, user input edge case). Not fixed; suggest error in FixEmit*::init.
+- FU-20 (note): CPU compute dt/grid at run 0 returns 0 for all cells (cinfo count 0 before first sort) while kk gives values; pre-existing CPU/kk difference.
+- FU-21 (from AB12, pre-existing CPU+kk, NOT FIXED): compute react/isurf/grid with fix balance: on a step where cells migrate, that step's per-cell tally is attributed to wrong cells (global sums correct). Check compute isurf/grid etc. for the same.

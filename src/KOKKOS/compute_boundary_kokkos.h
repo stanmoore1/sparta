@@ -265,7 +265,7 @@ void boundary_tally_kk(double dtremain,
 
 
  private:
-  int mvv2e;
+  double mvv2e;
   DAT::t_int_1d d_which;
 
   DAT::tdual_float_2d_lr k_myarray; // local accumulator array
