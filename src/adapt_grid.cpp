@@ -65,6 +65,8 @@ AdaptGrid::AdaptGrid(SPARTA *sparta) : Pointers(sparta)
 
   valueID = NULL;
   file = NULL;
+  region = NULL;
+  idregion = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -73,6 +75,7 @@ AdaptGrid::~AdaptGrid()
 {
   delete [] valueID;
   delete [] file;
+  delete [] idregion;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -309,6 +312,8 @@ void AdaptGrid::process_args(int narg, char **arg)
   nx = ny = nz = 2;
   if (domain->dimension == 2) nz = 1;
   region = NULL;
+  delete [] idregion;
+  idregion = NULL;
   sdir[0] = sdir[1] = sdir[2] = 0.0;
   file = NULL;
 
@@ -367,6 +372,9 @@ void AdaptGrid::process_args(int narg, char **arg)
       if (iregion == -1)
         error->all(FLERR,"Adapt region ID does not exist");
       region = domain->regions[iregion];
+      delete [] idregion;
+      idregion = new char[strlen(arg[iarg+1])+1];
+      strcpy(idregion,arg[iarg+1]);
       if (strcmp(arg[iarg+2],"all") == 0) regstyle = REGION_ALL;
       else if (strcmp(arg[iarg+2],"one") == 0) regstyle = REGION_ONE;
       else if (strcmp(arg[iarg+2],"center") == 0) regstyle = REGION_CENTER;
@@ -511,6 +519,15 @@ void AdaptGrid::check_args(int nevery)
 
 void AdaptGrid::setup(int iter)
 {
+  // re-resolve region, since region delete can free or move regions
+  //   between adaptations done by fix adapt
+
+  if (idregion) {
+    int iregion = domain->find_region(idregion);
+    if (iregion == -1) error->all(FLERR,"Adapt region ID does not exist");
+    region = domain->regions[iregion];
+  }
+
   // create RNG for style = RANDOM
 
   if (style == RANDOM) {
