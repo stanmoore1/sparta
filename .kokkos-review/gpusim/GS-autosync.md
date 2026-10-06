@@ -107,6 +107,12 @@ Statically, no code calls SurfKokkos::modify(Device,..), and every surf resize c
 B_fixed2 output equals B_unpatched (excluding the CPU-time column) on all of these.
 verdict: fixed for consistency (LAMMPS AtomKokkos::sync precedent); no reproducer exists.
 
+## Stock-example regression (B_fixed2 vs B_unpatched, np1, stats excluding the CPU column)
+
+examples/adapt (3), custom (28), ambi (3), surf (5), ablation (4), and deck s1: identical to B_unpatched on all of them,
+except the 4 `*.restart` custom decks. B_unpatched aborts on those; B_fixed2 matches cpu, as above. in.ambi stops with
+"Ran out of space in Kokkos collisions" on both binaries, so it is pre-existing and unrelated.
+
 ## Compile check (real tree)
 
 `.kokkos-review/compile_one.sh src/KOKKOS/{particle,grid,surf}_kokkos.cpp`: OK (after both changes).

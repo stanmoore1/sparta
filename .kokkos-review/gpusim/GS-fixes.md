@@ -76,3 +76,12 @@ complete: YES for distsurf (B == CPU, no distsurf report)
 verdict: NECESSARY+COMPLETE
 artifacts: $S/gpusim/GS-fixes/F-G16-5
 
+### F-G22-5 — fix grid/check/kk built error messages from stale host particles/cells
+method: no input makes a particle sit in a wrong cell (AB9 tried), so fault injection. Private binaries $S/gpusim/GS-fixes/F-G22-5/build/spa_inj_{A,B}: only fix_grid_check_kokkos.cpp recompiled (A or B source + identical injection block), linked against the unmodified bsync_{A,B} libraries. Injection (env GS_INJECT=<step>): after the fix's sync(Device), a device kernel moves particle k=nlocal/2 half a cell past its cell's hi[0]; with GS_INJ_SWAP=1 it also swaps particles 0 and k on the device (a reorder, as the device sort does); then particleKK->modify(Device,PARTICLE_MASK) (as a device kernel would claim); it prints the device-side TRUE id/cell of the moved particle. Deck in.gc: 2d 20x20, O flow with emit/face + vss, `fix gc grid/check 1 error`, inject at step 10; np1/2/4.
+positive control (GS_INJ_SWAP=1): A_sync message names the WRONG particle and cell: np1 `Particle 0,884975670 ... outside cell 3` vs TRUE id 1498251674 cell 334; np2 proc0 884975670/cell 3 vs 1519176102/101, proc1 1567536433/13 vs 117828811/399; np4 3/3 reporting ranks wrong the same way. B_sync: every message equals the TRUE device id/cell (np1, np2, np4). REPRODUCED (stale host data in the error message under split memory).
+negative control: displacement-only injection (no reorder; id/icell unchanged, only x differs on the host): A and B print identical, correct messages (np1/2/4); without injection (GS_INJECT=-1) both run clean (no ERROR, A/B step 20 np 11622).
+necessary: YES (with a device-side reorder, A reports a different particle id and cell than the one flagged)
+complete: YES for the outside-cell branch exercised; the single sync(Host,PARTICLE_MASK)/sync(Host,CELL_MASK) precedes all five message branches (source). Note B syncs CELL_MASK only; the messages read cells[icell].id only (no cinfo), so that suffices.
+verdict: NECESSARY+COMPLETE (fault-injected)
+artifacts: $S/gpusim/GS-fixes/F-G22-5 (build/fgc_{A,B}.cpp, os.*, o.*)
+
