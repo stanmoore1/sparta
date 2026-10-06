@@ -42,6 +42,7 @@ class FixAveGrid : public Fix {
   void copy_grid_one(int, int);
   void reset_grid_count(int);
   void add_grid_one();
+  void grid_changed();
   double memory_usage();
 
  protected:
@@ -104,6 +105,10 @@ class FixAveGrid : public Fix {
   bigint nextvalid();
   virtual void grow_percell(int);
   void grow_tally();
+  int add_tally(surfint);
+
+  int ndropped_rvous;      // # of tallies with no owning cell, in rendezvous
+  static int rendezvous_tallies(int, char *, int &, int *&, char *&, void *);
 };
 
 }
