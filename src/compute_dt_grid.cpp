@@ -451,7 +451,7 @@ void ComputeDtGrid::compute_per_grid()
     if (ctau->post_process_grid_flag)
       ctau->post_process_grid(tau_index,1,NULL,NULL,NULL,1);
 
-    if (tau_index == 0)
+    if (tau_index == 0 || ctau->post_process_grid_flag)
       memcpy(tau,ctau->vector_grid,nglocal*sizeof(double));
     else {
       int index = tau_index-1;
@@ -478,7 +478,7 @@ void ComputeDtGrid::compute_per_grid()
     if (ctemp->post_process_grid_flag)
       ctemp->post_process_grid(temp_index,1,NULL,NULL,NULL,1);
 
-    if (temp_index == 0)
+    if (temp_index == 0 || ctemp->post_process_grid_flag)
       memcpy(temp,ctemp->vector_grid,nglocal*sizeof(double));
     else {
       int index = temp_index-1;
@@ -505,7 +505,7 @@ void ComputeDtGrid::compute_per_grid()
     if (cusq->post_process_grid_flag)
       cusq->post_process_grid(usq_index,1,NULL,NULL,NULL,1);
 
-    if (usq_index == 0)
+    if (usq_index == 0 || cusq->post_process_grid_flag)
       memcpy(usq,cusq->vector_grid,nglocal*sizeof(double));
     else {
       int index = usq_index-1;
@@ -532,7 +532,7 @@ void ComputeDtGrid::compute_per_grid()
     if (cvsq->post_process_grid_flag)
       cvsq->post_process_grid(vsq_index,1,NULL,NULL,NULL,1);
 
-    if (vsq_index == 0)
+    if (vsq_index == 0 || cvsq->post_process_grid_flag)
       memcpy(vsq,cvsq->vector_grid,nglocal*sizeof(double));
     else {
       int index = vsq_index-1;
@@ -559,7 +559,7 @@ void ComputeDtGrid::compute_per_grid()
     if (cwsq->post_process_grid_flag)
       cwsq->post_process_grid(wsq_index,1,NULL,NULL,NULL,1);
 
-    if (wsq_index == 0)
+    if (wsq_index == 0 || cwsq->post_process_grid_flag)
       memcpy(wsq,cwsq->vector_grid,nglocal*sizeof(double));
     else {
       int index = wsq_index-1;

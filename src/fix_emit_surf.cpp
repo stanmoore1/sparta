@@ -1503,6 +1503,9 @@ void FixEmitSurf::subsonic_grid()
       if (np > 1) {
         ke = mv[3]/np - (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
         temp_thermal_cell = tprefactor * ke;
+        // thermal ke negligible vs total ke (all particles at COM velocity):
+        // ke is pure roundoff of either sign, treat cell as cold
+        if (ke <= 1.0e-10 * mv[3]/np) temp_thermal_cell = 0.0;
       } else temp_thermal_cell = particle->mixture[imix]->temp_thermal;
       press_cell = nrho_cell * boltz * temp_thermal_cell;
       if (np && temp_thermal_cell > 0.0) {
