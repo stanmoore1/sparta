@@ -74,3 +74,24 @@ Setup: S=$S (session scratchpad). Work dir $S/gpusim/GS-sweep (scripts in bin/, 
   `grow_percell(0)` at the end of the constructor (fix_ave_grid_kokkos.cpp:176-177); the grab of view_device() after
   grow_kokkos is a handle (device is synced by pergrid_sync(Device) at :219 before the zero/accumulate kernels).
   Introduced-by-review but benign (no data read; stats identical to stock).
+
+### R8 (pre-existing, latent): owned surf custom vectors never claimed after a pre-first-run `custom surf ... set`
+- Seen: examples/custom in.custom.circle.{set,file}[.fix][.distributed] (8 decks), Bw and Aw identically ("common"):
+  `[watch] surf:dvector: the host side was written without a claim and this sync_device has nothing to copy --
+  the device keeps stale data; element 0 of 50 is where they part` (3x + suppressed), during the FIRST run only.
+- Backtrace (WATCH_BT): DualView::sync_device <- SurfKokkos::sync(Device,ALL_MASK) <- UpdateKokkos::move<2,1,0,0>
+  (update_kokkos.cpp:701) <- UpdateKokkos::run.
+- Root cause: Custom::set_surf()/set_surf via variable (src/custom.cpp, plain `surf->edvec[...]` writes, ~line 940ff)
+  and read_surf custom columns write the host side of the owned custom views and never claim it. Before the 2nd run
+  UpdateKokkos::setup() non-prewrap branch does `surf_kk->modify(Host,ALL_MASK)` (update_kokkos.cpp:380) which covers it,
+  but the first run goes through the prewrap branch (update_kokkos.cpp:353-368), where only surf_kk->wrap_kokkos() runs,
+  and SurfKokkos::wrap_kokkos() (surf_kokkos.cpp:121-162) wraps lines/tris only, not custom.
+- Impact: none today -- no KOKKOS kernel reads the device side of the OWNED surf custom views (consumers such as
+  SurfCollideDiffuseKokkos use edvec_local after the host spread_custom(), which claims properly,
+  surf_custom_kokkos.cpp:441-466). Stats identical to stock over 2x800 steps. Latent GPU fault for any future device
+  reader of surf->edvec/eivec (owned).
+- Proposed fix: in UpdateKokkos::setup() prewrap branch, after `surf_kk->wrap_kokkos();` (update_kokkos.cpp:365-366) add
+  `surf_kk->modify(Host,CUSTOM_MASK);` (matching the non-prewrap branch's claim); equivalently claim CUSTOM_MASK at the
+  end of SurfKokkos::wrap_kokkos().
+- Classification: pre-existing-unfixed (same on A_sync). Related to (but distinct from) the KNOWN restart surf custom
+  array item: that one is read_restart, this is `custom surf set` / read_surf custom before run 1.
