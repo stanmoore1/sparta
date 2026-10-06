@@ -235,7 +235,7 @@ void FixAveGridKokkos::end_of_step()
 
     if (which[m] == COMPUTE) {
       Compute *compute = modify->compute[n];
-      if (!compute->kokkos_flag)
+      if (!compute->kokkos_flag || !dynamic_cast<KokkosBase*>(compute))
         error->all(FLERR,"Cannot (yet) use non-Kokkos computes with fix ave/grid/kk");
     }
 

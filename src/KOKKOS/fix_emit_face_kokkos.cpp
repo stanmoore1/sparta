@@ -806,7 +806,7 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
 
     const double press_cell = nrho_cell * boltz * temp_thermal_cell;
     double soundspeed_cell;
-    if (np) {
+    if (np && temp_thermal_cell > 0.0) {
       const double mass_cell = masstot / np;
       const double gamma_cell = gamma / np;
       soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);

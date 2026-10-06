@@ -417,4 +417,10 @@ void ComputeSonineGridKokkos::reallocate()
   memoryKK->create_kokkos(k_tally,tally,nglocal,ntotal,"sonine/grid:tally");
   d_tally = k_tally.view_device();
   d_vcom = DAT::t_float_3d ("d_vcom",nglocal,ngroup,4);
+
+  // host vcom is also allocated (freed by ~ComputeSonineGrid), since the
+  //   host ComputeSonineGrid::compute_per_grid() runs while prewrap is set
+
+  memory->destroy(vcom);
+  memory->create(vcom,nglocal,ngroup,4,"sonine/grid:vcom");
 }

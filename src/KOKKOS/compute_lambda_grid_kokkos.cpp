@@ -134,7 +134,7 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
 
     if (nrhowhich[m] == COMPUTE) {
       Compute *compute = modify->compute[n];
-      if (!compute->kokkos_flag)
+      if (!compute->kokkos_flag || !dynamic_cast<KokkosBase*>(compute))
         error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
       KokkosBase* cKKBase = dynamic_cast<KokkosBase*>(compute);
 
@@ -196,7 +196,7 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
 
     } else if (nrhowhich[m] == FIX) {
       Fix *fix = modify->fix[n];
-      if (!fix->kokkos_flag)
+      if (!fix->kokkos_flag || !dynamic_cast<KokkosBase*>(fix))
         error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
       KokkosBase* fKKBase = dynamic_cast<KokkosBase*>(fix);
       // a fix keeps its per-grid output between invocations and grid migration
@@ -222,7 +222,7 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
   auto l_temp = d_temp;
 
   if (tempwhich == COMPUTE) {
-    if (!ctemp->kokkos_flag)
+    if (!ctemp->kokkos_flag || !dynamic_cast<KokkosBase*>(ctemp))
       error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute lambda/grid/kk");
     KokkosBase* ctempKKBase = dynamic_cast<KokkosBase*>(ctemp);
 
@@ -245,7 +245,7 @@ void ComputeLambdaGridKokkos::compute_per_grid_kokkos()
     }
 
   } else if (tempwhich == FIX) {
-    if (!ftemp->kokkos_flag)
+    if (!ftemp->kokkos_flag || !dynamic_cast<KokkosBase*>(ftemp))
       error->all(FLERR,"Cannot (yet) use non-Kokkos fixes with compute lambda/grid/kk");
     KokkosBase* ftempKKBase = dynamic_cast<KokkosBase*>(ftemp);
     // a fix keeps its per-grid output between invocations and grid migration

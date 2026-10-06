@@ -337,7 +337,8 @@ void FixAveHistoWeight::bin_vector(int n, double *values, int stride)
 void FixAveHistoWeight::bin_particles(int attribute, int index)
 {
   Particle::OnePart *particles = particle->particles;
-  int *s2g = particle->mixture[imix]->species2group;
+  int *s2g = NULL;
+  if (mixflag) s2g = particle->mixture[imix]->species2group;
   int nlocal = particle->nlocal;
 
   Region *region;
@@ -409,7 +410,8 @@ void FixAveHistoWeight::bin_particles(int attribute, int index)
 void FixAveHistoWeight::bin_particles(double *values, int stride)
 {
   Particle::OnePart *particles = particle->particles;
-  int *s2g = particle->mixture[imix]->species2group;
+  int *s2g = NULL;
+  if (mixflag) s2g = particle->mixture[imix]->species2group;
   int nlocal = particle->nlocal;
 
   Region *region;

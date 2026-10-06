@@ -186,7 +186,8 @@ void ComputeSurfKokkos::pre_surf_tally()
     for (int n = 0; n < surf->nsr; n++) {
       if (!surf->sr[n]->kokkosable)
         error->all(FLERR,"Must use Kokkos-enabled surface reaction method with Kokkos");
-      if (strcmp(surf->sr[n]->style,"global") == 0) {
+      if (strcmp(surf->sr[n]->style,"global") == 0 ||
+          strcmp(surf->sr[n]->style,"global/kk") == 0) {
 #ifdef SPARTA_KOKKOS_FIXED_LISTS
         if (nglob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
           error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");
@@ -198,7 +199,8 @@ void ComputeSurfKokkos::pre_surf_tally()
         KK_SR_H_TYPE(n) = 0;
         KK_SR_H_MAP(n) = nglob;
         nglob++;
-      } else if (strcmp(surf->sr[n]->style,"prob") == 0) {
+      } else if (strcmp(surf->sr[n]->style,"prob") == 0 ||
+          strcmp(surf->sr[n]->style,"prob/kk") == 0) {
 #ifdef SPARTA_KOKKOS_FIXED_LISTS
         if (nprob >= KOKKOS_MAX_SURF_REACT_PER_TYPE)
           error->all(FLERR,"Kokkos currently supports two instances of each surface reaction method");

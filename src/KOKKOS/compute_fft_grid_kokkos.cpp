@@ -175,7 +175,7 @@ void ComputeFFTGridKokkos::compute_per_grid_kokkos()
     if (which[m] == COMPUTE) {
       Compute *c = modify->compute[vidx];
 
-      if (!c->kokkos_flag)
+      if (!c->kokkos_flag || !dynamic_cast<KokkosBase*>(c))
         error->all(FLERR,"Cannot (yet) use non-Kokkos computes with compute fft/grid/kk");
 
       KokkosBase* cKKBase = dynamic_cast<KokkosBase*>(c);

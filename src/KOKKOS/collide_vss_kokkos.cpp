@@ -87,6 +87,12 @@ enum{CONSTANT,VARIABLE};
 #define DELTAELECTRON 128
 #define DELTACELLCOUNT 2
 
+// size requested on a retry after a list overflow: grow geometrically
+//   (by at least delta, else by half the current size) so a react/retry
+//   step with heavy particle growth needs only a few passes
+
+#define GROWREQUEST(n,delta) ((n) + ((delta) > (n)/2 ? (delta) : (n)/2))
+
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
 
@@ -1166,7 +1172,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+        Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1186,7 +1192,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1603,7 +1609,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+        Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1623,7 +1629,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -2374,7 +2380,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             d_dellist(ndelete) = d_plist(icell,jj);
           } else {
             d_retry() = 1;
-            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+            Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -2422,7 +2428,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             np++;
           } else {
             d_retry() = 1;
-            Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+            Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -2963,7 +2969,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               np++;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -2983,14 +2989,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
                 d_dellist(ndelete) = index_kpart;
               } else {
                 d_retry() = 1;
-                Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+                Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
                 rand_pool.free_state(rand_gen);
                 return;
               }
 #endif
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
+              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3026,7 +3032,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               jpart = NULL;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
+              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3061,7 +3067,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               np++;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3088,7 +3094,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             d_dellist(ndelete) = d_plist(icell,jj);
           } else {
             d_retry() = 1;
-            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+            Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -3612,7 +3618,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           d_plist(icell,np++) = index_kpart;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3633,14 +3639,14 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
             d_dellist(ndelete) = index_kpart;
           } else {
             d_retry() = 1;
-            Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+            Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
             rand_pool.free_state(rand_gen);
             return;
           }
 #endif
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
+          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3671,7 +3677,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           jpart = NULL;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxelectron(),int(d_elist.extent(1))+DELTACELLCOUNT);
+          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3699,7 +3705,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           d_plist(icell,np++) = index;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxcellcount(),int(d_plist.extent(1))+DELTACELLCOUNT);
+          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3718,7 +3724,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         d_dellist(ndelete) = d_plist(icell,j);
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxdelete(),ndelete+DELTADELETE);
+        Kokkos::atomic_max(&d_maxdelete(),GROWREQUEST(ndelete,DELTADELETE));
         rand_pool.free_state(rand_gen);
         return;
       }
