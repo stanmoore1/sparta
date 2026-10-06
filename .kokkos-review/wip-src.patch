@@ -1,13 +1,15 @@
 diff --git a/src/FFT/remap3d.cpp b/src/FFT/remap3d.cpp
-index c6d81de1..ed56ffd2 100644
+index c6d81de1..bc661346 100644
 --- a/src/FFT/remap3d.cpp
 +++ b/src/FFT/remap3d.cpp
-@@ -611,6 +611,8 @@ struct remap_plan_3d *remap_3d_create_plan(
+@@ -611,6 +611,10 @@ struct remap_plan_3d *remap_3d_create_plan(
      MPI_Group_incl(orig_group, plan->commringlen,
                     plan->commringlist, &new_group);
      MPI_Comm_create(comm, new_group, &plan->comm);
++#if !defined(MPI_STUBS)  // STUBS lib has no MPI_Group_free (and no real groups)
 +    MPI_Group_free(&new_group);
 +    MPI_Group_free(&orig_group);
++#endif
    }
  
    // if using collective and the comm ring list is empty create
@@ -37,10 +39,37 @@ index d10bf2a2..31403041 100644
    // free internal arrays
  
 diff --git a/src/KOKKOS/remap3d_kokkos.cpp b/src/KOKKOS/remap3d_kokkos.cpp
-index fc02411d..7a3c3ee1 100644
+index fc02411d..bdbaf236 100644
 --- a/src/KOKKOS/remap3d_kokkos.cpp
 +++ b/src/KOKKOS/remap3d_kokkos.cpp
-@@ -591,14 +591,18 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+@@ -105,8 +105,6 @@ void RemapKokkos3d<DeviceType>::remap_3d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
+ {
+ 
+   typename FFT_AT::t_FFT_SCALAR_1d d_scratch;
+-  int me;
+-  MPI_Comm_rank(plan->comm,&me);
+ 
+   if (plan->memory == 0)
+     d_scratch = d_buf;
+@@ -199,7 +197,7 @@ void RemapKokkos3d<DeviceType>::remap_3d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
+                       &plan->packplan[numpacked]);
+           numpacked++;
+         }
+-        else if (plan->commringlist[isend] == me && plan->self) {
++        else if (isend == plan->selfcommringloc && plan->self) {
+           numpacked++;
+         }
+       }
+@@ -235,7 +233,7 @@ void RemapKokkos3d<DeviceType>::remap_3d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
+                        &plan->unpackplan[numpacked]);
+           numpacked++;
+         }
+-        else if (plan->commringlist[irecv] == me && plan->self) {
++        else if (irecv == plan->selfcommringloc && plan->self) {
+           numpacked++;
+         }
+       }
+@@ -591,14 +589,18 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
      // because of the Alltoallv, both send and recv have to be initialized even if
      // only one of those is performed
  
@@ -63,7 +92,7 @@ index fc02411d..7a3c3ee1 100644
        plan->nsend = nsend;
        plan->pack = PackKokkos3d<DeviceType>::pack_3d;
  
-@@ -654,121 +658,121 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+@@ -654,121 +656,121 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
        if (plan->recv_offset == nullptr || plan->recv_size == nullptr ||
            plan->rcvcnts == nullptr || plan->rdispls == nullptr ||
            plan->unpackplan == nullptr) return nullptr;
@@ -283,12 +312,14 @@ index fc02411d..7a3c3ee1 100644
  
      // if requested, allocate internal scratch space for recvs,
      // only need it if I will receive any data (including self)
-@@ -791,6 +795,8 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
+@@ -791,6 +793,10 @@ struct remap_plan_3d_kokkos<DeviceType>* RemapKokkos3d<DeviceType>::remap_3d_cre
        MPI_Group_incl(orig_group, plan->commringlen,
                        plan->commringlist, &new_group);
        MPI_Comm_create(comm, new_group, &plan->comm);
++#if !defined(MPI_STUBS)  // STUBS lib has no MPI_Group_free (and no real groups)
 +      MPI_Group_free(&new_group);
 +      MPI_Group_free(&orig_group);
++#endif
      }
  
      // if using collective and the comm ring list is empty create
