@@ -153,3 +153,56 @@ complete: YES (B correct on np1/np4 with and without rebalance); F-G00-1's own a
 verdict: NECESSARY+COMPLETE (side finding SF-2: `custom surf set` leaves the surf custom DualView unclaimed)
 artifacts: $S/gpusim/GS-fixes/F-G00-1
 
+
+### F-G12-2 — emit face/face-file/surf kk subsonic_sort left sorted_kk=1 (2nd subsonic emit fix reused a stale d_plist)
+decks: AB6 F-G12-2 in.face2 (2 identical subsonic emit/face xlo, 200 steps), in.file2 (2 emit/face/file, press-only file, 60 steps), in.surf2 (2 emit/surf circle, 8 steps; np4 uses in.surf4 = fnum 4e18 to keep the run small); watch/stale/strict via ab.sh; CPU ref = A_sync without -k. Signature: Kokkos RNG pools share the seed, so a stale list gives in1 == in2 exactly; correct behaviour is in2 > in1 (fix 2 sees fix 1's insertions), as on the CPU.
+positive control (step: np in1 in2):
+  face2 np1: A 76305 36594 = 36594 | B 80341 38258 38857 | CPU (AB6) 83582 39961 40506. np4: A 80593 38674 = 38674 | B 90158 43143 43834 | CPU 92050 44092 44735.
+  file2 np1: A 13073 2531 = 2531 | B 13096 2509 2576. np2: A 13031 2532 = 2532 | B 13331 2665 2699 | CPU 12996 2491 2538. np4: A 13279 2631 = 2631 | B 13512 2690 2805 | CPU 13345 2624 2705.
+  surf2 np1: A 10694 1886 = 1886 | B 55850 15356 33572 | CPU (AB6) 59681 15670 37089. surf4 np1: A 4516 1394 = 1394 | B 51598 14379 35491 | CPU 57179 16331 39120; np4: A 2417 349 = 349 | B 18435 4488 12228 | CPU 7876 1983 4174 (this deck is a runaway positive feedback with "Excessive subsonic thermal temp" warnings in all three builds, so totals diverge fast; the in2/in1 ratio ~2.3-2.7 in B and CPU vs exactly 1 in A is the signature).
+  REPRODUCED under split memory at np1/2/4 for all three styles (multi-proc was untested in AB6).
+detector: sorted_kk is a host flag, not a DualView, so watch/stale cannot see this fault. Labels: no A-only, no B-only except surf2 np1 B `particle:particles <- ParticleKokkos::grow` (the common grow note; A never grew because it inserted 5x fewer particles). np4: only the irregular noise, identical A/B. B adds no stale access under split memory.
+negative control: AB6 single-fix and disjoint mixed decks A == B; here the step-0 rows and the create_particles count A = B = CPU.
+necessary: YES (all three styles, np1/np2/np4)
+complete: YES (B shows the CPU in2 > in1 behaviour at np1/2/4 for face, face/file, surf; detector-clean)
+verdict: NECESSARY+COMPLETE (closes AB6's multi-proc gap)
+artifacts: $S/gpusim/GS-fixes/F-G12-2 (in.face2, in.file2, in.surf2, in.surf4, o.*, lab.*, batch*.out)
+
+### F-G00-10 — cll/td/impulsive/adiabatic kk backup() did not refresh the ambipolar/vibmode fix copies after a react/retry grew the particle arrays (re-check under split memory)
+deck: $S/gpusim/GS-fixes/F-G00-10/in.g.{cll,td,impulsive,adiabatic} = AB2 ion deck (2d circle, N2+ beam, fix ambipolar e N2+ N+, surf_react prob N2+ -> N + N+, emit/face) shrunk to fnum 0.01 / 100 steps (the AB2-size deck ran >10 min per 40 steps under watch/stale); run with `-pk kokkos react/retry yes`. Invariant: c_ia (sum ionambi) == N2+ + N+. CPU ref = A_sync without -k.
+positive control (np1, plain split-memory runs): A_sync cll and td abort `free(): invalid next size` (rc 134), impulsive SIGSEGV (rc 139), all before step 75. B_sync step 100: cll 17081, ia 11327 = 5599+5728; td 27861, 16714 = 5599+11115; impulsive 24884, 15255 = 5599+9656 (invariant exact). CPU ref step 100: cll 17176 / td 27842 / impulsive 25076 np (within noise). adiabatic: A == B identical (13681, 9634 = 5599+4035), as AB2 found (adiabatic necessity not shown). REPRODUCED.
+detector (cll np1, watch/stale/strict, 14 min): B rc 0 and its stats table identical to the plain B run; A hangs after the heap abort (timeout 124) with the same labels as B up to the crash. No A-only, no B-only labels; the 6 common ones are the particle grow/grow_custom notes and `surf_react:models/index <- SurfCollideCLLKokkos::pre_collide/backup` (GS-sweep R3: blit without modify_host, benign). The fault is a use-after-free of the fix's cached host/device pointer to the pre-grow particle custom array, not a DualView coherence error, so watch/stale cannot name it; poison (ASan) would, but the poison builds were still absent.
+negative control: same deck with `-pk kokkos react/extra 4.0` (no retry): A and B stats tables byte-identical (step 100 17069, 11308).
+np4: not testable on the sync builds: A and B (all four models) abort at step 0+ with `DualView::modify_host ERROR: concurrent modification ... "particle:ivector"` from ParticleKokkos::sync <- grow_custom <- Comm::migrate_particles, i.e. the known GS-autosync double-claim bug (ambipolar custom ivector + migration growth), not in 39e1c1f7. AB2's CPU-memory t4 runs (cll, td, impulsive) cover multi-thread.
+necessary: YES for cll/td/impulsive (A crashes under split memory too); adiabatic NOT shown (A == B)
+complete: YES at np1 (invariant exact for all 4 models, detector-clean on cll); np>1 blocked by the known auto_sync abort
+verdict: NECESSARY+COMPLETE (np1; multi-rank blocked by the GS-autosync bug)
+artifacts: $S/gpusim/GS-fixes/F-G00-10 (in.g.*, p.*, p4.*, n.cll.*, o.g.cll.*, lab.g.cll.*)
+
+## Side findings (pre-existing, A and B identical, not regressions)
+- SF-1: `[stale] grid:cells / grid:pcells (/sinfo) device side read while host side is newer, from UpdateKokkos::move<D,..>` after adapt_grid / balance_grid (FU-9, F-G00-14, F-G16-5, F-G00-1 decks). Same as GS-sweep R1: update_kokkos.cpp takes `d_cells/d_pcells/d_sinfo = grid_kk->k_*.view_device()` before `grid_kk->sync(Device, CELL_MASK|PCELL_MASK|SINFO_MASK|...)`; same allocation after the sync, so the kernel reads fresh data. Benign accessor order; cosmetic fix: sync before taking the handles.
+- SF-2: `custom surf set` writes the per-surf custom DualView (surf:darray) on the host without modify_host(), so `SurfKokkos::sync(Device)` has nothing to copy and the device copy keeps its initial values ([watch] report in F-G00-1 decks). Current Kokkos consumers (emit/surf/kk) read the host side, so results are right; a future device reader would see stale data. Same class as GS-autosync follow-up 2 (read_restart surf custom arrays unclaimed). Suggested: claim the host in the `custom` command's surf path (surf_kk->modify(Host, CUSTOM_MASK)).
+- Residual cosmetic detector notes in B listed per item: F-G04-1 (unclaimed host zero in ReactBird::init under gpu/aware no), F-G17-3 (resize/destructor accessor order in compute surf/kk, isurf/grid/kk), F-G00-14 (ave/grid grow_percell at init), F-G00-1 (cummulative_custom handle before sync).
+- Poison builds ($S/bpoison_{A,B}) never appeared during this run, so no ASan/poison pass was done; F-G16-6 (host plain-pointer reads) and F-G00-10 (use-after-free of fix copies) are the items a poison run would add detector evidence to.
+
+## Summary
+| ID | verdict |
+|---|---|
+| F-G04-1 | NECESSARY+COMPLETE (split memory: A reports cumulative react tallies on run 2; cosmetic [watch] residual in B under gpu/aware no) |
+| F-G13-4 | NECESSARY (detector: device collide reads stale particle ewhich) + COMPLETE, np1/np4 |
+| FU-9 | NOT-SHOWN-NECESSARY (no device consumer of grid ewhich); A == B, B clean |
+| F-G00-14 | NECESSARY+COMPLETE (A stale/migrated f_av via reduce/kk after balance np4 and adapt np1/np4; B == CPU) |
+| F-G16-6 | NECESSARY+COMPLETE (A host consumers of ke/particle/kk read zeros; B == CPU np1/np2) |
+| F-G00-2 | mvv2e part NOT-CATCHABLE by the tool; modify_device part NECESSARY via F-G16-6 |
+| F-G16-5 | NECESSARY+COMPLETE (A 293/1072 and 363/1072 wrong distsurf cells np1/np4; B 0) |
+| F-G22-5 | NECESSARY+COMPLETE (fault-injected device reorder: A names wrong particle/cell, B right, np1/2/4) |
+| FU-10 | NOT-SHOWN-NECESSARY (hygiene); host-only memset suffices under split memory: COMPLETE |
+| F-G00-4 | NOT-CATCHABLE (host writing device address space; needs real GPU); A == B, B COMPLETE by source |
+| F-G10-6 | NECESSARY+COMPLETE (perf: 500 -> 50 H2D state copies per array, surf and face) |
+| F-G18-1 | NECESSARY+COMPLETE (cpu-observable; B split-memory detector-clean np1/np4) |
+| F-G17-3 | NECESSARY+COMPLETE (cpu-observable; benign resize/destructor detector notes in B) |
+| F-G00-1 | NECESSARY+COMPLETE (A segfault np1/np4; B correct; side finding SF-2) |
+| F-G12-2 | NECESSARY+COMPLETE (all 3 emit styles, np1/2/4; closes AB6 multi-proc gap) |
+| F-G00-10 | NECESSARY+COMPLETE at np1 for cll/td/impulsive (adiabatic not shown); np4 blocked by the known GS-autosync particle:ivector abort in both A and B |
+
+## STATUS: COMPLETE
