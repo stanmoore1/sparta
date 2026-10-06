@@ -72,3 +72,16 @@ complete: B == CPU in every scatter_cmodel call path:
   Sibling scan: only other reflect3 uses are diffuse partial-specular (no noslip on CPU either) and surf_collide_specular_kokkos (already honors noslip). Not run: CI stoich-2 jp with cmip flags (h:502), ER (same h:484 line as LH1).
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB3/F-G00-18 (in.ns, in.ns_surf, *.surf, log.{CPU,A,B}.*)
+
+### F-G10-3 — adsorb/kk grid_changed() does not resize nstate_/device per-slot views (distributed SURF + fix balance) -> abort/heap overrun
+class: mpi (A_mpi/B_mpi, real MPI + Kokkos DEBUG_BOUNDS_CHECK)
+positive control: in.dist: 2d circle, closed box (r r p), 20000 O, specular + adsorb gs sample-GS_1.surf SURF mode, surfs explicit/distributed, balance_grid block, fix balance 10 rcb part, nsync 10, 200 steps, np 4, t 1; invariant v_tot = np + sum(s_nstick_total) = 20000 | CPU (B_mpi non-kk): 20000 at every step, Np(200) 8211 | A: rc 134, Kokkos::abort "Surf_react adsorb model applied to the wrong boundary type" (the idx>=nstate_ guard, h:244) after step 170 | B: rc 0, v_tot 20000 throughout, Np(200) 8162 | REPRODUCED
+negative control: same deck with no rebalance (fix balance every 1000): np4 kk 3 repeats A Np(200) 8227/8227/8207, B 8185/8171/8301, CPU 8179/8205 (np>1 runs are non-deterministic even on CPU) -> agree within noise, all v_tot 20000; np1 (no surf redistribution) ns 1/10: A == B stats identical; np2 2d t2 and np2 3d t2+retry rebalance without growing past the old size: CPU == A == B bit-identical
+necessary: A fails on every np>=3 rebalance variant: 2d np4 ns10/nb10 abort@~175; 2d np4 ns1/nb5 abort@~95; 2d np4 react/retry yes abort@~105; 2d np3 ns5/nb20 SIGSEGV@~25 (shrink path: host total_state/area/... overread, not caught by view bounds check); 3d sphere (1200 tris, 12^3 grid) np4 abort@~45; 2d gs/ps (PS_1 desorption, tau spread) np4 abort@~95
+complete: B runs to 200 steps on all of the above with the invariant exact (2d: 20000 every step; 3d: constant 19995 per run) and Np within noise of CPU (2d np4 8162 vs 8211, ns1 8227 vs 8215, retry 8207 vs 8243, np3 8015 vs 8152, 3d 10200 vs 10218); gs/ps np4: B 44461..45014 vs CPU 44311..44459 (3 repeats each) -- within seed spread (CPU np1 seeds: 44219/44346/44774), and the kk-vs-cpu PS offset is identical A==B at np1 (pre-existing, not grid-change related). Covers grow+shrink, 2d/3d, nsync 1/5/10, retry backups (d_*_backup resized in alloc_state_kokkos), gs and gs/ps, t1/t2. Sibling scan: all nstate_-sized views/loops (cpp:460, 542, 550, 585, 592) use the resized views; FACE mode unaffected (base returns early); global/prob keep no per-surf state.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB3/F-G10-3 (in.dist, in.dist3d, in.dist_ps, variants*.sh, variants.txt, out.v.*/log.v.*, out.{cpu,A,B}.np4)
+
+### F-G10-5 — addendum: EXACT RanKnuth part still untested (no SPARTA_KOKKOS_EXACT build among A_opt/B_opt/A_mpi/B_mpi); verdict unchanged.
+
+## STATUS: COMPLETE

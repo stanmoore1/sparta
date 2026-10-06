@@ -8,3 +8,4 @@ AB6 emit: F-G00-1, F-G11-1, F-G11-2 (CPU), F-G11-3, F-G11-4, F-G12-1, F-G12-2
 AB7 fix ave: F-G00-3, F-G00-4, F-G00-12, F-G00-20, F-G14-1, F-G14-5, F-G14-6, G12x-F-G14-1
 AB8 fft: F-G20-9, F-G00-8/F-G19-2, F-G19-1, F-G19-3, F-G19-9, F-G20-6, F-G20-7, F-G00-21/F-G20-1, F-G19-4 (CPU+kk), F-G19-5/F-G20-2, F-G19-6/F-G20-3, F-G19-7, F-G20-8, F-G20-5, R-C-3
 AB9 infra/grid/surf: F-G21-1, F-G21-2, F-G21-4, F-G21-5, F-G21-7, F-G21-8, F-G21-9, F-G21-12, F-G22-1, F-G22-2, F-G22-3, F-G22-4 (CPU), F-G22-5, F-G18-2-cpu
+AB10 follow-ups (A = B_opt = $S/spa_new_final [before follow-ups], C = $S/spa_C_opt [with follow-ups]; for the ORIGINAL bug also compare to A_opt): FU-1, FU-2, FU-3, FU-4, FU-5, FU-6 (perf: re-measure in.one2 react/retry slowdown from ab/AB1), FU-8 (deck $S/ab/AB2/F-G09-4/in.sr_kk), FU-9, FU-10
