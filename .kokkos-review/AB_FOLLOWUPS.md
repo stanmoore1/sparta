@@ -18,3 +18,6 @@
 - FU-15 (from AB8, F-G19-4 CPU side): with FFT_SINGLE the CPU remap2d rejects precision=1 ("Single precision not supported"); before the fix the swapped args made it accept and move half the data (silently wrong). Now an explicit error. Decision: keep (explicit unsupported > silent wrong); report as behavior change.
 - FU-16 (from AB8, kk, unreachable from compute fft/grid): remap3d_kokkos collective plan, rank with no data -> send_size[] unallocated write at :689 (A and B). Remainder of deferred F-G20-4.
 - FU-17 (from AB8, CPU+kk, collective plans only): MPI_Comm_group/MPI_Group_incl groups never freed (remap3d_kokkos.cpp:789-793, src/FFT/remap3d.cpp:609-613), 144 B/plan.
+- FU-3b: AB10 found FU-3 INCOMPLETE (tiny-positive roundoff ke). Being replaced with relative threshold (FX-followups2).
+- FU-18 (from AB10, CPU): compute dt/grid reads array_grid instead of vector_grid for post-processed compute input -> segfault (compute_dt_grid.cpp:514). Being fixed (FX-followups2).
+- Notes (not fixed): adsorb + compute surf/kk unsupported (feature gap, clean error in A and C); FU-10 memset zeroes host only (device copy of first allocation not zeroed on GPU, hygiene); Kokkos emit/face low seed-to-seed variance = Kokkos RNG fixed seed 12345+rank ignores user seed (package design, see F-G04-4 REFUTED-design).
