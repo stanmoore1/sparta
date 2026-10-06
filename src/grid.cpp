@@ -2275,7 +2275,8 @@ void Grid::grow_cells(int n, int m)
     cells = (ChildCell *)
       memory->srealloc(cells,maxcell*sizeof(ChildCell),"grid:cells",
                        SPARTA_GET_ALIGN(ChildCell));
-    memset(&cells[oldmax],0,(maxcell-oldmax)*sizeof(ChildCell));
+    if (maxcell > oldmax)
+      memset(&cells[oldmax],0,(maxcell-oldmax)*sizeof(ChildCell));
     if (ncustom) reallocate_custom(oldmax,maxcell);
   }
 
@@ -2284,7 +2285,8 @@ void Grid::grow_cells(int n, int m)
     while (maxlocal < nlocal+m) maxlocal += DELTA;
     cinfo = (ChildInfo *)
       memory->srealloc(cinfo,maxlocal*sizeof(ChildInfo),"grid:cinfo");
-    memset(&cinfo[oldmax],0,(maxlocal-oldmax)*sizeof(ChildInfo));
+    if (maxlocal > oldmax)
+      memset(&cinfo[oldmax],0,(maxlocal-oldmax)*sizeof(ChildInfo));
   }
 }
 
@@ -2311,7 +2313,8 @@ void Grid::grow_sinfo(int n)
     while (maxsplit < nsplitlocal+nsplitghost+n) maxsplit += DELTA;
     sinfo = (SplitInfo *)
       memory->srealloc(sinfo,maxsplit*sizeof(SplitInfo),"grid:sinfo");
-    memset(&sinfo[oldmax],0,(maxsplit-oldmax)*sizeof(SplitInfo));
+    if (maxsplit > oldmax)
+      memset(&sinfo[oldmax],0,(maxsplit-oldmax)*sizeof(SplitInfo));
   }
 }
 

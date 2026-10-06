@@ -485,17 +485,24 @@ void FixAblate::epsilon_adjust_multiv(int initflag)
 
       // if mixflag = 1, inner indices in disagreement in terms of side
       // set to all out (inside can become out but not vice versa)
+      // "out" is set to thresh - EPSILON, not exactly thresh: a value exactly
+      //   on the threshold puts a Marching Squares/Cubes vertex exactly on the
+      //   grid corner point, which gives degenerate (zero-area) triangles
+      //   lying in a cell face and aborts MarchingCubes::cleanup() with
+      //   "Some cell faces do not have zero or 2 triangles" mid-ablation
+      // same side of thresh as before (<= thresh), so the inside/outside
+      //   classification is unchanged
 
       if (mixflag) {
 
         for (int j = 0; j < nmultiv; j++)
-          mvalues[icell][i][j] = thresh;
+          mvalues[icell][i][j] = thresh - EPSILON;
 
       // all out
       } else if (!allin) {
         for (int j = 0; j < nmultiv; j++)
           if (mvalues[icell][i][j] > thresh)
-            mvalues[icell][i][j] = thresh;
+            mvalues[icell][i][j] = thresh - EPSILON;
       }
 
       // a directional value exactly equal to thresh places a Marching
