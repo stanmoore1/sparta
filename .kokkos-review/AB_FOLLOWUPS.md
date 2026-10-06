@@ -21,3 +21,5 @@
 - FU-3b: AB10 found FU-3 INCOMPLETE (tiny-positive roundoff ke). Being replaced with relative threshold (FX-followups2).
 - FU-18 (from AB10, CPU): compute dt/grid reads array_grid instead of vector_grid for post-processed compute input -> segfault (compute_dt_grid.cpp:514). Being fixed (FX-followups2).
 - Notes (not fixed): adsorb + compute surf/kk unsupported (feature gap, clean error in A and C); FU-10 memset zeroes host only (device copy of first allocation not zeroed on GPU, hygiene); Kokkos emit/face low seed-to-seed variance = Kokkos RNG fixed seed 12345+rank ignores user seed (package design, see F-G04-4 REFUTED-design).
+- FU-19 (note): PONLY subsonic emit with a mixture temp 0 and nonzero vstream -> soundspeed_mixture 0 -> divide by 0 for fallback cells (pre-existing, user input edge case). Not fixed; suggest error in FixEmit*::init.
+- FU-20 (note): CPU compute dt/grid at run 0 returns 0 for all cells (cinfo count 0 before first sort) while kk gives values; pre-existing CPU/kk difference.
