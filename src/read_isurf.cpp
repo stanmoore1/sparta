@@ -808,6 +808,8 @@ void ReadISurf::read_corners_parallel(char *gridfile)
 
   memory->destroy(proclist);
   memory->sfree(sdatum);
+  memory->destroy(ibuf);
+  memory->destroy(dbuf);
 
   // assign RecvDatum corner values to per grid cell cvalues
 

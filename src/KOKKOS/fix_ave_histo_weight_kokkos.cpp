@@ -64,27 +64,27 @@ FixAveHistoWeightKokkos::FixAveHistoWeightKokkos(SPARTA *spa, int narg, char **a
 
   // check that length of 2 values is the same
 
-  int size[2];
+  // in scalar mode each input is a single value
+
+  int size[2] = {0,0};
 
   for (int i = 0; i < nvalues; i++) {
     if (which[i] == X || which[i] == V) {
       size[i] = particle->nlocal;
-    } else if (which[i] == COMPUTE && kind == GLOBAL && mode == SCALAR) {
-      int icompute = modify->find_compute(ids[i]);
-      size[i] = modify->compute[icompute]->size_vector;
+    } else if (kind == GLOBAL && mode == SCALAR) {
+      size[i] = 1;
     } else if (which[i] == COMPUTE && kind == GLOBAL && mode == VECTOR) {
       int icompute = modify->find_compute(ids[i]);
-      size[i] = modify->compute[icompute]->size_array_rows;
+      if (argindex[i] == 0) size[i] = modify->compute[icompute]->size_vector;
+      else size[i] = modify->compute[icompute]->size_array_rows;
     } else if (which[i] == COMPUTE && kind == PERPARTICLE) {
       size[i] = particle->nlocal;
     } else if (which[i] == COMPUTE && kind == PERGRID) {
       size[i] = grid->nlocal;
-    } else if (which[i] == FIX && kind == GLOBAL && mode == SCALAR) {
-      int ifix = modify->find_fix(ids[i]);
-      size[i] = modify->fix[ifix]->size_vector;
     } else if (which[i] == FIX && kind == GLOBAL && mode == VECTOR) {
       int ifix = modify->find_fix(ids[i]);
-      size[i]= modify->fix[ifix]->size_array_rows;
+      if (argindex[i] == 0) size[i] = modify->fix[ifix]->size_vector;
+      else size[i] = modify->fix[ifix]->size_array_rows;
     } else if (which[i] == FIX && kind == PERPARTICLE) {
       size[i] = particle->nlocal;
     } else if (which[i] == FIX && kind == PERGRID) {
@@ -250,7 +250,7 @@ void FixAveHistoWeightKokkos::calculate_weights()
       if (j == 0) {
         weights = fix->vector_particle;
       } else if (fix->array_particle) {
-        weights = fix->array_particle[j-1];
+        weights = &fix->array_particle[0][j-1];
       }
 
     } else if (kind == PERGRID) {

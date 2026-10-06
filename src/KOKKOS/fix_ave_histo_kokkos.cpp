@@ -98,6 +98,14 @@ FixAveHistoKokkos::~FixAveHistoKokkos()
 
 void FixAveHistoKokkos::init()
 {
+  // re-resolve region, since region delete can free or move regions
+
+  if (regionflag) {
+    iregion = domain->find_region(idregion);
+    if (iregion == -1)
+      error->all(FLERR,"Fix ave/histo/kk region ID does not exist");
+  }
+
   // set current indices for all computes,fixes,variables
 
   for (int i = 0; i < nvalues; i++) {
@@ -298,17 +306,17 @@ void FixAveHistoKokkos::end_of_step()
         error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
         if (j == 0) {
           int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_vector(i));
+          for (int k = 0; k < n; k++) bin_scalar(reducer, fix->compute_vector(k));
         } else {
-          int n = fix->size_vector;
-          for (i = 0; i < n; i++) bin_scalar(reducer, fix->compute_array(i,j-1));
+          int n = fix->size_array_rows;
+          for (int k = 0; k < n; k++) bin_scalar(reducer, fix->compute_array(k,j-1));
         }
 
       } else if (kind == PERPARTICLE) {
         error->all(FLERR,"Fix not compatible with fix ave/histo/kk");
         if (j == 0) bin_particles(reducer, fix->vector_particle,1);
         else if (fix->array_particle)
-          bin_particles(reducer, fix->array_particle[j-1],fix->size_per_particle_cols);
+          bin_particles(reducer, &fix->array_particle[0][j-1],fix->size_per_particle_cols);
       } else if (kind == PERGRID) {
         if (j == 0) {
           // per-grid fixes fill d_vector_grid; d_vector_particle is unallocated

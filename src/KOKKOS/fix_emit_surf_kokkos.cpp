@@ -1155,8 +1155,8 @@ void FixEmitSurfKokkos::operator()(TagFixEmitSurf_subsonic_grid, const int &i) c
     temp_thermal_cell = tsubsonic;
 
   } else {
-    const double nrho_cell = np * fnum / d_cinfo[icell].volume;
-    const double massrho_cell = masstot * fnum / d_cinfo[icell].volume;
+    const double nrho_cell = np * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
+    const double massrho_cell = masstot * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     if (np > 1) {
       const double ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;

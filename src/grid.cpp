@@ -44,6 +44,7 @@ using namespace MathConst;
 #define BIG 1.0e20
 #define MAXGROUP 32
 #define MAXLEVEL 32
+#define MAXRESTARTSTR 65536     // max length of a name string in restart file
 
 // default values, can be overridden by global command
 
@@ -2748,29 +2749,47 @@ void Grid::read_restart(FILE *fp)
 
   // read level info
 
-  if (me == 0) tmp = fread(&maxlevel,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&maxlevel,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&maxlevel,1,MPI_INT,0,world);
   if (maxlevel < 0 || maxlevel > MAXLEVEL)
     error->all(FLERR,"Invalid grid level count in restart file");
-  if (me == 0) tmp = fread(plevels,sizeof(ParentLevel),maxlevel,fp);
+  if (me == 0) {
+    tmp = fread(plevels,sizeof(ParentLevel),maxlevel,fp);
+    if (tmp != maxlevel) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(plevels,maxlevel*sizeof(ParentLevel),MPI_CHAR,0,world);
 
   // if any exist, clear existing group names, before reading new ones
 
   for (int i = 0; i < ngroup; i++) delete [] gnames[i];
 
-  if (me == 0) tmp = fread(&ngroup,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&ngroup,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&ngroup,1,MPI_INT,0,world);
   if (ngroup < 0 || ngroup > MAXGROUP)
     error->all(FLERR,"Invalid grid group count in restart file");
 
   int n;
   for (int i = 0; i < ngroup; i++) {
-    if (me == 0) tmp = fread(&n,sizeof(int),1,fp);
+    if (me == 0) {
+      tmp = fread(&n,sizeof(int),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&n,1,MPI_INT,0,world);
+    if (n <= 0 || n > MAXRESTARTSTR)
+      error->all(FLERR,"Invalid string length in restart file");
     gnames[i] = new char[n];
-    if (me == 0) tmp = fread(gnames[i],sizeof(char),n,fp);
+    if (me == 0) {
+      tmp = fread(gnames[i],sizeof(char),n,fp);
+      if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(gnames[i],n,MPI_CHAR,0,world);
+    gnames[i][n-1] = '\0';
   }
 }
 

@@ -357,10 +357,21 @@ void Comm::migrate_cells(int nmigrate)
   igrid->exchange_variable(sbuf,gsize,rbuf);
 
   // unpack received grid cells with their particles
+  // for explicit distributed surfs, unpack_one() uses surf hash to skip
+  //   received surfs this proc already owns, so hash my owned surfs first
+  //   compress_explicit() clears the hash, so rehash after it
+
+  int distexplicit = surf->distributed && !surf->implicit;
+  if (distexplicit) surf->rehash();
 
   offset = 0;
   for (i = 0; i < nrecv; i++)
     offset += grid->unpack_one(&rbuf[offset],1,1,1);
+
+  if (distexplicit) {
+    surf->hash->clear();
+    surf->hashfilled = 0;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -391,6 +402,14 @@ void Comm::migrate_cells_less_memory(int nmigrate)
   int icell_end = grid->nlocal;
   int not_done = 1;
   int nglocal = grid->nlocal;
+
+  // for explicit distributed surfs, unpack_one() uses surf hash to skip
+  //   received surfs this proc already owns, so hash my owned surfs first
+  // unpack_one() adds each newly received surf to the hash
+  // compress_explicit() at the end clears the hash
+
+  int distexplicit = surf->distributed && !surf->implicit;
+  if (distexplicit) surf->rehash();
 
   while (not_done) {
     Grid::ChildCell *cells = grid->cells;
@@ -496,6 +515,11 @@ void Comm::migrate_cells_less_memory(int nmigrate)
     if (surf->implicit) surf->compress_implicit();
     grid->compress();
     if (surf->distributed && !surf->implicit) surf->compress_explicit();
+  }
+
+  if (distexplicit) {
+    surf->hash->clear();
+    surf->hashfilled = 0;
   }
 }
 

@@ -27,6 +27,7 @@ using namespace SPARTA_NS;
 
 #define DELTA 8
 #define SMALL 1.0e-6
+#define MAXRESTARTSTR 65536     // max length of a name string in restart file
 
 /* ---------------------------------------------------------------------- */
 
@@ -704,67 +705,134 @@ void Mixture::read_restart(FILE *fp)
 
   int me = comm->me;
 
-  if (me == 0) tmp = fread(&nspecies,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&nspecies,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&nspecies,1,MPI_INT,0,world);
+  if (nspecies < 0 || nspecies > particle->nspecies)
+    error->all(FLERR,"Invalid mixture species count in restart file");
 
   while (nspecies > maxspecies) allocate();
 
-  if (me == 0) tmp = fread(species,sizeof(int),nspecies,fp);
+  if (me == 0) {
+    tmp = fread(species,sizeof(int),nspecies,fp);
+    if (tmp != nspecies) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(species,nspecies,MPI_INT,0,world);
+  for (int i = 0; i < nspecies; i++)
+    if (species[i] < 0 || species[i] >= particle->nspecies)
+      error->all(FLERR,"Invalid mixture species index in restart file");
 
-  if (me == 0) tmp = fread(&nrho_flag,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&nrho_flag,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&nrho_flag,1,MPI_INT,0,world);
   if (nrho_flag) {
-    if (me == 0) tmp = fread(&nrho_user,sizeof(double),1,fp);
+    if (me == 0) {
+      tmp = fread(&nrho_user,sizeof(double),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&nrho_user,1,MPI_DOUBLE,0,world);
   }
-  if (me == 0) tmp = fread(&vstream_flag,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&vstream_flag,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&vstream_flag,1,MPI_INT,0,world);
   if (vstream_flag) {
-    if (me == 0) tmp = fread(vstream_user,sizeof(double),3,fp);
+    if (me == 0) {
+      tmp = fread(vstream_user,sizeof(double),3,fp);
+      if (tmp != 3) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(vstream_user,3,MPI_DOUBLE,0,world);
   }
-  if (me == 0) tmp = fread(&temp_thermal_flag,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&temp_thermal_flag,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&temp_thermal_flag,1,MPI_INT,0,world);
   if (temp_thermal_flag) {
-    if (me == 0) tmp = fread(&temp_thermal_user,sizeof(double),1,fp);
+    if (me == 0) {
+      tmp = fread(&temp_thermal_user,sizeof(double),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&temp_thermal_user,1,MPI_DOUBLE,0,world);
   }
-  if (me == 0) tmp = fread(&temp_rot_flag,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&temp_rot_flag,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&temp_rot_flag,1,MPI_INT,0,world);
   if (temp_rot_flag) {
-    if (me == 0) tmp = fread(&temp_rot_user,sizeof(double),1,fp);
+    if (me == 0) {
+      tmp = fread(&temp_rot_user,sizeof(double),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&temp_rot_user,1,MPI_DOUBLE,0,world);
   }
-  if (me == 0) tmp = fread(&temp_vib_flag,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&temp_vib_flag,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&temp_vib_flag,1,MPI_INT,0,world);
   if (temp_vib_flag) {
-    if (me == 0) tmp = fread(&temp_vib_user,sizeof(double),1,fp);
+    if (me == 0) {
+      tmp = fread(&temp_vib_user,sizeof(double),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&temp_vib_user,1,MPI_DOUBLE,0,world);
   }
 
-  if (me == 0) tmp = fread(fraction_flag,sizeof(int),nspecies,fp);
+  if (me == 0) {
+    tmp = fread(fraction_flag,sizeof(int),nspecies,fp);
+    if (tmp != nspecies) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(fraction_flag,nspecies,MPI_INT,0,world);
-  if (me == 0) tmp = fread(fraction_user,sizeof(double),nspecies,fp);
+  if (me == 0) {
+    tmp = fread(fraction_user,sizeof(double),nspecies,fp);
+    if (tmp != nspecies) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(fraction_user,nspecies,MPI_DOUBLE,0,world);
 
   int ngroup_file;
-  if (me == 0) tmp = fread(&ngroup_file,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&ngroup_file,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&ngroup_file,1,MPI_INT,0,world);
+  if (ngroup_file < 0)
+    error->all(FLERR,"Invalid mixture group count in restart file");
 
   int n;
   char *id;
 
   for (int i = 0; i < ngroup_file; i++) {
-    if (me == 0) tmp = fread(&n,sizeof(int),1,fp);
+    if (me == 0) {
+      tmp = fread(&n,sizeof(int),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&n,1,MPI_INT,0,world);
+    if (n <= 0 || n > MAXRESTARTSTR)
+      error->all(FLERR,"Invalid string length in restart file");
     id = new char[n];
-    if (me == 0) tmp = fread(id,sizeof(char),n,fp);
+    if (me == 0) {
+      tmp = fread(id,sizeof(char),n,fp);
+      if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(id,n,MPI_CHAR,0,world);
+    id[n-1] = '\0';
     add_group(id);
     delete [] id;
   }
 
-  if (me == 0) tmp = fread(mix2group,sizeof(int),nspecies,fp);
+  if (me == 0) {
+    tmp = fread(mix2group,sizeof(int),nspecies,fp);
+    if (tmp != nspecies) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(mix2group,nspecies,MPI_INT,0,world);
+  for (int i = 0; i < nspecies; i++)
+    if (mix2group[i] < 0 || mix2group[i] >= ngroup)
+      error->all(FLERR,"Invalid mixture group index in restart file");
 }

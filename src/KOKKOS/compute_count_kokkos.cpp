@@ -65,6 +65,11 @@ void ComputeCountKokkos::init()
     d_count = k_count.view_device();
   }
 
+  // force re-tally on first invocation of a new run,
+  //   particles may have changed since last run on same timestep
+
+  lasttally = -1;
+
   // check if the group count in any accessed mixtures has changed
   int warn = 0;
   int err = 0;

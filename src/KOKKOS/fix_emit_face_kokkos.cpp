@@ -196,6 +196,24 @@ void FixEmitFaceKokkos::flatten_region()
 
 void FixEmitFaceKokkos::perform_task()
 {
+  // if global timestep was reset since tasks were created (e.g. fix dt/reset),
+  //   rescale non-subsonic insertion counts which are proportional to dt
+
+  if (!subsonic && update->dt != dt) {
+    double dtratio = update->dt / dt;
+    k_tasks.sync_host();
+    if (perspecies) k_ntargetsp.sync_host();
+    for (int i = 0; i < ntask; i++) {
+      tasks[i].ntarget *= dtratio;
+      if (perspecies)
+        for (int isp = 0; isp < nspecies; isp++) tasks[i].ntargetsp[isp] *= dtratio;
+      if (tasks[i].ntarget >= MAXSMALLINT)
+        error->one(FLERR,"Fix emit/face insertion count exceeds 32-bit int");
+    }
+    k_tasks.modify_host();
+    if (perspecies) k_ntargetsp.modify_host();
+  }
+
   dt = update->dt;
   auto l_dimension = this->dimension;
   auto l_subsonic_style = this->subsonic_style;
@@ -796,8 +814,8 @@ void FixEmitFaceKokkos::operator()(TagFixEmitFace_subsonic_grid, const int &i) c
     temp_thermal_cell = tsubsonic;
 
   } else {
-    const double nrho_cell = np * fnum / d_cinfo[icell].volume;
-    const double massrho_cell = masstot * fnum / d_cinfo[icell].volume;
+    const double nrho_cell = np * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
+    const double massrho_cell = masstot * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     if (np > 1) {
       const double ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;

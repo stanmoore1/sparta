@@ -57,6 +57,7 @@ enum{LT,LE,GT,GE,EQ,NEQ,BETWEEN};
 #define EPSILON_GRID 1.0e-3
 #define BIG 1.0e20
 #define MAXGROUP 32
+#define MAXRESTARTSTR 65536     // max length of a name string in restart file
 
 /* ---------------------------------------------------------------------- */
 
@@ -2943,16 +2944,30 @@ void Surf::read_restart(FILE *fp)
 
   for (int i = 0; i < ngroup; i++) delete [] gnames[i];
 
-  if (me == 0) tmp = fread(&ngroup,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&ngroup,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&ngroup,1,MPI_INT,0,world);
+  if (ngroup < 0 || ngroup > MAXGROUP)
+    error->all(FLERR,"Invalid surf group count in restart file");
 
   int n;
   for (int i = 0; i < ngroup; i++) {
-    if (me == 0) tmp = fread(&n,sizeof(int),1,fp);
+    if (me == 0) {
+      tmp = fread(&n,sizeof(int),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&n,1,MPI_INT,0,world);
+    if (n <= 0 || n > MAXRESTARTSTR)
+      error->all(FLERR,"Invalid string length in restart file");
     gnames[i] = new char[n];
-    if (me == 0) tmp = fread(gnames[i],sizeof(char),n,fp);
+    if (me == 0) {
+      tmp = fread(gnames[i],sizeof(char),n,fp);
+      if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(gnames[i],n,MPI_CHAR,0,world);
+    gnames[i][n-1] = '\0';
   }
 }
 

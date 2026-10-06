@@ -39,6 +39,7 @@ enum{INT,DOUBLE};                      // several files
 #define DELTASPECIES 16
 #define DELTAMIXTURE 8
 #define MAXLINE 1024
+#define MAXRESTARTSTR 65536     // max length of a name string in restart file
 
 // customize by adding an abbreviation string
 // also add a check for the keyword in 2 places in add_species()
@@ -1453,15 +1454,23 @@ void Particle::read_restart_species(FILE *fp)
 {
   int tmp;
 
-  if (me == 0) tmp = fread(&nspecies,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&nspecies,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&nspecies,1,MPI_INT,0,world);
+  if (nspecies < 0)
+    error->all(FLERR,"Invalid species count in restart file");
 
   if (nspecies > maxspecies) {
     while (nspecies > maxspecies) maxspecies += DELTASPECIES;
     grow_species();
   }
 
-  if (me == 0) tmp = fread(species,sizeof(Species),nspecies,fp);
+  if (me == 0) {
+    tmp = fread(species,sizeof(Species),nspecies,fp);
+    if (tmp != nspecies) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(species,nspecies*sizeof(Species),MPI_CHAR,0,world);
 
   maxvibmode = 0;
@@ -1500,8 +1509,13 @@ void Particle::read_restart_mixture(FILE *fp)
 
   // now process restart file data
 
-  if (me == 0) tmp = fread(&nmixture,sizeof(int),1,fp);
+  if (me == 0) {
+    tmp = fread(&nmixture,sizeof(int),1,fp);
+    if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+  }
   MPI_Bcast(&nmixture,1,MPI_INT,0,world);
+  if (nmixture < 0)
+    error->all(FLERR,"Invalid mixture count in restart file");
 
   if (nmixture > maxmixture) {
     while (nmixture > maxmixture) maxmixture += DELTAMIXTURE;
@@ -1513,11 +1527,20 @@ void Particle::read_restart_mixture(FILE *fp)
   char *id;
 
   for (int i = 0; i < nmixture; i++) {
-    if (me == 0) tmp = fread(&n,sizeof(int),1,fp);
+    if (me == 0) {
+      tmp = fread(&n,sizeof(int),1,fp);
+      if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(&n,1,MPI_INT,0,world);
+    if (n <= 0 || n > MAXRESTARTSTR)
+      error->all(FLERR,"Invalid string length in restart file");
     id = new char[n];
-    if (me == 0) tmp = fread(id,sizeof(char),n,fp);
+    if (me == 0) {
+      tmp = fread(id,sizeof(char),n,fp);
+      if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
+    }
     MPI_Bcast(id,n,MPI_CHAR,0,world);
+    id[n-1] = '\0';
     mixture[i] = new Mixture(sparta,id);
     mixture[i]->read_restart(fp);
     delete [] id;

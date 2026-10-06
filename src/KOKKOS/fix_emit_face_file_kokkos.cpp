@@ -268,11 +268,29 @@ void FixEmitFaceFileKokkos::flatten_region()
 
 void FixEmitFaceFileKokkos::perform_task()
 {
-  // the non-Kokkos perform_task_*() read update->dt into a local, leaving the
-  //   class member dt (frozen at init) for subsonic_inflow().  keep that
-  //   split so a run with fix dt/reset behaves identically
+  // if global timestep was reset since tasks were created (e.g. fix dt/reset),
+  //   rescale non-subsonic insertion counts which are proportional to dt
+  // subsonic_inflow() recomputes counts using current dt
+  // same as the non-Kokkos perform_task_*()
 
-  dt_step = update->dt;
+  if (!subsonic && update->dt != dt) {
+    double dtratio = update->dt / dt;
+    k_tasks.sync_host();
+    if (perspecies) k_ntargetsp.sync_host();
+    for (int i = 0; i < ntask; i++) {
+      tasks[i].ntarget *= dtratio;
+      if (perspecies)
+        for (int isp = 0; isp < nspecies; isp++) tasks[i].ntargetsp[isp] *= dtratio;
+      if (tasks[i].ntarget >= MAXSMALLINT)
+        error->one(FLERR,
+                   "Fix emit/face/file insertion count exceeds 32-bit int");
+    }
+    k_tasks.modify_host();
+    if (perspecies) k_ntargetsp.modify_host();
+  }
+
+  dt = update->dt;
+  dt_step = dt;
 
   // face geometry is fix-wide here, not per task as in fix emit/face, so
   //   hoist it into locals the compaction lambda can capture by value
@@ -906,8 +924,8 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
     temp_thermal_cell = d_tasks(i).temp_thermal;
 
   } else {
-    const double nrho_cell = np * fnum / d_cinfo[icell].volume;
-    const double massrho_cell = masstot * fnum / d_cinfo[icell].volume;
+    const double nrho_cell = np * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
+    const double massrho_cell = masstot * fnum * d_cinfo[icell].weight / d_cinfo[icell].volume;
     if (np > 1) {
       const double ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;

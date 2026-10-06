@@ -351,7 +351,9 @@ void FixAveGridKokkos::end_of_step()
       //   stale values and the push-back would clobber the device work
 
       tally_to_host();
-      input->variable->compute_grid(n,&tally[0][k],ntotal,1);
+      double *tptr = NULL;
+      if (tally) tptr = &tally[0][k];
+      input->variable->compute_grid(n,tptr,ntotal,1);
 
     // access custom attribute
 

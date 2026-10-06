@@ -707,6 +707,8 @@ void ReadRestart::grid_params()
   //   read by code compiled for 32-bit IDs
 
   int maxlevel = grid->maxlevel;
+  if (maxlevel <= 0)
+    error->all(FLERR,"Invalid grid level count in restart file");
   int nbits = grid->plevels[maxlevel-1].nbits + grid->plevels[maxlevel-1].newbits;
   if (nbits > sizeof(cellint)*8) {
     char str[128];
@@ -807,6 +809,7 @@ void ReadRestart::read_gp_single_file_same_procs()
 
       tmp = fread(&n,sizeof(int),1,fp);
       if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+      if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 
       if (n > maxbuf) {
         maxbuf = n;
@@ -830,6 +833,7 @@ void ReadRestart::read_gp_single_file_same_procs()
     fseek(fp,filepos_first,SEEK_SET);
     tmp = fread(&n,sizeof(int),1,fp);
     if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
     tmp = fread(buf,sizeof(char),n,fp);
     if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
 
@@ -884,6 +888,7 @@ void ReadRestart::read_gp_single_file_diff_procs()
       error->one(FLERR,"Invalid flag in peratom section of restart file");
 
     n = read_int();
+    if (n < 0) error->all(FLERR,"Invalid buffer length in restart file");
 
     if (n > maxbuf) {
       maxbuf = n;
@@ -951,6 +956,7 @@ void ReadRestart::read_gp_multi_file_less_procs(char *file)
 
       tmp = fread(&n,sizeof(int),1,fp);
       if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+      if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 
       if (n > maxbuf) {
         maxbuf = n;
@@ -1056,6 +1062,7 @@ void ReadRestart::read_gp_multi_file_more_procs(char *file)
 
       tmp = fread(&n,sizeof(int),1,fp);
       if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+      if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 
       if (n > maxbuf) {
         maxbuf = n;
@@ -1150,10 +1157,12 @@ void ReadRestart::read_gp_multi_file_less_procs_memlimit(char *file)
       if (mem_limit_file) {
         tmp = fread(&n_big,sizeof(bigint),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n_big < 0) error->one(FLERR,"Invalid buffer length in restart file");
       } else {
         int n;
         tmp = fread(&n,sizeof(int),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 	n_big = n;
       }
 
@@ -1322,10 +1331,12 @@ void ReadRestart::read_gp_multi_file_more_procs_memlimit(char *file)
       if (mem_limit_file) {
         tmp = fread(&n_big,sizeof(bigint),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n_big < 0) error->one(FLERR,"Invalid buffer length in restart file");
       } else {
         int n;
         tmp = fread(&n,sizeof(int),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
         n_big = n;
       }
 
@@ -1649,6 +1660,7 @@ void ReadRestart::read_surfs_single_file()
       error->one(FLERR,"Invalid flag in peratom section of restart file");
 
     n = read_int();
+    if (n < 0) error->all(FLERR,"Invalid buffer length in restart file");
 
     if (n > maxbuf) {
       maxbuf = n;
@@ -1709,9 +1721,11 @@ void ReadRestart::read_surfs_multi_file_less_procs(char *file)
       if (mem_limit_file) {
         tmp = fread(&n_big,sizeof(bigint),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n_big < 0) error->one(FLERR,"Invalid buffer length in restart file");
       } else {
         tmp = fread(&n,sizeof(int),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
         n_big = n;
       }
       filepos = ftell(fp);
@@ -1728,6 +1742,7 @@ void ReadRestart::read_surfs_multi_file_less_procs(char *file)
 
       tmp = fread(&n,sizeof(int),1,fp);
       if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+      if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 
       if (n > maxbuf) {
         maxbuf = n;
@@ -1813,9 +1828,11 @@ void ReadRestart::read_surfs_multi_file_more_procs(char *file)
       if (mem_limit_file) {
         tmp = fread(&n_big,sizeof(bigint),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n_big < 0) error->one(FLERR,"Invalid buffer length in restart file");
       } else {
         tmp = fread(&n,sizeof(int),1,fp);
         if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+        if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
         n_big = n;
       }
       filepos = ftell(fp);
@@ -1840,6 +1857,7 @@ void ReadRestart::read_surfs_multi_file_more_procs(char *file)
 
       tmp = fread(&n,sizeof(int),1,fp);
       if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+      if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
 
       if (n > maxbuf) {
         maxbuf = n;
@@ -2138,14 +2156,18 @@ char *ReadRestart::read_string()
   if (me == 0) {
     tmp = fread(&n,sizeof(int),1,fp);
     if (tmp != 1) error->one(FLERR,"Unexpected end of restart file");
+    if (n < 0) error->one(FLERR,"Invalid buffer length in restart file");
   }
   MPI_Bcast(&n,1,MPI_INT,0,world);
+  if (n <= 0 || n > MAXSMALLINT/2)
+    error->all(FLERR,"Invalid string length in restart file");
   char *value = new char[n];
   if (me == 0) {
     tmp = fread(value,sizeof(char),n,fp);
     if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
   }
   MPI_Bcast(value,n,MPI_CHAR,0,world);
+  value[n-1] = '\0';
   return value;
 }
 
@@ -2183,6 +2205,7 @@ void ReadRestart::read_char_vec(bigint n, char *vec)
 {
   if (n > MAXSMALLINT)
     error->all(FLERR,"Restart file read buffer exceeds 2 GB");
+  if (n < 0) error->all(FLERR,"Invalid buffer length in restart file");
   if (me == 0) {
     int tmp = fread(vec,sizeof(char),n,fp);
     if (tmp != n) error->one(FLERR,"Unexpected end of restart file");
