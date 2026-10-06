@@ -295,17 +295,35 @@ void Surf::init()
     if (comm->me == 0)
       error->warning(FLERR,"Surfs are distributed with infinite grid cutoff");
 
+  // surfs to check, so that each surf is counted exactly once on any # of procs
+  //   explicit all: every proc stores all nsurf surfs in nlocal lines/tris,
+  //     counted locally, not summed across procs
+  //   explicit distributed: nlocal+nghost lines/tris are copies of surfs in
+  //     my owned/ghost cells (a surf can be stored on several procs),
+  //     so check the nown mylines/mytris I uniquely own and sum across procs
+  //   implicit (distributed): nlocal = surfs in my owned cells (each surf
+  //     belongs to one cell), nghost = copies from ghost cells, so check nlocal
+
+  Line *clines = lines;
+  Tri *ctris = tris;
+  int ncheck = nlocal;
+  if (distributed && !implicit) {
+    clines = mylines;
+    ctris = mytris;
+    ncheck = nown;
+  }
+
   // check that surf element types are all values >= 1
 
   bigint flag,allflag;
 
   flag = 0;
   if (domain->dimension == 2) {
-    for (int i = 0; i < nlocal; i++)
-      if (lines[i].type <= 0) flag++;
+    for (int i = 0; i < ncheck; i++)
+      if (clines[i].type <= 0) flag++;
   } else {
-    for (int i = 0; i < nlocal; i++)
-      if (tris[i].type <= 0) flag++;
+    for (int i = 0; i < ncheck; i++)
+      if (ctris[i].type <= 0) flag++;
   }
 
   if (distributed)
@@ -325,11 +343,11 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (lines[i].isc < 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (clines[i].isc < 0) flag++;
     } else {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (tris[i].isc < 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (ctris[i].isc < 0) flag++;
     }
 
     if (distributed)
@@ -350,11 +368,11 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (lines[i].isr >= 0 && sc[lines[i].isc]->allowreact == 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (clines[i].isr >= 0 && sc[clines[i].isc]->allowreact == 0) flag++;
     } else {
-      for (int i = 0; i < nlocal+nghost; i++)
-        if (tris[i].isr >= 0 && sc[tris[i].isc]->allowreact == 0) flag++;
+      for (int i = 0; i < ncheck; i++)
+        if (ctris[i].isr >= 0 && sc[ctris[i].isc]->allowreact == 0) flag++;
     }
 
     if (distributed)
@@ -375,14 +393,14 @@ void Surf::init()
   if (surf_collision_check) {
     flag = 0;
     if (domain->dimension == 2) {
-      for (int i = 0; i < nlocal+nghost; i++) {
-        if (!lines[i].transparent) continue;
-        if (!sc[lines[i].isc]->transparent) flag++;
+      for (int i = 0; i < ncheck; i++) {
+        if (!clines[i].transparent) continue;
+        if (!sc[clines[i].isc]->transparent) flag++;
       }
     } else {
-      for (int i = 0; i < nlocal+nghost; i++) {
-        if (!tris[i].transparent) continue;
-        if (!sc[tris[i].isc]->transparent) flag++;
+      for (int i = 0; i < ncheck; i++) {
+        if (!ctris[i].transparent) continue;
+        if (!sc[ctris[i].isc]->transparent) flag++;
       }
     }
 
