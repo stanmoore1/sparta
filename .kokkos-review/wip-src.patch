@@ -424,29 +424,20 @@ index 2ed4c3e3..0a45c468 100644
      if (mask & TRI_MASK) k_tris.sync_device();
      if (mask & MYLINE_MASK) k_mylines.sync_device();
 diff --git a/src/compute_isurf_grid.cpp b/src/compute_isurf_grid.cpp
-index a56ae019..1b9fedd3 100644
+index a56ae019..82a86d6b 100644
 --- a/src/compute_isurf_grid.cpp
 +++ b/src/compute_isurf_grid.cpp
-@@ -25,6 +25,8 @@
- #include "memory.h"
- #include "error.h"
- 
-+#include <map>
-+
- using namespace SPARTA_NS;
- 
- enum{NUM,NUMWT,MFLUX,FX,FY,FZ,PRESS,XPRESS,YPRESS,ZPRESS,
-@@ -458,8 +460,7 @@ void ComputeISurfGrid::post_process_isurf_grid()
+@@ -458,6 +458,9 @@ void ComputeISurfGrid::post_process_isurf_grid()
    //   to my owned grid cells
    // for implicit surfs, surfIDs are also cellIDs
  
--  grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
--                               array_surf_tally,array_grid);
-+  collate_tallies(sparta,ntally,ntotal,tally2surf,array_surf_tally,array_grid);
++  // tallies whose cell migrated since they were made (e.g. fix balance on
++  //   this step) are routed to the cell's current owner by the collate
++
+   grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
+                                array_surf_tally,array_grid);
  
-   // zero out result if icell not in grid group
-   // can't apply until now, b/c tally included surfs in ghost cells and
-@@ -509,6 +510,12 @@ void ComputeISurfGrid::grow_tally()
+@@ -509,6 +512,12 @@ void ComputeISurfGrid::grow_tally()
  
  void ComputeISurfGrid::reallocate()
  {
@@ -459,249 +450,21 @@ index a56ae019..1b9fedd3 100644
    // normflux is indexed by surf ID and is sized by the surf count,
    // not the grid cell count, so it must be reset unconditionally
    // implicit surfs are re-created by ablation with the grid unchanged
-@@ -534,3 +541,202 @@ bigint ComputeISurfGrid::memory_usage()
-   bytes += maxtally * sizeof(surfint);          // tally2surf
-   return bytes;
- }
-+
-+/* ----------------------------------------------------------------------
-+   sum per-surf tallies of implicit surfs into owned grid cells
-+   shared by compute isurf/grid and compute react/isurf/grid (+ kk styles)
-+   nrow tallies, ncol values each, ids = surf IDs = IDs of the owning cells
-+   out = per-grid array for nlocal owned cells, zeroed here
-+   usual case: every tallied cell is still an owned or ghost cell of this
-+     proc, use Grid::collate_array_implicit() directly
-+   if the grid changed since the tallies were made (e.g. fix balance
-+     migrated cells on the tally step), a tallied cell may be neither owned
-+     nor ghost anymore, Grid::collate_array_implicit() cannot route it
-+     (it would sum it into owned cell 0), so route those tallies to the
-+     cell's current owner via a rendezvous directory of owned cell IDs
-+   tallies for cells that no longer exist anywhere (e.g. refined away)
-+     are dropped
-+------------------------------------------------------------------------- */
-+
-+namespace {
-+  struct RvousTally {
-+    Memory *memory;
-+    int ncol;
-+  };
-+
-+  union ubufc {
-+    double d;
-+    int64_t i;
-+    ubufc(double arg) : d(arg) {}
-+    ubufc(int64_t arg) : i(arg) {}
-+  };
-+
-+  inline int rvous_proc(cellint id, int nprocs)
-+  {
-+    uint64_t h = (uint64_t) id;
-+    h ^= h >> 33;
-+    h *= 0xff51afd7ed558ccdULL;
-+    h ^= h >> 33;
-+    return (int) (h % (uint64_t) nprocs);
-+  }
-+
-+  // input datum = ID, owner proc (-1 for a tally), ncol values
-+  // output datum = ID, ncol values, sent to the owner proc
-+
-+  int rvous_route(int n, char *inbuf, int &flag, int *&proclist,
-+                  char *&outbuf, void *ptr)
-+  {
-+    RvousTally *rt = (RvousTally *) ptr;
-+    int ncol = rt->ncol;
-+    int insize = ncol + 2;
-+    double *in = (double *) inbuf;
-+
-+    std::map<cellint,int> owner;
-+    int ntally = 0;
-+    for (int i = 0; i < n; i++) {
-+      double *one = &in[(bigint) i*insize];
-+      int proc = (int) ubufc(one[1]).i;
-+      if (proc >= 0) owner[(cellint) ubufc(one[0]).i] = proc;
-+      else ntally++;
-+    }
-+
-+    rt->memory->create(proclist,ntally,"isurf/grid:proclist");
-+    double *out = (double *)
-+      rt->memory->smalloc((bigint) ntally*(ncol+1)*sizeof(double),
-+                          "isurf/grid:outbuf");
-+
-+    int nout = 0;
-+    bigint m = 0;
-+    for (int i = 0; i < n; i++) {
-+      double *one = &in[(bigint) i*insize];
-+      if ((int) ubufc(one[1]).i >= 0) continue;
-+      std::map<cellint,int>::iterator it =
-+        owner.find((cellint) ubufc(one[0]).i);
-+      if (it == owner.end()) continue;
-+      proclist[nout++] = it->second;
-+      out[m++] = one[0];
-+      for (int j = 0; j < ncol; j++) out[m++] = one[2+j];
-+    }
-+
-+    flag = 2;
-+    outbuf = (char *) out;
-+    return nout;
-+  }
-+}
-+
-+void ComputeISurfGrid::collate_tallies(SPARTA *sparta, int nrow, int ncol,
-+                                       surfint *ids, double **in,
-+                                       double **out)
-+{
-+  Grid *grid = sparta->grid;
-+  Comm *comm = sparta->comm;
-+  Memory *memory = sparta->memory;
-+
-+  if (!grid->hashfilled) grid->rehash();
-+  Grid::MyHash *ghash = grid->hash;
-+
-+  // nunknown = # of my tallies whose cell I neither own nor ghost
-+
-+  int nunknown = 0;
-+  for (int i = 0; i < nrow; i++)
-+    if (ghash->find((cellint) ids[i]) == ghash->end()) nunknown++;
-+
-+  int anyunknown;
-+  MPI_Allreduce(&nunknown,&anyunknown,1,MPI_INT,MPI_MAX,sparta->world);
-+
-+  if (!anyunknown) {
-+    grid->collate_array_implicit(nrow,ncol,(cellint *) ids,in,out);
-+    return;
-+  }
-+
-+  // split tallies into known (normal collate) and unknown (rendezvous)
-+
-+  int nknown = nrow - nunknown;
-+  cellint *kids;
-+  double **kin;
-+  memory->create(kids,MAX(nknown,1),"isurf/grid:kids");
-+  kin = (double **) memory->smalloc((bigint) MAX(nknown,1)*sizeof(double *),
-+                                    "isurf/grid:kin");
-+
-+  Grid::ChildCell *cells = grid->cells;
-+  int nglocal = grid->nlocal;
-+  int nprocs = comm->nprocs;
-+  int me = comm->me;
-+
-+  // rendezvous input: directory of my owned cells + my unknown tallies
-+
-+  int ndir = 0;
-+  for (int icell = 0; icell < nglocal; icell++)
-+    if (cells[icell].nsplit > 0) ndir++;
-+
-+  int nsend = ndir + nunknown;
-+  int insize = ncol + 2;
-+  int *proclist;
-+  double *inbuf;
-+  memory->create(proclist,MAX(nsend,1),"isurf/grid:proclist");
-+  memory->create(inbuf,(bigint) MAX(nsend,1)*insize,"isurf/grid:inbuf");
-+
-+  int n = 0;
-+  bigint m = 0;
-+  for (int icell = 0; icell < nglocal; icell++) {
-+    if (cells[icell].nsplit <= 0) continue;
-+    proclist[n++] = rvous_proc(cells[icell].id,nprocs);
-+    inbuf[m++] = ubufc((int64_t) cells[icell].id).d;
-+    inbuf[m++] = ubufc((int64_t) me).d;
-+    for (int j = 0; j < ncol; j++) inbuf[m++] = 0.0;
-+  }
-+
-+  nknown = 0;
-+  for (int i = 0; i < nrow; i++) {
-+    if (ghash->find((cellint) ids[i]) != ghash->end()) {
-+      kids[nknown] = (cellint) ids[i];
-+      kin[nknown++] = in[i];
-+      continue;
-+    }
-+    proclist[n++] = rvous_proc((cellint) ids[i],nprocs);
-+    inbuf[m++] = ubufc((int64_t) ids[i]).d;
-+    inbuf[m++] = ubufc((int64_t) -1).d;
-+    for (int j = 0; j < ncol; j++) inbuf[m++] = in[i][j];
-+  }
-+
-+  // normal collate of known tallies, zeroes out
-+
-+  grid->collate_array_implicit(nknown,ncol,kids,kin,out);
-+
-+  memory->destroy(kids);
-+  memory->sfree(kin);
-+
-+  // route unknown tallies to current owners of their cells
-+
-+  RvousTally rt;
-+  rt.memory = memory;
-+  rt.ncol = ncol;
-+
-+  char *buf;
-+  int nout = comm->rendezvous(1,nsend,(char *) inbuf,insize*sizeof(double),
-+                              0,proclist,rvous_route,
-+                              0,buf,(ncol+1)*sizeof(double),(void *) &rt);
-+  double *outbuf = (double *) buf;
-+
-+  memory->destroy(proclist);
-+  memory->destroy(inbuf);
-+
-+  // sum routed tallies into my owned cells
-+
-+  if (!grid->hashfilled) grid->rehash();
-+  ghash = grid->hash;
-+
-+  m = 0;
-+  for (int i = 0; i < nout; i++) {
-+    cellint cellID = (cellint) ubufc(outbuf[m++]).i;
-+    Grid::MyHash::iterator it = ghash->find(cellID);
-+    if (it == ghash->end() || it->second >= nglocal) {
-+      m += ncol;
-+      continue;
-+    }
-+    int icell = it->second;
-+    for (int j = 0; j < ncol; j++) out[icell][j] += outbuf[m++];
-+  }
-+
-+  memory->sfree(outbuf);
-+}
-diff --git a/src/compute_isurf_grid.h b/src/compute_isurf_grid.h
-index 844123d3..732d1850 100644
---- a/src/compute_isurf_grid.h
-+++ b/src/compute_isurf_grid.h
-@@ -41,6 +41,8 @@ class ComputeISurfGrid : public Compute {
-   virtual int tallyinfo(surfint *&);
-   void post_process_isurf_grid();
-   void reallocate();
-+  static void collate_tallies(class SPARTA *, int, int, surfint *,
-+                              double **, double **);
-   bigint memory_usage();
- 
-  protected:
 diff --git a/src/compute_react_isurf_grid.cpp b/src/compute_react_isurf_grid.cpp
-index 329c4f57..861f924a 100644
+index 329c4f57..32713228 100644
 --- a/src/compute_react_isurf_grid.cpp
 +++ b/src/compute_react_isurf_grid.cpp
-@@ -14,6 +14,7 @@
- 
- #include "string.h"
- #include "compute_react_isurf_grid.h"
-+#include "compute_isurf_grid.h"
- #include "particle.h"
- #include "mixture.h"
- #include "surf.h"
-@@ -298,8 +299,11 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
+@@ -298,6 +298,9 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
    //   to my owned grid cells
    // for implicit surfs, surfIDs are also cellIDs
  
--  grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
--                               array_surf_tally,array_grid);
 +  // tallies whose cell migrated since they were made (e.g. fix balance on
 +  //   this step) are routed to the cell's current owner
 +
-+  ComputeISurfGrid::collate_tallies(sparta,ntally,ntotal,tally2surf,
-+                                    array_surf_tally,array_grid);
+   grid->collate_array_implicit(ntally,ntotal,(cellint *) tally2surf,
+                                array_surf_tally,array_grid);
  
-   // zero out result if icell not in grid group
-   // can't apply until now, b/c tally included surfs in ghost cells and
-@@ -334,6 +338,18 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
+@@ -334,6 +337,18 @@ void ComputeReactISurfGrid::post_process_isurf_grid()
    }
  }
  
@@ -732,3 +495,410 @@ index 528a739b..a3fe8a4e 100644
    bigint memory_usage();
  
   protected:
+diff --git a/src/grid.h b/src/grid.h
+index 601d0d52..8ecc97c1 100644
+--- a/src/grid.h
++++ b/src/grid.h
+@@ -384,6 +384,8 @@ class Grid : protected Pointers {
+   }
+ 
+  protected:
++  void collate_implicit(int, int, cellint *, double **, double **);
++
+   int me;
+   int maxcell;             // size of cells
+   int maxsplit;            // size of sinfo
+diff --git a/src/grid_collate.cpp b/src/grid_collate.cpp
+index 61517468..2110e30b 100644
+--- a/src/grid_collate.cpp
++++ b/src/grid_collate.cpp
+@@ -18,6 +18,8 @@
+ #include "memory.h"
+ #include "error.h"
+ 
++#include <map>
++
+ using namespace SPARTA_NS;
+ 
+ // ----------------------------------------------------------------------
+@@ -25,117 +27,92 @@ using namespace SPARTA_NS;
+ // ----------------------------------------------------------------------
+ 
+ /* ----------------------------------------------------------------------
+-   vector version of collate for implicit surf tallies into grid cells
+-   input tallies should be only for unsplit/split cells, not sub-cells
+-     caller can copy output to sub-cells if needed
+-   n = # of tallies for my owned+ghost cells
+-   ids = grid cell IDs for each tally (actually implicit surf IDs)
+-   in = value for each tally
+-   return out = summed values for my owned cells, including ghost contributions
+-     will only be values for unsplit and split cells, not sub-cells
+-   communication of ghost tallies done via rendezvous with irregular option
+-   called from fix ave/grid
++   helpers for collate of implicit surf tallies
++   the tally IDs are grid cell IDs, but the cell may be neither owned nor
++     ghost by the tallying proc anymore if the grid changed after the
++     tallies were made (e.g. fix balance migrated cells on the tally step,
++     or between steps of a fix ave/grid window)
++   such tallies are routed to the cell's current owner via a rendezvous
++     directory of owned cell IDs
++   tallies for cells that no longer exist anywhere are dropped
+ ------------------------------------------------------------------------- */
+ 
+-void Grid::collate_vector_implicit(int n, cellint *ids,
+-                                   double *in, double *out)
+-{
+-  int i,icell;
+-  cellint cellID;
+-
+-  // if grid cell hash is not current, create it
+-
+-  if (!hashfilled) rehash();
+-
+-  // zero output values, only for owned cells
+-
+-  if (nlocal) memset(out,0,nlocal*sizeof(double));
+-
+-  // if I own grid cell, sum in value to out values directly
+-  // else nsend = # of tallies to contribute to irregular
+-
+-  int nsend = 0;
+-  for (i = 0; i < n; i++) {
+-    icell = (*hash)[ids[i]];
+-    if (icell >= nlocal) nsend++;
+-    else out[icell] += in[i];
++namespace {
++  union ubufc {
++    double d;
++    int64_t i;
++    ubufc(double arg) : d(arg) {}
++    ubufc(int64_t arg) : i(arg) {}
++  };
++
++  struct RvousCollate {
++    Memory *memory;
++    int ncol;
++  };
++
++  inline int rvous_proc(cellint id, int nprocs)
++  {
++    uint64_t h = (uint64_t) id;
++    h ^= h >> 33;
++    h *= 0xff51afd7ed558ccdULL;
++    h ^= h >> 33;
++    return (int) (h % (uint64_t) nprocs);
+   }
+ 
+-  // done if just one proc
+-
+-  if (comm->nprocs == 1) return;
+-
+-  // create rvous inputs
+-  // nsend = # of datums to send
+-
+-  int *proclist;
+-  memory->create(proclist,nsend,"grid:proclist");
+-  double *in_rvous;
+-  memory->create(in_rvous,2*nsend,"grid:in_rvous");
+-
+-  int m = 0;
+-  nsend = 0;
+-  for (i = 0; i < n; i++) {
+-    icell = (*hash)[ids[i]];
+-    if (icell >= nlocal) {
+-      proclist[nsend] = cells[icell].proc;
+-      in_rvous[m++] = ubuf(ids[i]).d;
+-      in_rvous[m++] = in[i];
++  // input datum = cell ID, owner proc (-1 for a tally), ncol values
++  // output datum = cell ID, ncol values, sent to the owner proc
++
++  int rvous_route(int n, char *inbuf, int &flag, int *&proclist,
++                  char *&outbuf, void *ptr)
++  {
++    RvousCollate *rc = (RvousCollate *) ptr;
++    int ncol = rc->ncol;
++    int insize = ncol + 2;
++    double *in = (double *) inbuf;
++
++    std::map<cellint,int> owner;
++    int ntally = 0;
++    for (int i = 0; i < n; i++) {
++      double *one = &in[(bigint) i*insize];
++      int proc = (int) ubufc(one[1]).i;
++      if (proc >= 0) owner[(cellint) ubufc(one[0]).i] = proc;
++      else ntally++;
+     }
+-  }
+-
+-  // perform rendezvous operation
+-  // which = 0 for irregular comm, 1 for all2all comm
+-  // use irregular comm with clumped grid decomposition
+-  //   ghost tallies should need sending to a handful of nearby procs,
+-  //   even if cutoff is infinite
+-  // use all2all comm with dispersed grid decomposition
+-  //   ghost tallies could need sending to nearly all other procs
+ 
+-  int which = 0;
+-  if (!clumped) which = 1;
+-
+-  char *buf;
+-  int nout = comm->rendezvous(which,nsend,(char *) in_rvous,
+-                              2*sizeof(double),
+-                              0,proclist,NULL,
+-                              0,buf,2*sizeof(double),(void *) this);
+-  double *out_rvous = (double *) buf;
+-
+-  memory->destroy(proclist);
+-  memory->destroy(in_rvous);
+-
+-  // sum tallies returned for grid cells I own into out
++    rc->memory->create(proclist,ntally,"grid:proclist");
++    double *out = (double *)
++      rc->memory->smalloc((bigint) ntally*(ncol+1)*sizeof(double),
++                          "grid:outbuf");
++
++    int nout = 0;
++    bigint m = 0;
++    for (int i = 0; i < n; i++) {
++      double *one = &in[(bigint) i*insize];
++      if ((int) ubufc(one[1]).i >= 0) continue;
++      std::map<cellint,int>::iterator it =
++        owner.find((cellint) ubufc(one[0]).i);
++      if (it == owner.end()) continue;
++      proclist[nout++] = it->second;
++      out[m++] = one[0];
++      for (int j = 0; j < ncol; j++) out[m++] = one[2+j];
++    }
+ 
+-  m = 0;
+-  for (i = 0; i < nout; i++) {
+-    cellID = (cellint) ubuf(out_rvous[m++]).u;
+-    icell = (*hash)[cellID];
+-    out[icell] += out_rvous[m++];
++    flag = 2;
++    outbuf = (char *) out;
++    return nout;
+   }
+-
+-  // clean-up
+-
+-  memory->destroy(out_rvous);
+ }
+ 
+ /* ----------------------------------------------------------------------
+-   array version of collate for implicit surf tallies into grid cells
+-   input tallies should be only for unsplit/split cells, not sub-cells
+-     caller can copy output to sub-cells if needed
+-   nrow = # of tallies for my owned+ghost cells
+-   ncol = # of values per tally
+-   ids = grid cell IDs for each tally (actually implicit surf IDs)
+-   in = ncol values for each tally
+-   return out = summed values for my owned cells, including ghost contributions
+-     will only be values for unsplit and split cells, not sub-cells
+-   communication of ghost tallies done via rendezvous with irregular option
+-   called from compute isurf/grid, compute react/isurf/grid,
+-     fix ave/grid, surf react/implicit
++   common collate for vector (ncol = 1) and array versions
++   in[i] = pointer to ncol values of tally i
++   out[icell] = pointer to ncol values of owned cell icell, zeroed here
++   fast path (every tally ID is an owned or ghost cell of its proc):
++     identical to the original algorithm, plus one MPI_Allreduce
+ ------------------------------------------------------------------------- */
+ 
+-void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+-                                  double **in, double **out)
++void Grid::collate_implicit(int nrow, int ncol, cellint *ids,
++                            double **in, double **out)
+ {
+   int i,j,icell;
+   cellint cellID;
+@@ -146,14 +123,27 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+ 
+   // zero output values for owned cells
+ 
+-  if (nlocal) memset(&out[0][0],0,(bigint) nlocal*ncol*sizeof(double));
++  for (icell = 0; icell < nlocal; icell++)
++    memset(out[icell],0,ncol*sizeof(double));
+ 
++  // look up each tally ID, never insert into hash
++  // icellrow[i] = owned/ghost index, -1 if neither (unknown)
+   // if I own grid cell, sum in values to out values directly
+   // else nsend = # of tallies to contribute to rendezvous
+ 
++  int *icellrow;
++  memory->create(icellrow,MAX(nrow,1),"grid:icellrow");
++
+   int nsend = 0;
++  int nunknown = 0;
+   for (i = 0; i < nrow; i++) {
+-    icell = (*hash)[ids[i]];
++    MyHash::iterator it = hash->find(ids[i]);
++    if (it == hash->end()) {
++      icellrow[i] = -1;
++      nunknown++;
++      continue;
++    }
++    icell = icellrow[i] = it->second;
+     if (icell >= nlocal) nsend++;
+     else {
+       for (j = 0; j < ncol; j++)
+@@ -162,8 +152,15 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+   }
+ 
+   // done if just one proc
++  // unknown tallies on one proc are for cells that no longer exist
++
++  if (comm->nprocs == 1) {
++    memory->destroy(icellrow);
++    return;
++  }
+ 
+-  if (comm->nprocs == 1) return;
++  int anyunknown;
++  MPI_Allreduce(&nunknown,&anyunknown,1,MPI_INT,MPI_MAX,world);
+ 
+   // create rvous inputs
+   // nsend = # of datums to send
+@@ -178,7 +175,7 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+   bigint m = 0;
+   nsend = 0;
+   for (i = 0; i < nrow; i++) {
+-    icell = (*hash)[ids[i]];
++    icell = icellrow[i];
+     if (icell >= nlocal) {
+       proclist[nsend] = cells[icell].proc;
+       in_rvous[m++] = ubuf(ids[i]).d;
+@@ -219,9 +216,131 @@ void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
+       out[icell][j] += out_rvous[m++];
+   }
+ 
+-  // clean-up
+-
+   memory->destroy(out_rvous);
++
++  if (!anyunknown) {
++    memory->destroy(icellrow);
++    return;
++  }
++
++  // route unknown tallies to the current owners of their cells
++  // rendezvous input: directory of my owned cells (not sub cells)
++  //   + my unknown tallies, both hashed by cell ID to a rendezvous proc
++
++  int nprocs = comm->nprocs;
++  int me = comm->me;
++
++  int ndir = 0;
++  for (icell = 0; icell < nlocal; icell++)
++    if (cells[icell].nsplit > 0) ndir++;
++
++  int nsend2 = ndir + nunknown;
++  int insize = ncol + 2;
++  if ((bigint) insize*nsend2 > MAXSMALLINT)
++    error->one(FLERR,"Grid collate buffer exceeds 2 GB");
++  double *in2;
++  memory->create(proclist,MAX(nsend2,1),"grid:proclist");
++  memory->create(in2,MAX(nsend2,1)*insize,"grid:in_rvous");
++
++  int n = 0;
++  m = 0;
++  for (icell = 0; icell < nlocal; icell++) {
++    if (cells[icell].nsplit <= 0) continue;
++    proclist[n++] = rvous_proc(cells[icell].id,nprocs);
++    in2[m++] = ubufc((int64_t) cells[icell].id).d;
++    in2[m++] = ubufc((int64_t) me).d;
++    for (j = 0; j < ncol; j++) in2[m++] = 0.0;
++  }
++
++  for (i = 0; i < nrow; i++) {
++    if (icellrow[i] >= 0) continue;
++    proclist[n++] = rvous_proc(ids[i],nprocs);
++    in2[m++] = ubufc((int64_t) ids[i]).d;
++    in2[m++] = ubufc((int64_t) -1).d;
++    for (j = 0; j < ncol; j++) in2[m++] = in[i][j];
++  }
++
++  memory->destroy(icellrow);
++
++  RvousCollate rc;
++  rc.memory = memory;
++  rc.ncol = ncol;
++
++  nout = comm->rendezvous(1,nsend2,(char *) in2,insize*sizeof(double),
++                          0,proclist,rvous_route,
++                          0,buf,(ncol+1)*sizeof(double),(void *) &rc);
++  out_rvous = (double *) buf;
++
++  memory->destroy(proclist);
++  memory->destroy(in2);
++
++  // sum routed tallies into my owned cells
++
++  m = 0;
++  for (i = 0; i < nout; i++) {
++    cellID = (cellint) ubufc(out_rvous[m++]).i;
++    MyHash::iterator it = hash->find(cellID);
++    if (it == hash->end() || it->second >= nlocal) {
++      m += ncol;
++      continue;
++    }
++    icell = it->second;
++    for (j = 0; j < ncol; j++)
++      out[icell][j] += out_rvous[m++];
++  }
++
++  memory->sfree(out_rvous);
++}
++
++/* ----------------------------------------------------------------------
++   vector version of collate for implicit surf tallies into grid cells
++   input tallies should be only for unsplit/split cells, not sub-cells
++     caller can copy output to sub-cells if needed
++   n = # of tallies for my owned+ghost cells (when they were made)
++   ids = grid cell IDs for each tally (actually implicit surf IDs)
++   in = value for each tally
++   return out = summed values for my owned cells, including ghost contributions
++     and tallies whose cell has migrated since they were made
++     will only be values for unsplit and split cells, not sub-cells
++   communication of ghost tallies done via rendezvous with irregular option
++   called from fix ave/grid
++------------------------------------------------------------------------- */
++
++void Grid::collate_vector_implicit(int n, cellint *ids,
++                                   double *in, double *out)
++{
++  double **inrow,**outrow;
++  memory->create(inrow,MAX(n,1),"grid:inrow");
++  memory->create(outrow,MAX(nlocal,1),"grid:outrow");
++  for (int i = 0; i < n; i++) inrow[i] = &in[i];
++  for (int i = 0; i < nlocal; i++) outrow[i] = &out[i];
++
++  collate_implicit(n,1,ids,inrow,outrow);
++
++  memory->destroy(inrow);
++  memory->destroy(outrow);
++}
++
++/* ----------------------------------------------------------------------
++   array version of collate for implicit surf tallies into grid cells
++   input tallies should be only for unsplit/split cells, not sub-cells
++     caller can copy output to sub-cells if needed
++   nrow = # of tallies for my owned+ghost cells (when they were made)
++   ncol = # of values per tally
++   ids = grid cell IDs for each tally (actually implicit surf IDs)
++   in = ncol values for each tally
++   return out = summed values for my owned cells, including ghost contributions
++     and tallies whose cell has migrated since they were made
++     will only be values for unsplit and split cells, not sub-cells
++   communication of ghost tallies done via rendezvous with irregular option
++   called from compute isurf/grid, compute react/isurf/grid,
++     fix ave/grid, surf react/implicit
++------------------------------------------------------------------------- */
++
++void Grid::collate_array_implicit(int nrow, int ncol, cellint *ids,
++                                  double **in, double **out)
++{
++  collate_implicit(nrow,ncol,ids,in,out);
+ }
+ 
+ // ----------------------------------------------------------------------
