@@ -96,3 +96,23 @@ complete: YES under split memory: the host-only memset is sufficient because Gri
 verdict: NOT-SHOWN-NECESSARY (hygiene); device-copy concern from AB10 resolved: COMPLETE
 artifacts: $S/gpusim/GS-fixes/FU-10
 
+### F-G00-4 — fix ave/histo/kk binned global scalars via host bin_one() atomics on device views
+deck: AB7 in.pos (v_n equal np + c_t compute temp, ave running) and AB7 complete/in.c (fix scalar f_gc from grid/check/kk, equal-style v_s, ave window, beyond extra/end); np1, np4; watch/stale/strict.
+result: A_sync and B_sync: stats tables identical and all four histogram files byte-identical (np1 and np4); no ave/histo report from any detector in A or B.
+why not catchable: A's host code writes into d_bin/d_stats — the *device* side of k_bin/k_stats — and that is coherent in the DualView model (the device side is the one being declared modified). The split-memory build only gives the host side its own allocation; the device side is still host-addressable memory on the Serial backend, so a host thread writing it is legal and poison mode (which poisons only the stale side) would not fault either. The fault is a physical-address-space one (host dereferences GPU memory) and needs a real GPU without UVM.
+positive control: n/a (tool cannot express the fault)
+negative control: A == B byte-identical, np1/np4.
+necessary: NOT catchable by this tool
+complete: B's device bin_scalar path gives identical output to A's host path on every call site (compute scalar, fix scalar, equal variable), np1/np4.
+verdict: NOT-CATCHABLE (gpu address-space fault); B output-equivalent, COMPLETE by source
+artifacts: $S/gpusim/GS-fixes/F-G00-4
+
+### F-G10-6 — adsorb/kk state_synced_to_device set only on the blitted image (H2D state copy every step; perf)
+method: the copies are Kokkos::deep_copy into plain device Views (sra:total_state/species_state/area/weight) from create_mirror_view mirrors, not DualViews, so SPARTA_KOKKOS_TRACE (DualView-only) does not see them (it lists 399/200 other sra DualView events, identical A vs B). Counted instead with the AB3 Kokkos-tools hook ($S/ab/AB3/tools/kmem.so, KOKKOS_TOOLS_LIBS) on the split-memory builds. Decks AB3 F-G10-5 in.surf / in.face (adsorb gs, nsync 10, 500 steps, react/retry no).
+positive control: A_sync: 500 deep_copies each into sra:total_state, species_state, area, weight (every step), surf and face. B_sync: 50 each (once per nsync window). REPRODUCED (perf).
+negative control: step-500 stats A == B (surf: 3215 16785 20000; face: 797 0).
+necessary: YES (perf only: removes 450 redundant H2D copies per array per 500 steps)
+complete: YES (both SURF and FACE adsorb modes)
+verdict: NECESSARY+COMPLETE (perf-only)
+artifacts: $S/gpusim/GS-fixes/F-G10-6
+
