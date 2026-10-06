@@ -78,9 +78,10 @@ positive control: 2d box 0..1, `create_grid 2 2 1 levels 2 subset 2 2 2 1 5 5 1`
 positive control 3d/3 levels: `create_grid 2 2 2 levels 3 subset 2 2 2 2 5 5 5 subset 3 * * * 3 3 3`, 20 particles with y on level-2 edges and z on level-3 edges; gdb hits (40) checked against a Python emulation of CPU id_point_child recursion | A: 22/40 mismatches incl. level-3 recursion done with the wrong child's lo/hi (e.g. (0,2,1) vs (0,0,1)) | B: 0/40 mismatches | REPRODUCED
 end-to-end: final particle cellIDs (dump id cellID x y [z], every step) for all three inputs: A_kk == B_kk == CPU (0 differing particle-steps). Reason: A always errs to child j-1 with the point exactly on that child's hi face, and the move loop's `xnew >= hi` test immediately does a zero-length face crossing into the correct child. Also tried particles ending the step exactly on the face (x0=0.45, vx*dt=0.05): still self-corrected.
 negative control: (a) same inputs with transverse coords +0.03 off-edge: A/B/CPU identical cellIDs; (b) 3d 3-level random gas with VSS collisions, 20000 particles, 100 steps, t1: A_kk and B_kk thermo identical (np, nattempt, ncoll, max/ave cell counts)
-necessary: shown at function level (A returns a different child than CPU for exactly-on-edge points, at both NPARENT/NPBPARENT call sites, both levels); NOT shown end-to-end — no observable change in cell assignment, counts or thermo found on CPU/OpenMP 1 proc (only an extra zero-length crossing; could matter when the wrong child is a ghost/unknown on another proc - MPI not tested).
+MPI (A_mpi/B_mpi, real MPI + bounds check): in.pos/in.pos2/in.pos3d + `balance_grid rcb cell` (gridcut 0, children of a parent split across procs, ghost children present), np=2 and np=4, kk (t1) and cpu | final+per-step cellIDs: A_kk == B_kk == A_cpu == B_cpu (0 differing particle-steps in all 6 cases), no bounds-check abort, all 20 particles retained | NOT REPRODUCED end-to-end (masked by the same zero-length face crossing; the wrong child is a ghost on the same proc's ghost list, so the crossing hands off correctly)
+necessary: shown at function level (A returns a different child than CPU for exactly-on-edge points, at both NPARENT/NPBPARENT call sites, both levels); NOT shown end-to-end — no observable change in cell assignment, counts or thermo found on CPU/OpenMP 1 proc (only an extra zero-length crossing; could matter when the wrong child is a ghost/unknown on another proc; MPI np=2/4 with ghost children tested above: also masked).
 complete: B matches CPU at every call/level tested (2d x/y, 3d y/z, 2 and 3 levels, periodic NPBPARENT path); no other inverse-index child lookup in src/KOKKOS (only id_find_child has this formula).
-verdict: NECESSARY, COMPLETENESS-PARTIAL (function-level necessity only, end-to-end masked by self-correction; MPI/ghost-child variant untested)
+verdict: NECESSARY, COMPLETENESS-PARTIAL (function-level necessity only; end-to-end masked by self-correction on 1 proc and on np=2/4 with ghost children, cpu and kk)
 artifacts: $S/ab/AB9/F-G22-1 (in.pos*, gdbA/gdbB/g3A/g3B hits, emu3d.py, cmp.py)
 
 ### F-G22-5 — fix grid/check/kk built error messages from stale host particles/cells
@@ -132,6 +133,7 @@ class: mpi (EXACT + real MPI + threaded comm) / gpu-only for the sync half
 runtime test: NOT possible here — needs a -DSPARTA_KOKKOS_EXACT build of the whole KOKKOS package with real MPI (the macro changes ~30 KOKKOS headers/sources, so no partial relink); the non-EXACT real-MPI builds were still at ~31% after >1h; with MPI stubs (1 proc) no particle ever migrates.
 unit-level (drv.cpp linked to A libs, replicates the two compress strategies on real Particle objects, 12 particles): non-ascending plist {5,11,10} | A strategy (Particle::compress_migrate unconditionally): 1 migrated particle kept locally (duplicate) and 1 non-migrating particle lost | B strategy (ascending test -> compress_reactions): 0 kept / 0 lost; {7,2,9,4}: both correct; ascending {2,5,10,11}: both correct (negative control)
 compile: A and B comm_kokkos.cpp both pass -fsyntax-only with -DSPARTA_KOKKOS_EXACT
+MPI negative control (A_mpi/B_mpi, non-EXACT, real MPI + bounds check): 3d periodic 8^3 rcb, 20000 N2, no collisions, 100 steps, np=4 | kk and cpu: A vs B identical (189234 particle comms, Np 20000 conserved, step-100 particle dumps byte-identical, no bounds abort); the EXACT branch itself is still not built (A_mpi/B_mpi are non-EXACT). artifacts: F-G21-7/mpi
 sync half (missing sync(Host) before host compaction, device not refreshed): gpu-only — host/device views alias on this OpenMP build.
 necessary: NOT shown at runtime; the mechanism (compress_migrate on non-ascending list duplicates/loses particles) is shown at unit level; whether the EXACT threaded path actually produces non-ascending d_plist on OpenMP was not observed.
 complete: by inspection the EXACT branch mirrors CPU Comm::migrate_particles (sync Host, ascending test, compress, modify Host, then the existing grow + sync(Device)); untested at runtime.
@@ -157,3 +159,5 @@ complete: all 4 branches (INT vec/array, DOUBLE vec/array) correct in B on np=1,
 verdict: NECESSARY+COMPLETE
 artifacts: $S/ab/AB9/F-G22-4 (in.dist2, cmp_tau.py, unit/)
 
+
+## STATUS: COMPLETE
