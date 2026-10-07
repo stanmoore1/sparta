@@ -184,6 +184,15 @@ int ComputeReactISurfGridKokkos::tallyinfo(surfint *&ptr)
     tally2surf[istart] = tally2surf[iend];
   }
 
+  // the compaction above rewrote the host copies in place.  They are a
+  //   per-step product read only on the host, while the device copies are
+  //   re-zeroed by clear() and re-claimed by post_surf_tally(), so the two
+  //   sides are left apart on purpose.  Say so (not modify_host(): the next
+  //   post_surf_tally() modify_device() would then be a concurrent claim)
+
+  k_tally2surf.clear_sync_state();
+  k_array_surf_tally.clear_sync_state();
+
   return ntally;
 }
 

@@ -362,8 +362,16 @@ void UpdateKokkos::setup()
 
     // surf
 
-    if (surf->exist)
+    // owned surf custom vectors/arrays written on the host before the first
+    //   run (custom surf ... set, read_surf custom columns, read_restart) are
+    //   never claimed there, so claim them here as the non-prewrap branch
+    //   below does with ALL_MASK; without it the sync(Device) in move()
+    //   copies nothing and the device copy stays stale
+
+    if (surf->exist) {
       surf_kk->wrap_kokkos();
+      surf_kk->modify(Host,CUSTOM_MASK);
+    }
 
     sparta->kokkos->prewrap = 0;
   } else {
@@ -662,9 +670,15 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
     if (!continue_loop_flag)
       niterate++;
 
-    d_particles = particle_kk->k_particles.view_device();
+    // sync before taking the device handles below, so no handle is taken
+    //   from a side that is still owed a copy
 
     GridKokkos* grid_kk = ((GridKokkos*)grid);
+    particle_kk->sync(Device,PARTICLE_MASK);
+    grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
+
+    d_particles = particle_kk->k_particles.view_device();
+
     d_cells = grid_kk->k_cells.view_device();
     d_sinfo = grid_kk->k_sinfo.view_device();
     d_pcells = grid_kk->k_pcells.view_device();
@@ -712,9 +726,6 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
         d_particles = particle_kk->k_particles.view_device();
       }
     }
-
-    particle_kk->sync(Device,PARTICLE_MASK);
-    grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK);
 
     // may be able to move this outside of the while loop
     grid_kk_copy.copy(grid_kk);
