@@ -86,10 +86,11 @@ FixEmitFaceKokkos::~FixEmitFaceKokkos()
   rand_pool.destroy();
 #endif
 
-  for (int i = 0; i < ntaskmax; i++) {
-    tasks[i].ntargetsp = NULL;
-    tasks[i].vscale = NULL;
-  }
+  // the per-task vectors point into Kokkos DualViews, not into new[] memory,
+  //   and tasks itself is the host half of k_tasks: a NULL tasks keeps
+  //   ~FixEmitFace() from freeing either.  Do not clear the per-task pointers
+  //   through tasks first: the run leaves k_tasks claimed on the device, so
+  //   that would write the stale host side, and it is not needed
 
   tasks = NULL;
 }

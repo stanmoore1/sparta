@@ -98,21 +98,12 @@ FixEmitFaceFileKokkos::~FixEmitFaceFileKokkos()
 #endif
 
   // the per-task vectors point into Kokkos DualViews, not into new[] memory,
-  //   so hide them from ~FixEmitFaceFile(), which would delete[] them
-
-  if (tasks) {
-    for (int i = 0; i < ntaskmax; i++) {
-      tasks[i].ntargetsp = NULL;
-      tasks[i].vscale = NULL;
-      tasks[i].fraction = NULL;
-      tasks[i].cummulative = NULL;
-    }
-  }
-
-  // tasks itself is the host half of k_tasks, so it must not reach
-  //   memory->sfree() in ~FixEmitFaceFile().  zero ntaskmax as well: unlike
-  //   ~FixEmitFace(), ~FixEmitFaceFile() has no "if (tasks)" guard around its
-  //   delete[] loop, so a NULL tasks with a nonzero ntaskmax would fault
+  //   and tasks itself is the host half of k_tasks, so neither may reach the
+  //   delete[] loop and memory->sfree() in ~FixEmitFaceFile().  A NULL tasks
+  //   with a zero ntaskmax skips both (that loop has no "if (tasks)" guard,
+  //   so ntaskmax must be zeroed too).  Clearing the per-task pointers through
+  //   tasks is then not needed, and would write the host side of k_tasks,
+  //   which the run may leave stale behind a device claim
 
   tasks = NULL;
   ntaskmax = 0;

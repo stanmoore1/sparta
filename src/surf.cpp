@@ -308,14 +308,14 @@ void Surf::init()
     if (comm->me == 0)
       error->warning(FLERR,"Surfs are distributed with infinite grid cutoff");
 
-  // check that surf element types are all values >= 1
-
-  bigint flag,allflag;
-
-  // scan each surf element exactly once across procs, so error counts are
-  //   not inflated by copies of distributed surfs in several procs' cells
-  // explicit distributed: mylines/mytris = surfs this proc uniquely owns
-  // all or implicit: lines/tris 0 to nlocal-1
+  // surfs to check, so that each surf is counted exactly once on any # of procs
+  //   explicit all: every proc stores all nsurf surfs in nlocal lines/tris,
+  //     counted locally, not summed across procs
+  //   explicit distributed: nlocal+nghost lines/tris are copies of surfs in
+  //     my owned/ghost cells (a surf can be stored on several procs),
+  //     so check the nown mylines/mytris I uniquely own and sum across procs
+  //   implicit (distributed): nlocal = surfs in my owned cells (each surf
+  //     belongs to one cell), nghost = copies from ghost cells, so check nlocal
 
   Line *clines = lines;
   Tri *ctris = tris;
@@ -325,6 +325,10 @@ void Surf::init()
     ctris = mytris;
     ncheck = nown;
   }
+
+  // check that surf element types are all values >= 1
+
+  bigint flag,allflag;
 
   flag = 0;
   if (domain->dimension == 2) {

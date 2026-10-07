@@ -235,8 +235,20 @@ void SurfKokkos::sync(ExecutionSpace space, unsigned int mask)
       error->one(FLERR,"Sync Device before wrap");
 
   if (space == Device) {
-    if (sparta->kokkos->auto_sync)
+    if (sparta->kokkos->auto_sync) {
+      // Automatic syncing exists because non-Kokkos code may have written the
+      // host side through the plain pointers, so the host is declared modified
+      // and copied down.  Declaring it while the device still holds a claim is
+      // both a lie -- the host copy is the older one -- and fatal: Kokkos
+      // aborts a DualView claimed on both sides at once.  No current
+      // caller is known to leave surf data claimed on the device here; the
+      // guard keeps this in step with the other classes.
+      // Refresh the host first, as AtomKokkos::sync() does in LAMMPS and
+      // CollideVSSKokkos::sync() does here: a no-op when the device is clean,
+      // and the copy the host is owed when it is not.
+      sync(Host,mask);
       modify(Host,mask);
+    }
     if (mask & LINE_MASK) k_lines.sync_device();
     if (mask & TRI_MASK) k_tris.sync_device();
     if (mask & MYLINE_MASK) k_mylines.sync_device();

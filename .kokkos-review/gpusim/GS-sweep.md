@@ -1,0 +1,334 @@
+# GS-sweep: every example on B_sync (39e1c1f7 + tool) with the coherence detectors
+
+Setup: S=$S (session scratchpad). Work dir $S/gpusim/GS-sweep (scripts in bin/, outputs in out/<variant>.np<N>/).
+- Inputs copied to work/_tmpl/<ex>, `run N` shortened by bin/shorten.py (target ~0.3 s stock loop time, >=20 steps,
+  >= one period of periodic fixes when affordable, rounded to the stats period; plans in out/plan.txt.<ex>).
+  torque: averaging/stats periods 3000->100, run 200; surf_react_heatflux: periods 1000->50, run 150; cylinder: run 10.
+- Variants (np1): stock = $S/spa_C4_opt -k on t 1 -sf kk (39e1c1f7, OpenMP, MPI stubs);
+  Bw = B_sync + WATCH= STALE= STALE_STRICT=1; Ba = B_sync + AUDIT=1; Aw/Aa = same on A_sync (e071055f);
+  Bp/Ap = poison builds (when present).
+- Stats compare: thermo rows (CPU column dropped) of stock vs Bw vs Ba.
+
+## Per-example results
+
+(Progress notes, written while the np1 sweep runs; the per-example table follows at the end.)
+
+### Report classes seen so far on B (np1), with first analysis
+- R1 `[stale] grid:cells / grid:pcells / grid:sinfo device read while host newer, from UpdateKokkos::move<2,1,0,0>`
+  (adapt.*). Same report on A_sync (adapt.static, same counts 8/9) -> pre-existing. Cause: update_kokkos.cpp:674-676
+  take `d_cells/d_sinfo/d_pcells = grid_kk->k_*.view_device()` BEFORE `grid_kk->sync(Device,CELL_MASK|PCELL_MASK|SINFO_MASK|PLEVEL_MASK)`
+  at :717. The handle is the same allocation after the sync (sync never reallocates), so the kernel reads fresh data:
+  accessor-order false positive, not a GPU fault. Cosmetic fix: move the grid_kk->sync (and particle_kk->sync) above the
+  view_device() grabs at :671-676.
+- R2 `[stale] grid:cinfo device read while host newer, from ComputePropertyGridKokkos::compute_per_grid_kokkos()`
+  (ablation.multi.inner.3d): compute_property_grid_kokkos.cpp:111-113 same handle-before-sync order; benign. Cosmetic fix: sync first.
+- R3 `[stale] update:tally_models` (UpdateKokkos::setup_surf_tally_copies), `surf_react:models` (SurfCollideDiffuseKokkos::pre_collide),
+  `collide:gas_tally_models` (CollideVSSKokkos::setup_gas_tally): blit to view_host() without modify_host, then
+  `k.view_device().extent(0)` in *_buf_sync()/resize (kokkos_type.h:866-886, update_kokkos.cpp:86-108) runs while the pair
+  differs with nothing owed (STALE_STRICT). Only metadata is read; the sync that follows copies everything. Benign.
+  Cosmetic fix: call k.modify_host() inside *_buf_blit(), or test k.extent(0) instead of k.view_device().extent(0).
+- R4 `[stale] ave/grid:tally, ave/grid:array_grid from FixAveGridKokkos::grow_percell / ~FixAveGridKokkos`,
+  `surf:dvector from SurfKokkos::remove_custom`, `surf:tally2surf/array_surf_tally from ~ComputeSurfKokkos`,
+  `particle:particles from ParticleKokkos::grow`: memory_kokkos.h grow_kokkos()/destroy_kokkos() take
+  `data.view_host()(i,0)` addresses / `view_device().data()` right after a DualView resize (device marked newer), and
+  the caller syncs straight after (fix_ave_grid_kokkos.cpp:641-654). Pointer arithmetic only; benign.
+- R5 `[watch] react/isurf/grid:tally2surf & array_surf_tally: host side written, never claimed, now lost (between
+  sync_host and modify_device)` (ablation.3d.reactions): ComputeReactISurfGridKokkos::tallyinfo()
+  (compute_react_isurf_grid_kokkos.cpp:150-187) compacts the host copy in place without a claim; the next step's
+  post_surf_tally() modify_device() discards it. The device copy is re-zeroed by clear() each step and the compacted
+  host copy is a per-step product consumed on the host, so nothing is lost that is needed: benign by design.
+  Annotation fix: after the compaction loop, `k_tally2surf.clear_sync_state(); k_array_surf_tally.clear_sync_state();`
+  to document the deliberate divergence (NOT modify_host(): the next post_surf_tally() modify_device() would then trip
+  the concurrent-modification abort). Same in A (common) -> pre-existing, benign.
+- R6 audit `<style> starts with <array> stale on the device, not covered by datamask_read` for emit/face (start_of_step,
+  reset_grid_count, copy_grid_one), grid/check (end_of_step), ambipolar (update_custom): all three declare
+  EMPTY_MASK read and sync what they use themselves (fix_emit_face_kokkos.cpp:325,591,595,678,689;
+  fix_grid_check_kokkos.cpp:70,73; fix_ambipolar_kokkos.cpp:96,117 - update_custom is a host routine). Informational.
+- R7 audit `end_of_step ablate declares every array in datamask_modify` (FixAblate keeps Fix's ALL_MASK): uncheckable by the audit, not a fault.
+
+### Restart notes (session resumed after interruption)
+- Many Aw/Aa np1 runs from shock_tube onward (and custom.step.*) had rc=1 t=0: disk-full at the time, not code. Re-queued.
+- implicit/*: data files missing in repo; generated with tools/implicit_grid.py (python3 port: tobytes, 'wb'; same seeds,
+  so values differ from the py2 originals but stock and B read the same files). Re-queued Bw/Ba/Aw/Aa.
+- jagged/in.jagged.3d*: sdata.20x20x10x10x10 generated by tools/jagged3d.py under python3 fails the watertight check
+  on stock too ("640 unmatched edges") -> NOT RUN (input-data problem, not coherence). jagged 2d variants ran.
+- Bw timeouts (rc=124 at 300 s: bfield, torque, ambi*, ambi_3body, adjust_temp sphere.*, surf_react_heatflux,
+  ablation.3d*): WATCH=all memcmp's every watched array on each sync; e.g. bfield calls ParticleKokkos::sync(Host)
+  from VariableKokkos::eval_tree per evaluation (gdb). Tool cost, not a hang. Re-queued with 1500 s cap.
+- ablation/in.ablation.3d: stock alone needs 131 s (1M cells, 693k particles) -> B variants time out; left as NOT COVERED.
+
+### Additional report classes (B, np1/np4), all accessor-order / metadata-only, no stats change
+- R1b `[stale] particle:particles device read while host newer, from UpdateKokkos::move<3,0,1,0>/<3,1,1,0>/<2,1,0,0>`
+  (surf_react_adsorb *.ps, adapt np4): same handle-before-sync order, update_kokkos.cpp:672 `d_particles = ...view_device()`
+  precedes `particle_kk->sync(Device,PARTICLE_MASK)` at :723 (the host-newer state comes from the PS reaction/insert
+  of the previous step or from migration). Benign. Fix: move the syncs at :723-724 to the top of the while(1) body.
+- R3b `[stale] surf_react:models/index <- SurfCollideCLLKokkos::pre_collide`, `fix_emit_surf:slist_surf <-
+  FixEmitSurfKokkos::perform_task`: sr_buf_resize/sr_idx_resize/slist_buf_sync test `k.view_device().extent(0)`
+  after host blits (kokkos_type.h:868,884,893; fix_emit_surf_kokkos.cpp:76). Metadata only; same code exists in A.
+  Fix: use `k.extent(0)` (or `k.d_view.extent(0)`), or modify_host() in the blit.
+- R4b `[stale] irregular:index_send <- IrregularKokkos::augment_data_uniform / ~IrregularKokkos` (np4 only):
+  irregular_kokkos.cpp:119-121/265-267 grab view_device() right after create_kokkos; data is written on host and
+  claimed (:174/:298/:304) and synced (:401) before the kernel reads it. Benign handle grab.
+- R4c `[stale] surf:ivector/iarray, surf/spread:* <- ~SurfKokkos`, `grid:dvector/ivector <- GridKokkos::memory_usage`
+  (host read; extent only, grid_kokkos.cpp:498-513): destroy/size queries, no data read. Benign.
+- R4d `ave/grid:tally|array_grid <- FixAveGridKokkos::grow_percell` is B-ONLY (adjust_temp circle/sphere): B added
+  `grow_percell(0)` at the end of the constructor (fix_ave_grid_kokkos.cpp:176-177); the grab of view_device() after
+  grow_kokkos is a handle (device is synced by pergrid_sync(Device) at :219 before the zero/accumulate kernels).
+  Introduced-by-review but benign (no data read; stats identical to stock).
+
+### R8 (pre-existing, latent): owned surf custom vectors never claimed after a pre-first-run `custom surf ... set`
+- Seen: examples/custom in.custom.circle.{set,file}[.fix][.distributed] (8 decks), Bw and Aw identically ("common"):
+  `[watch] surf:dvector: the host side was written without a claim and this sync_device has nothing to copy --
+  the device keeps stale data; element 0 of 50 is where they part` (3x + suppressed), during the FIRST run only.
+- Backtrace (WATCH_BT): DualView::sync_device <- SurfKokkos::sync(Device,ALL_MASK) <- UpdateKokkos::move<2,1,0,0>
+  (update_kokkos.cpp:701) <- UpdateKokkos::run.
+- Root cause: Custom::set_surf()/set_surf via variable (src/custom.cpp, plain `surf->edvec[...]` writes, ~line 940ff)
+  and read_surf custom columns write the host side of the owned custom views and never claim it. Before the 2nd run
+  UpdateKokkos::setup() non-prewrap branch does `surf_kk->modify(Host,ALL_MASK)` (update_kokkos.cpp:380) which covers it,
+  but the first run goes through the prewrap branch (update_kokkos.cpp:353-368), where only surf_kk->wrap_kokkos() runs,
+  and SurfKokkos::wrap_kokkos() (surf_kokkos.cpp:121-162) wraps lines/tris only, not custom.
+- Impact: none today -- no KOKKOS kernel reads the device side of the OWNED surf custom views (consumers such as
+  SurfCollideDiffuseKokkos use edvec_local after the host spread_custom(), which claims properly,
+  surf_custom_kokkos.cpp:441-466). Stats identical to stock over 2x800 steps. Latent GPU fault for any future device
+  reader of surf->edvec/eivec (owned).
+- Proposed fix: in UpdateKokkos::setup() prewrap branch, after `surf_kk->wrap_kokkos();` (update_kokkos.cpp:365-366) add
+  `surf_kk->modify(Host,CUSTOM_MASK);` (matching the non-prewrap branch's claim); equivalently claim CUSTOM_MASK at the
+  end of SurfKokkos::wrap_kokkos().
+- Classification: pre-existing-unfixed (same on A_sync). Related to (but distinct from) the KNOWN restart surf custom
+  array item: that one is read_restart, this is `custom surf set` / read_surf custom before run 1.
+
+### Poison pass (B_poison / A_poison, SPARTA_KOKKOS_POISON=1, ASAN_OPTIONS=detect_leaks=0:halt_on_error=0:log_path=...)
+positive control (harness check): GS-poison's F-G16-5 deck on A_poison with this harness -> use-after-poison in
+  ComputeDistSurfGridKokkos (TagComputeDistSurfGrid_surf_distance), as GS-poison recorded. Harness catches faults.
+Bp np1: all examples (skipped: ablation.3d [stock 131 s], implicit.3d.big, jagged.3d* [no valid data]) -> 133 runs.
+  Every run rc=0 and stats identical to stock, with 0 ASan reports, EXCEPT the 4 custom/*.restart decks:
+  use-after-poison (memcpy) in Grid::unpack_custom grid_custom.cpp:467 <- GridKokkos::unpack_custom grid_custom_kokkos.cpp:395
+  <- ReadRestart::create_child_cells read_restart.cpp:1453 (4-10 sites), then the modify_host "grid:ivector" abort (rc=134).
+  Ap np1 on custom/*: identical sites/counts -> pre-existing; this is the KNOWN reallocate_custom device-side resize
+  + auto_sync double-claim (fixed in the repo, not in B_sync). Tag: KNOWN.
+  Poison also gives stats for the decks where watch/audit time out: ablation.3d.reactions, ambi, ambi_3body,
+  bfield, torque: Bp == stock.
+Bp np4 (circle, sphere, adapt.static/rotate, surf.move/remove/add, emit.face/surf.flow/surf.normal, ablation.2d,
+  ablation.multi.inner.3d, collide, collide_3D): 0 ASan reports on all ranks, rc=0, stats == stockmpi np4.
+  Bw/Ba np4 on the same subset: stats == stockmpi np4; reports only R1/R1b/R2/R3/R4b (benign classes).
+- R5b `[watch] boundary:array: host side written, never claimed, now lost (between sync_host and modify_device)`
+  (free/in.free, common with A): ComputeBoundaryKokkos::compute_array() normalizes the host copy in place
+  (compute_boundary_kokkos.cpp:98-103, `array[i][j] /= normflux[i]`) after its sync_host (:87/:90); the next
+  compute_array() regenerates the whole array (Allreduce + modify_device). Host result is the consumer copy, nothing
+  needed is lost: benign. Annotation fix: `k_array.clear_sync_state();` after the normalization loop.
+
+### Reduced decks for the cases the detectors could not finish (work/_tmpl/<ex>_s, _t)
+WATCH= (all views) memcmp's the full array on every sync, and several paths sync per particle
+(Particle::add_particle -> ParticleKokkos::zero_custom -> sync; FixAmbipolarKokkos::update_custom -> sync(Host) per
+created particle; VariableKokkos::eval_tree -> sync per evaluation) -> O(N^2) under watch (gdb). On a real GPU these
+repeated syncs are flag checks, so this is a tool cost, not a coherence bug.
+- adjust_temp_s (sphere.* run 20->5, one adapt period), surf_react_heatflux_s (run 16->8, one adapt/balance period),
+  ablation_s (3d.reactions run 20->4), ambi_s (run 100->20), ambi_3body_s (run 20->6): stock, Bp, Ba, Bw (+Aw/Aa).
+- _t: same with fewer particles for watch: ambi_t (fnum x20), ambi_3body_t (fnum x20), surf_react_heatflux_t (ppc 0.1).
+Results: every completed Bw/Ba/Bp run == stock; reports only in classes R3/R4/R5/R6 and the same as A where A ran
+(adjust_temp_s sphere.adjust, ablation_s, ambi_s, ambi_t, ambi_3body_t, surf_react_heatflux_t: all "common").
+New sub-class, common with A: `surf:tally2surf <- ComputeSurfKokkos::init_normflux` (host+device read) = R4 (grow_kokkos
+then view_host().data()/view_device() handle grabs, compute_surf_kokkos.cpp:113-117; B only changed the size to
+MAX(nsurf,nold)). Still not finished by watch: ambi_s/in.ambi (Bw 1500 s; ambi_t covers it), surf_react_heatflux_s Bw/Ba
+(heatflux_t covers it), ambi_3body full (ambi_3body_s Bw done, 1176 s), ablation.3d (stock 131 s; not covered),
+implicit.3d.big Bw (Ba == stock).
+
+## Per-example table (np1; stats = thermo rows minus CPU vs stock; classes as defined above)
+Classes: R1 handle-before-sync in UpdateKokkos::move; R2/KNOWN ComputePropertyGridKokkos handle-before-sync;
+R3 tally/model byte buffers metadata read; R4 handle/pointer grabs after resize/destroy/size queries; R5 host-side
+post-processing of a per-step product discarded by the next device tally (react/isurf/grid, boundary); R6/R7 audit
+informational; R8 unclaimed `custom surf set` before run 1; KNOWN-restart = auto_sync double claim + device-side
+custom resize (abort rc=134, poison in Grid::unpack_custom).
+| example/input | stock | Bw stats | Ba stats | Bp stats | B report classes |
+|---|---|---|---|---|---|
+| ablation/in.ablation.2d | rc=0 | same(4) | same(4) | same(4) | R3, R6, R7 |
+| ablation/in.ablation.3d | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | - | none |
+| ablation/in.ablation.3d.reactions | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | same(22) | R3, R6, R7 |
+| ablation/in.ablation.multi.inner.3d | rc=0 | same(51) | same(51) | same(51) | R2/KNOWN, R7 |
+| ablation_s/in.ablation.3d.reactions | rc=0 | same(6) | same(6) | same(6) | R3, R4, R5, R6, R7 |
+| adapt/in.adapt.rotate | rc=0 | same(31) | same(31) | same(31) | R1, R6 |
+| adapt/in.adapt.slide | rc=0 | same(50) | same(50) | same(50) | R1, R6 |
+| adapt/in.adapt.static | rc=0 | same(51) | same(51) | same(51) | R1, R6 |
+| adjust_temp/in.circle.adjust | rc=0 | same(7) | same(7) | same(7) | R1, R3, R4, R6 |
+| adjust_temp/in.circle.constant | rc=0 | same(6) | same(6) | same(6) | R1, R3, R4, R6 |
+| adjust_temp/in.sphere.adjust | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | TIMEOUT (rc=124) | R3, R4 |
+| adjust_temp/in.sphere.constant | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | KILLED(redone as _s) (rc=143) | R3, R4 |
+| adjust_temp_s/in.sphere.adjust | rc=0 | same(3) | same(3) | same(3) | R3, R4 |
+| adjust_temp_s/in.sphere.constant | rc=0 | same(3) | same(3) | same(3) | R3, R4 |
+| ambi/in.ambi | rc=0 | TIMEOUT (rc=124) | same(12) | same(12) | R6 |
+| ambi/in.ambi.group | rc=0 | same(7) | same(7) | same(7) | none |
+| ambi/in.ambi.group.react | rc=0 | same(14) | same(14) | same(14) | none |
+| ambi_3body/in.ambi_3body | rc=0 | TIMEOUT (rc=124) | same(12) | same(12) | none |
+| ambi_3body_s/in.ambi_3body | rc=0 | same(5) | same(5) | same(5) | none |
+| ambi_3body_t/in.ambi_3body | rc=0 | same(5) | - | - | none |
+| ambi_s/in.ambi | rc=0 | TIMEOUT (rc=124) | same(4) | same(4) | R6 |
+| ambi_s/in.ambi.group | rc=0 | same(7) | same(7) | same(7) | none |
+| ambi_t/in.ambi | rc=0 | same(4) | - | - | R3 |
+| axi/in.axi | rc=0 | same(12) | same(12) | same(12) | none |
+| bfield/in.bfield | rc=0 | same(12) | same(12) | same(12) | none |
+| bfield/in.bfield.grid | rc=0 | same(12) | same(12) | same(12) | none |
+| chem/in.chem | rc=0 | same(10) | same(10) | same(10) | none |
+| chem/in.chem.gastally | rc=0 | same(5) | same(5) | same(5) | R3 |
+| chem_rates/in.chem_rates | rc=0 | same(10) | same(10) | same(10) | none |
+| circle/in.circle | rc=0 | same(8) | same(8) | same(8) | none |
+| circle/in.circle.distributed | rc=0 | same(11) | same(11) | same(11) | none |
+| circle/in.circle.transparent | rc=0 | same(11) | same(11) | same(11) | R3, R4 |
+| collide/in.collide | rc=0 | same(8) | same(8) | same(8) | none |
+| collide/in.collide.group | rc=0 | same(9) | same(9) | same(9) | none |
+| collide/in.collideInterspecies | rc=0 | same(10) | same(10) | same(10) | none |
+| collide/in.collide_2D | rc=0 | same(8) | same(8) | same(8) | none |
+| collide/in.collide_2D_nn | rc=0 | same(9) | same(9) | same(9) | none |
+| collide/in.collide_2D_sub | rc=0 | same(10) | same(10) | same(10) | none |
+| collide/in.collide_3D | rc=0 | same(12) | same(12) | same(12) | none |
+| collide/in.collide_3D_nn | rc=0 | same(12) | same(12) | same(12) | none |
+| collide/in.collide_3D_sub | rc=0 | same(12) | same(12) | same(12) | none |
+| custom/in.custom.circle.file | rc=0 | same(24) | same(24) | same(24) | R6, R8 |
+| custom/in.custom.circle.file.distributed | rc=0 | same(24) | same(24) | same(24) | R6, R8 |
+| custom/in.custom.circle.file.fix | rc=0 | same(19) | same(19) | same(19) | R4, R6, R7, R8 |
+| custom/in.custom.circle.file.fix.distributed | rc=0 | same(22) | same(22) | same(22) | R4, R6, R7, R8 |
+| custom/in.custom.circle.set | rc=0 | same(20) | same(20) | same(20) | R6, R8 |
+| custom/in.custom.circle.set.distributed | rc=0 | same(24) | same(24) | same(24) | R6, R8 |
+| custom/in.custom.circle.set.fix | rc=0 | same(17) | same(17) | same(17) | R4, R6, R7, R8 |
+| custom/in.custom.circle.set.fix.distributed | rc=0 | same(22) | same(22) | same(22) | R4, R6, R7, R8 |
+| custom/in.custom.coarse.2d | rc=0 | same(3) | same(3) | same(3) | R4 |
+| custom/in.custom.coarse.3d | rc=0 | same(3) | same(3) | same(3) | R4 |
+| custom/in.custom.collide.create | rc=0 | same(12) | same(12) | same(12) | R4 |
+| custom/in.custom.cube.clip | rc=0 | same(9) | same(9) | same(9) | R4, R6 |
+| custom/in.custom.cube.read | rc=0 | same(27) | same(27) | same(27) | R6 |
+| custom/in.custom.cube.read.restart | rc=0 | DIFF@0/22,0 (rc=134) | DIFF@0/22,0 (rc=134) | DIFF@0/22,0 (rc=134) | KNOWN-restart, KNOWN-restart(poison) |
+| custom/in.custom.cube.reread | rc=0 | same(7) | same(7) | same(7) | none |
+| custom/in.custom.cube.set | rc=0 | same(28) | same(28) | same(28) | R6 |
+| custom/in.custom.cube.set.restart | rc=0 | DIFF@0/20,0 (rc=134) | DIFF@0/20,0 (rc=134) | DIFF@0/20,0 (rc=134) | KNOWN-restart, KNOWN-restart(poison) |
+| custom/in.custom.spiky.set | rc=0 | same(26) | same(26) | same(26) | R1, R4, R6 |
+| custom/in.custom.step.clip | rc=0 | same(10) | same(10) | same(10) | R4, R6 |
+| custom/in.custom.step.read | rc=0 | same(33) | same(33) | same(33) | R6 |
+| custom/in.custom.step.read.restart | rc=0 | DIFF@0/16,0 (rc=134) | DIFF@0/16,0 (rc=134) | DIFF@0/16,0 (rc=134) | KNOWN-restart, KNOWN-restart(poison) |
+| custom/in.custom.step.set | rc=0 | same(37) | same(37) | same(37) | R6 |
+| custom/in.custom.step.set.restart | rc=0 | DIFF@0/16,0 (rc=134) | DIFF@0/16,0 (rc=134) | DIFF@0/16,0 (rc=134) | KNOWN-restart, KNOWN-restart(poison) |
+| custom/in.custom.step.temp.read | rc=0 | same(11) | same(11) | same(11) | none |
+| custom/in.custom.step.temp.remove | rc=0 | same(22) | same(22) | same(22) | R1, R6 |
+| custom/in.custom.step.temp.variable | rc=0 | same(11) | same(11) | same(11) | none |
+| emit/in.emit.face | rc=0 | same(5) | same(5) | same(5) | R6 |
+| emit/in.emit.face.region | rc=0 | same(5) | same(5) | same(5) | R6 |
+| emit/in.emit.surf.boundary | rc=0 | same(4) | same(4) | same(4) | R6 |
+| emit/in.emit.surf.flow | rc=0 | same(4) | same(4) | same(4) | R6 |
+| emit/in.emit.surf.flow.region | rc=0 | same(5) | same(5) | same(5) | R6 |
+| emit/in.emit.surf.mflow | rc=0 | same(12) | same(12) | same(12) | none |
+| emit/in.emit.surf.mflow.single | rc=0 | same(8) | same(8) | same(8) | none |
+| emit/in.emit.surf.normal | rc=0 | same(5) | same(5) | same(5) | R3, R4, R6 |
+| emit/in.emit.surf.normal.region | rc=0 | same(5) | same(5) | same(5) | R6 |
+| emit/in.emit.surf.subsonic | rc=0 | same(11) | same(11) | same(11) | none |
+| explicit2implicit/in.ablate.axi.spherecone | rc=0 | same(7) | same(7) | same(7) | R3, R4, R6, R7 |
+| explicit2implicit/in.exp2imp.axi.circle | rc=0 | same(2) | same(2) | same(2) | none |
+| explicit2implicit/in.exp2imp.axi.spherecone | rc=0 | same(2) | same(2) | same(2) | none |
+| explicit2implicit/in.exp2imp.axi.spherecone.readback | rc=0 | same(2) | same(2) | same(2) | none |
+| explicit2implicit/in.exp2imp.axi.spherecone.readback2 | rc=0 | same(5) | same(5) | same(5) | none |
+| explicit2implicit/in.exp2imp.circle.2d | rc=0 | same(4) | same(4) | same(4) | none |
+| explicit2implicit/in.exp2imp.sphere.3d | rc=0 | same(22) | same(22) | same(22) | none |
+| fft/in.fft.2d | rc=0 | same(12) | same(12) | same(12) | none |
+| fft/in.fft.3d | rc=0 | same(12) | same(12) | same(12) | none |
+| flowfile/in.flowfile | rc=0 | same(11) | same(11) | same(11) | R6 |
+| free/in.free | rc=0 | same(11) | same(11) | same(11) | R3, R4, R5 |
+| free/in.free.restart | rc=0 | same(8) | same(8) | same(8) | none |
+| implicit/in.implicit.2d | rc=0 | same(12) | same(12) | same(12) | R4 |
+| implicit/in.implicit.2d.rectangle | rc=0 | same(12) | same(12) | same(12) | R4 |
+| implicit/in.implicit.3d.big | rc=0 | TIMEOUT (rc=124) | same(6) | - | none |
+| implicit/in.implicit.3d.small | rc=0 | same(12) | same(12) | same(12) | none |
+| jagged/in.jagged.2d | rc=0 | same(12) | same(12) | same(12) | none |
+| jagged/in.jagged.2d.distributed | rc=0 | same(12) | same(12) | same(12) | none |
+| jagged/in.jagged.3d | rc=1 | same(0) (rc=1) | same(0) (rc=1) | - | none |
+| jagged/in.jagged.3d.distributed | rc=1 | same(0) (rc=1) | same(0) (rc=1) | - | none |
+| mfp_mct/in.mfp_mct | rc=0 | same(9) | same(9) | same(9) | none |
+| optmove/in.optmove | rc=0 | same(6) | same(6) | same(6) | none |
+| optmove/in.optmove.axi | rc=0 | same(5) | same(5) | same(5) | none |
+| optmove/in.optmove.flow | rc=0 | same(7) | same(7) | same(7) | none |
+| optmove/in.optmove.surf | rc=0 | same(6) | same(6) | same(6) | none |
+| qk/in.qk | rc=0 | same(5) | same(5) | same(5) | none |
+| regions/in.regions | rc=0 | same(5) | same(5) | same(5) | none |
+| relax_const/in.relax_const | rc=0 | same(22) | same(22) | same(22) | none |
+| relax_variable/in.relax_variable | rc=0 | same(22) | same(22) | same(22) | none |
+| shock_tube/in.shocktube | rc=0 | same(12) | same(12) | same(12) | none |
+| sphere/in.sphere | rc=0 | same(12) | same(12) | same(12) | none |
+| sphere/in.sphere.distributed | rc=0 | same(12) | same(12) | same(12) | none |
+| spiky/in.spiky | rc=0 | same(10) | same(10) | same(10) | none |
+| step/in.step | rc=0 | same(11) | same(11) | same(11) | none |
+| surf/in.surf.add | rc=0 | same(24) | same(24) | same(24) | R1, R6 |
+| surf/in.surf.move | rc=0 | same(35) | same(35) | same(35) | R1, R6 |
+| surf/in.surf.remove | rc=0 | same(14) | same(14) | same(14) | R1, R6 |
+| surf/in.surf.rotate | rc=0 | same(27) | same(27) | same(27) | R1, R6 |
+| surf/in.surf.slide | rc=0 | same(41) | same(41) | same(41) | R1, R6 |
+| surf_collide/in.beam.adiabatic | rc=0 | same(9) | same(9) | same(9) | none |
+| surf_collide/in.beam.cll | rc=0 | same(8) | same(8) | same(8) | none |
+| surf_collide/in.beam.diffuse | rc=0 | same(8) | same(8) | same(8) | none |
+| surf_collide/in.beam.impulsive | rc=0 | same(11) | same(11) | same(11) | none |
+| surf_collide/in.beam.specular | rc=0 | same(10) | same(10) | same(10) | none |
+| surf_collide/in.beam.td | rc=0 | same(10) | same(10) | same(10) | none |
+| surf_collide/in.circle.adiabatic | rc=0 | same(7) | same(7) | same(7) | none |
+| surf_collide/in.circle.cll | rc=0 | same(7) | same(7) | same(7) | none |
+| surf_collide/in.circle.diffuse | rc=0 | same(7) | same(7) | same(7) | none |
+| surf_collide/in.circle.impulsive | rc=0 | same(11) | same(11) | same(11) | none |
+| surf_collide/in.circle.specular | rc=0 | same(8) | same(8) | same(8) | none |
+| surf_collide/in.circle.td | rc=0 | same(8) | same(8) | same(8) | none |
+| surf_collide/in.piston | rc=0 | same(8) | same(8) | same(8) | none |
+| surf_react_adsorb/in.beam.face.gs | rc=0 | same(55) | same(55) | same(55) | R3 |
+| surf_react_adsorb/in.beam.face.gs_ps | rc=0 | same(92) | same(92) | same(92) | R1, R3, R6 |
+| surf_react_adsorb/in.beam.face.ps | rc=0 | same(64) | same(64) | same(64) | R1, R3, R6 |
+| surf_react_adsorb/in.beam.surf.gs | rc=0 | same(57) | same(57) | same(57) | R3 |
+| surf_react_adsorb/in.beam.surf.gs_ps | rc=0 | same(101) | same(101) | same(101) | R3, R4 |
+| surf_react_adsorb/in.beam.surf.ps | rc=0 | same(66) | same(66) | same(66) | R1, R3, R4, R6 |
+| surf_react_adsorb/in.circle.gs | rc=0 | same(49) | same(49) | same(49) | R3, R4 |
+| surf_react_adsorb/in.circle.gs_ps | rc=0 | same(36) | same(36) | same(36) | R1, R3, R4, R6 |
+| surf_react_adsorb/in.circle.ps | rc=0 | same(30) | same(30) | same(30) | R1, R3, R4, R6 |
+| surf_react_heatflux/in.surf_react_heatflux | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | KILLED(redone as _s) (rc=143) | R3, R4 |
+| surf_react_heatflux_s/in.surf_react_heatflux | rc=0 | TIMEOUT (rc=124) | TIMEOUT (rc=124) | same(3) | R3, R4 |
+| surf_react_heatflux_t/in.surf_react_heatflux | rc=0 | same(3) | same(3) | - | R3, R4 |
+| tally_computes/in.gas.collision.tally | rc=0 | same(11) | same(11) | same(11) | R3 |
+| tally_computes/in.gas.reaction.tally | rc=0 | same(10) | same(10) | same(10) | R3 |
+| tally_computes/in.surf.collision.tally | rc=0 | same(7) | same(7) | same(7) | R3 |
+| tally_computes/in.surf.reaction.tally | rc=0 | same(48) | same(48) | same(48) | R3, R4 |
+| thermostat/in.thermostat | rc=0 | same(14) | same(14) | same(14) | none |
+| thermostat/in.thermostat_ave | rc=0 | same(14) | same(14) | same(14) | none |
+| torque/in.torque | rc=0 | same(4) | same(4) | same(4) | R3 |
+| variable_timestep/in.variable_dt | rc=0 | same(11) | same(11) | same(11) | none |
+| vibrate/in.vibrate | rc=0 | same(12) | same(12) | same(12) | none |
+
+np4 subset (Bw/Ba/Bp vs stockmpi np4, all identical, Bp 0 ASan reports): circle, sphere, adapt.static, adapt.rotate,
+surf.add/move/remove, emit.face/surf.flow/surf.normal, ablation.2d, ablation.multi.inner.3d, collide, collide_3D.
+Not run: python/paraview/vtk (excluded), jagged/in.jagged.3d* (input generator produces non-watertight surface under
+python3 -- fails on stock), ablation/in.ablation.3d under detectors (stock alone 131 s).
+
+## SUMMARY -- distinct coherence findings still present in B_sync (39e1c1f7)
+No example produced a stats difference between B (watch / audit / poison builds, np1 and np4) and the stock build,
+except the KNOWN restart abort. Poison (class-1 stale access) is clean on B everywhere except KNOWN. No finding is
+introduced by the review in a harmful way.
+
+1. KNOWN (already fixed in the repo, not in B_sync): custom/*.restart abort (modify_host ERROR grid:ivector),
+   poison use-after-poison at grid_custom.cpp:467 <- grid_custom_kokkos.cpp:395 <- read_restart.cpp:1453; same in A.
+2. R8 pre-existing, latent (no wrong results today): owned surf custom vectors written by `custom surf ... set`
+   / read_surf custom before the FIRST run are never claimed; the prewrap branch of UpdateKokkos::setup()
+   (update_kokkos.cpp:353-368) lacks the `surf_kk->modify(Host,...)` that the non-prewrap branch has (:380), so
+   SurfKokkos::sync(Device) at update_kokkos.cpp:701 copies nothing and the device owned copy stays stale.
+   Fix: add `surf_kk->modify(Host,CUSTOM_MASK);` after `surf_kk->wrap_kokkos();` at update_kokkos.cpp:365-366
+   (or claim CUSTOM_MASK at the end of SurfKokkos::wrap_kokkos(), surf_kokkos.cpp:161). Evidence: Bw == Aw watch
+   report on 8 examples/custom circle decks, element 0 of 50.
+3. R5/R5b pre-existing, benign by design: unclaimed host post-processing of per-step products
+   (ComputeReactISurfGridKokkos::tallyinfo compute_react_isurf_grid_kokkos.cpp:150-187;
+   ComputeBoundaryKokkos::compute_array compute_boundary_kokkos.cpp:98-103). Annotation fix: clear_sync_state()
+   on the two views after the host edit (not modify_host(), which would trip the next modify_device()).
+4. Accessor-order / metadata-only reports (no data read on the stale side; poison silent; stats identical) --
+   cosmetic fixes only:
+   - R1/R1b update_kokkos.cpp:672-677 view_device() grabs before the syncs at :723-724 -> move the syncs to the top
+     of the while(1) body. R2 (= KNOWN ComputePropertyGridKokkos) compute_property_grid_kokkos.cpp:111-113, same remedy.
+   - R3 kokkos_type.h:868/884/893, update_kokkos.cpp:86-108, fix_emit_surf_kokkos.cpp:62/76: test `k.extent(0)`
+     instead of `k.view_device().extent(0)`, or modify_host() inside the *_buf_blit helpers.
+   - R4 memory_kokkos.h grow/destroy pointer grabs; irregular_kokkos.cpp:119-121/265-267; ~SurfKokkos/~GridKokkos;
+     GridKokkos::memory_usage (grid_kokkos.cpp:498-513); ComputeSurfKokkos::init_normflux.
+5. Introduced by the review: only R4d -- FixAveGridKokkos constructor now calls grow_percell(0)
+   (fix_ave_grid_kokkos.cpp:176-177); the view_device() grab after grow_kokkos is a handle, and pergrid_sync(Device)
+   (:219) runs before the zero/accumulate kernels. Benign; stats identical (adjust_temp, surf_react_heatflux).
+6. Fixed by the review (seen only on A): `surf_react:models <- UpdateKokkos::backup` (tally_computes
+   in.surf.reaction.tally), plus the A-side items already recorded by the GS-* agents.
+Tool note: WATCH=all is O(N^2) on decks that create many particles with custom attributes or evaluate particle
+variables per particle (per-particle syncs); use _t-style smaller decks or SPARTA_KOKKOS_WATCH=<name>.
+
+## STATUS: COMPLETE

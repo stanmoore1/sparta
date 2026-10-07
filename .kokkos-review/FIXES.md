@@ -123,3 +123,9 @@
 | FU-10 | grid_kokkos.cpp | 1bb317c3 |
 | FU-13 | compute_react_isurf_grid (CPU+kk) | 5f379276 |
 | FU-3b, FU-18 | emit (CPU+kk), compute_dt_grid.cpp | f9743740 |
+| R2-3 (FU-14) | compute_react_surf.cpp, surf.cpp | 8df7d59e |
+| auto_sync handoff | particle/grid/surf_kokkos.cpp | cc4ae24f |
+| R2-1 (FU-21) | grid_collate.cpp, grid.h, compute_(react_)isurf_grid | e7d8acdb |
+| R2-2 (FU-16, FU-17, F-G20-4) | remap2d/3d (CPU+kk), STUBS | 80739203 |
+| GPU coherence (G1,R8,R1,R2,U-1,R5) | 8 src/KOKKOS files | 3859618b |
+| GPU coherence R8b | modify_kokkos.cpp | 647697c1 |
