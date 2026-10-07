@@ -128,3 +128,4 @@
 | R2-1 (FU-21) | grid_collate.cpp, grid.h, compute_(react_)isurf_grid | e7d8acdb |
 | R2-2 (FU-16, FU-17, F-G20-4) | remap2d/3d (CPU+kk), STUBS | 80739203 |
 | GPU coherence (G1,R8,R1,R2,U-1,R5) | 8 src/KOKKOS files | 3859618b |
+| GPU coherence R8b | modify_kokkos.cpp | 647697c1 |

@@ -24,3 +24,4 @@
 - 2026-10-06 GPU-sim: bsync_A/B built (src/spa_), poison builds compiling; agents GS-autosync (handoff auto_sync), GS-fixes (gpu-only fixes A/B), GS-sweep (examples under detectors). R2-3 committed; R2-1 moving fix into Grid::collate_*_implicit; R2-2 remap running.
 - 2026-10-06 20:55 UTC: session limit + disk full (cleaned obsolete binaries/objects/dumps; 15G free). Relaunched R2-2, GS-fixes, GS-sweep; poison builds rebuilding. Committed so far this round: R2-3, auto_sync handoff, R2-1.
 - round-2 regression: examples t1 C4 vs C5 (R2-1,R2-2,R2-3,auto_sync) = 141/141 IDENTICAL; STUBS link OK with MPI_Group_free stub.
+- 2026-10-07: GS-coh and GS-r8b committed. All requested round-2 items + auto_sync handoff + GPU coherence follow-ups done. Remaining: R3/R4/R6/R7 cosmetic detector reports (not fixed by choice); report artifact not yet updated for round 2.
