@@ -160,3 +160,35 @@ step.set(.restart), free: 21 decks, all rc=0, C' stats == S on all 21 (and A' ==
 C'-only labels: NONE. C' reports: R3 (update:tally_models, fix_emit_surf:slist_surf), R4 (irregular:index_send
 handle grabs, ~ComputeBoundaryKokkos). A'-only: R1/R1b (grid cells/pcells/sinfo, particle:particles <- move<2|3,1,0,0>),
 R2 (grid:cinfo <- ComputePropertyGridKokkos), R8 (surf dvector/iarray/darray incl. restart decks), R5b (boundary:array).
+
+(Container restart: builds spa_A/spa_C/spa_S/spa_Cp, source edits and fix.diff all survived intact
+(`git diff -- src` == $W/fix.diff). Only the audit run was interrupted, and it was rerun.)
+
+## Audit (SPARTA_KOKKOS_AUDIT=1), targeted decks, A' vs C' np1
+adapt.static/rotate, free, ablation.multi.inner.3d, ablation_s 3d.reactions, custom circle.set/.file/.file.distributed/
+.set.fix, cube.read(.restart), step.set(.restart): the audit is armed (end-of-run "datamask audit: ..." line present).
+After step numbers are stripped, A' and C' print the same audit lines on all 13 decks. Those lines are R6
+informational only (emit/face etc. start with arrays stale on the device and sync them itself), with no undeclared
+write. C' stats == S on all 13.
+
+## Not changed (cosmetic, per instructions)
+R3 (metadata `view_device().extent(0)` reads in *_buf_sync / tally blits), R4 (memory_kokkos.h grow/destroy pointer
+grabs, irregular_kokkos index_send, ~Grid/~Surf/compute/fix destructors, FixAveGridKokkos::grow_percell,
+init_normflux), R6 (audit informational), R7 (FixAblate ALL_MASK) are still present on C', same as on A'. No data is read on the stale side.
+Follow-up R8b: an in-run `fix custom N surf set` leaves owned surf custom unclaimed. Proposed one-liner is in
+ModifyKokkos::custom_surf_changed() (see R8). That file is outside this task. The issue is latent.
+
+## Summary
+| item | A' evidence | C' | verdict |
+|---|---|---|---|
+| G1 grow_custom / reallocate_custom device resize | stale `particle:{d,i}vector <- grow_custom`, `grid:{d,i}vector <- reallocate_custom` (np1/np4); trace resize (0,0)->(0,1) | clean; stats == S == A' (np1/np4); in-run grow with ambipolar arrays (react/retry) == S, poison-clean | NECESSARY (latent, detector-shown) + COMPLETE |
+| R8/G2 surf custom before 1st run / read_restart | watch empty-sync surf:{dvector,iarray,darray} on 8 custom decks incl. restart | clean (except R8b in-run fix custom) | NECESSARY (latent) + COMPLETE; R8b follow-up |
+| R2/G3 ComputePropertyGrid sync order | stale grid:cinfo (ablation.multi.inner.3d np1/np4) | clean | accessor-order, fixed |
+| R1 UpdateKokkos::move handles before sync | stale grid:cells/pcells/sinfo, particle:particles (adapt, spiky, surf_react_adsorb, np1/np4) | clean | accessor-order, fixed |
+| U-1 emit/face(/file) destructor | poison use-after-poison fix_emit_face_kokkos.cpp:90/91 (B_poison = HEAD code), np1/np4 | C'p 0 reports np1/np4 | NECESSARY (benign teardown) + COMPLETE |
+| R5 react/isurf/grid tallyinfo | watch "host written, never claimed, now lost" | clean (clear_sync_state) | benign, documented |
+| R5b compute boundary | watch boundary:array lost | clean (clear_sync_state) | benign, documented |
+Regression: C' stats == stock on 134 np1 decks and a 21-deck np4 subset. No C'-only detector label anywhere.
+compile_one.sh (OpenMP, non-tool) OK on all 8 files. The full non-tool Serial build (spa_S) and the tool builds also compile.
+
+## STATUS: COMPLETE
