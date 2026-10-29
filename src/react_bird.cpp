@@ -16,6 +16,7 @@
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
+#include <string>
 #include "react_bird.h"
 #include "input.h"
 #include "collide.h"
@@ -85,6 +86,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   tally_reactions = new bigint[nlist];
   tally_reactions_all = new bigint[nlist];
   tally_flag = 0;
+  tce_bounds_checked = 0;
 
   reactions = NULL;
   list_ij = NULL;
@@ -123,6 +125,7 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   tce_style = 0;
   tally_reactions = NULL;
   tally_reactions_all = NULL;
+  tce_bounds_checked = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -469,29 +472,19 @@ void ReactBird::init()
     }
   }
 
-  // validate the TCE temperature exponents now that coeff[5] = omega is
-  // set.  This must happen inside init(), before ReactBirdKokkos::init()
-  // mirrors rlist onto the device, so that a channel switched off by the
-  // check is switched off on the GPU too.  It applies only to the tce
-  // styles, whose probability carries the Gamma normalization it guards.
-
-  check_tce_bounds();
-
-  // a reverse reaction whose forward partner is inactive (switched off by
-  // the bounds check above) has no rate to derive from: switch it off too
+  // a reverse reaction derived from a forward reaction whose temperature
+  //   exponent is below the TCE bound (see check_tce_bounds()) has no
+  //   consistent rate: the forward probability is clamped and does not
+  //   reproduce k_f, so the detailed-balance table cannot be calibrated
+  //   against it; switch the reverse off, check_tce_bounds() warns about
+  //   the forward reaction
 
   for (int m = 0; m < nlist; m++) {
     OneReaction *b = &rlist[m];
     if (!b->active || !b->reverse || b->reverse_partner < 0) continue;
-    if (rlist[b->reverse_partner].active) continue;
+    OneReaction *f = &rlist[b->reverse_partner];
+    if (f->active && f->coeff[3] > tce_eta_bound(f)) continue;
     b->active = 0;
-    if (comm->me == 0) {
-      char str[MAXLINE+128];
-      snprintf(str,sizeof(str),"Reverse reaction %s deactivated because its "
-               "forward reaction %s is inactive",
-               b->id,rlist[b->reverse_partner].id);
-      error->warning(FLERR,str);
-    }
   }
 
   // the equilibrium constant of every active reverse reaction comes from
@@ -1180,122 +1173,134 @@ void ReactBird::fit_keq_residual(int i)
 
 /* ----------------------------------------------------------------------
    check that the temperature exponent eta = coeff[3] of each active
-     reaction is within the exact bounds of the TCE reaction probability
+     Arrhenius reaction is within the bound for which the TCE reaction
+     probability
        P = C1 * Gamma(z+5/2-omega) / Gamma(z+eta+3/2) *
            (Ec-Ea)^(eta-1+omega) * (1-Ea/Ec)^(z+3/2-omega)
-     else warn that the probability will be erroneous
+     reproduces the Arrhenius rate of the reaction
+   the bound is eta > -(z + 3/2), see tce_eta_bound() for z
+     below it the TCE inversion of the Arrhenius rate does not exist
+     and the argument of Gamma(z+eta+3/2) is non-positive
+     ReactTCE::attempt() clamps the gamma function to 1.0e-6,
+     so the reaction still runs but its rate is incorrect, and
+     ReactBird::init() switches off any reverse reaction derived from it
+   other properties of the probability, e.g. whether it diverges as Ec
+     approaches Ea or infinity, do not change its average, so the rate
+     is still reproduced; where the probability exceeds 1 it is clipped,
+     which ReactTCE::end_of_run() warns about when it happens
+   B-style reverse reactions are seeded with eta = 0, so never flagged
+   all violating reactions are reported in one warning, on the first
+     call only, so that it is not repeated for each run
+   called from ReactTCE::init() and ReactTCEKokkos::init(),
+     after ReactBird::init()
+------------------------------------------------------------------------- */
+
+void ReactBird::check_tce_bounds()
+{
+  if (tce_bounds_checked) return;
+  tce_bounds_checked = 1;
+
+  char str[MAXLINE+64];
+
+  int nbad = 0;
+  std::string mesg;
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active) continue;
+
+    // QK reactions do not use the TCE probability
+
+    if (r->style != ARRHENIUS) continue;
+
+    double eta = r->coeff[3];
+    double bound = tce_eta_bound(r);
+
+    if (eta <= bound) {
+      snprintf(str,sizeof(str),"\n  %s: temperature exponent %g <= %g",
+               r->id,eta,bound);
+      mesg += str;
+      nbad++;
+    }
+  }
+
+  if (nbad && comm->me == 0) {
+    std::string head = std::to_string(nbad) + " TCE reaction(s) have a "
+      "temperature exponent below the bound -(z+3/2) for which the TCE "
+      "model can reproduce their Arrhenius rate. Their gamma function is "
+      "non-positive and clamped, so their reaction rates are incorrect";
+    if (partialEnergy == 0) head += " and any reverse reaction derived "
+      "from them is switched off";
+    head += ":";
+    error->warning(FLERR,(head + mesg).c_str());
+  }
+}
+
+/* ----------------------------------------------------------------------
+   warn once, over all procs, about invalid TCE reaction probabilities
+     recorded on this proc during the run by the tce styles
+   negflag = 1 if a negative probability occurred
+   bigindex = rlist index of the first reaction at which a species pair's
+     summed probability exceeded 1, -1 if none
+   called on all procs by ReactTCE::end_of_run() and
+     ReactTCEKokkos::end_of_run()
+------------------------------------------------------------------------- */
+
+void ReactBird::report_tce_prob_flags(int negflag, int bigindex)
+{
+  int negall;
+  MPI_Allreduce(&negflag,&negall,1,MPI_INT,MPI_MAX,world);
+
+  // report the lowest-index reaction flagged by any proc
+
+  int mine = (bigindex >= 0) ? bigindex : nlist;
+  int bigall;
+  MPI_Allreduce(&mine,&bigall,1,MPI_INT,MPI_MIN,world);
+
+  if (comm->me == 0) {
+    if (negall)
+      error->warning(FLERR,"Negative TCE reaction probability occurred "
+                     "during this run, check reaction file coefficients");
+    if (bigall < nlist) {
+      std::string mesg = "Summed TCE reaction probability exceeded 1.0 "
+        "during this run, e.g. at reaction " +
+        std::string(rlist[bigall].id) + ": the Arrhenius rates exceed "
+        "the collision rate at some collision energies, where the "
+        "reactions of that species pair are limited to the collision rate "
+        "(each selected in proportion to its probability), so their rates "
+        "are under-predicted; this is independent of timestep and fnum";
+      error->warning(FLERR,mesg.c_str());
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   lower bound -(z+3/2) on the temperature exponent of Arrhenius reaction R
+     for which the TCE probability reproduces its rate, see
+     check_tce_bounds()
    z = continuum internal DOF contributing to the collision energy Ec,
      constant for a given reaction:
      partial energy (rDOF): z = coeff[0]
      total energy: z = average rotational DOF of the reactants, plus the
        average vibrational DOF when vibstyle = smooth; the discrete
        vibrational and electronic ladders enter through the microcanonical
-       energy-factor tables, not through z, so z stays constant
-   3 bounds on eta:
-   (1) eta > -(z + 3/2), else the argument of Gamma(z+eta+3/2) is
-       non-positive: Gamma is negative (negative probability) or hits
-       a pole at a non-positive integer (infinite or NaN probability),
-       and the microcanonical table seeds are non-integrable;
-       z is constant so this is certain: it is an error
-   (2) trend as Ec -> Ea: for Ea > 0 the probability varies as
-       (Ec-Ea)^(eta+z+1/2) near threshold and must vanish there,
-       requiring eta > -(z + 1/2)
-       not checked for barrierless reactions (Ea = 0, e.g. recombination),
-       whose integrable low-energy behavior is set by eta-1+omega
-   (3) trend as Ec -> infinity: the probability varies as
-       Ec^(eta-1+omega) and must not diverge, requiring eta <= 1 - omega
-   B-style reverse reactions are seeded with eta = 0 and the forward
-     temperature exponent applied at the cell temperature, so they are
-     checked in the form that actually runs
-   called from ReactTCE::init() and ReactTCEKokkos::init(),
-     after ReactBird::init() has set coeff[5] = omega and seeded any
-     B-style reverse coefficients
+       energy-factor tables, not through z
 ------------------------------------------------------------------------- */
 
-void ReactBird::check_tce_bounds()
+double ReactBird::tce_eta_bound(OneReaction *r)
 {
-  // the qk and tce/qk styles evaluate Arrhenius reactions with a plain
-  // power law that has no Gamma normalization, so the bounds do not apply
-
-  if (!tce_style) return;
-
   Particle::Species *species = particle->species;
-  char str[MAXLINE+256];
+  int isp = r->reactants[0];
+  int jsp = r->reactants[1];
 
-  for (int m = 0; m < nlist; m++) {
-    OneReaction *r = &rlist[m];
-    if (!r->active) continue;
-
-    // the bounds below are properties of the TCE reaction probability, so
-    // they apply only to Arrhenius-style reactions; a QK reaction's
-    // coefficients mean something else entirely
-
-    if (r->style != ARRHENIUS) continue;
-
-    int isp = r->reactants[0];
-    int jsp = r->reactants[1];
-
-    double ea = r->coeff[1];
-    double eta = r->coeff[3];
-    double omega = r->coeff[5];
-
-    double z;
-    if (partialEnergy) z = r->coeff[0];
-    else {
-      z = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
-      if (collide->vibstyle == SMOOTH)
-        z += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
-    }
-
-    // each test below fires on the violation of its bound:
-    // (1) and (2) are lower bounds on eta, (3) is an upper bound
-
-    if (eta <= -(z+1.5)) {
-      // the TCE normalization divides by Gamma(z+eta+3/2), whose argument
-      // is <= 0 here: a pole, or a value whose sign alternates between
-      // unit intervals, so the probability is meaningless; where it comes
-      // out negative, being summed into the pair's cumulative total in
-      // ReactTCE::attempt(), it also corrupts the selection of every
-      // OTHER channel the same species pair participates in.  Deactivate
-      // the channel and warn rather than aborting: several shipped rate
-      // sets (e.g. the charge-exchange fits in examples/ambi/air.tce)
-      // contain such exponents.  For those (Gamma argument in (-1,0) or
-      // (-3,-2)) the channel could never fire, but its negative
-      // probability shifted the selection of the pair's other channels;
-      // with it switched off they are selected correctly
-      r->active = 0;
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be > %g, "
-                "else the gamma function is negative or infinite and the "
-                "reaction probability is erroneous; reaction deactivated",
-                r->id,eta,-(z+1.5));
-        error->warning(FLERR,str);
-      }
-    } else if (ea > 0.0 && eta < -(z+0.5)) {
-      // strict inequality: at eta = -(z+1/2) the near-threshold factor is
-      // (Ec-Ea)^0 = 1 (finite, integrable), which is the exponent of the
-      // ubiquitous eta = -3/2 dissociation with one rotor (z = 1) and is
-      // physically benign; only eta strictly below the bound leaves the
-      // probability nonzero-and-growing at threshold
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be >= %g, "
-                "else the reaction probability does not vanish as the "
-                "collision energy approaches the activation energy",
-                r->id,eta,-(z+0.5));
-        error->warning(FLERR,str);
-      }
-    }
-
-    if (eta > 1.0-omega) {
-      if (comm->me == 0) {
-        sprintf(str,"Reaction %s: temperature exponent %g must be <= %g, "
-                "else the reaction probability diverges as the "
-                "collision energy approaches infinity",
-                r->id,eta,1.0-omega);
-        error->warning(FLERR,str);
-      }
-    }
+  double z;
+  if (partialEnergy) z = r->coeff[0];
+  else {
+    z = 0.5 * (species[isp].rotdof + species[jsp].rotdof);
+    if (collide->vibstyle == SMOOTH)
+      z += 0.5 * (species[isp].vibdof + species[jsp].vibdof);
   }
+  return -(z+1.5);
 }
 
 /* ----------------------------------------------------------------------
@@ -1552,7 +1557,7 @@ void ReactBird::readfile(char *fname)
           strcpy(r->id_reactants[r->nreactant],word);
           r->nreactant++;
         } else {
-          if (r->nreactant == MAXPRODUCT) {
+          if (r->nproduct == MAXPRODUCT) {
             print_reaction(copy1,copy2);
             error->all(FLERR,"Too many products in a reaction formula");
           }

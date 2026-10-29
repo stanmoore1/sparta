@@ -30,6 +30,7 @@ class ReactTCE : public ReactBird {
  public:
   ReactTCE(class SPARTA *, int, char **);
   void init();
+  void end_of_run();
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &);
 
@@ -38,10 +39,14 @@ class ReactTCE : public ReactBird {
  protected:
   int index_eelec;      // custom eelec index for the 3rd-body energy of
                         // a reverse recombination; -1 if not defined
-  int probwarnflag;     // 1 once the P>1 saturation warning has been issued
 
   double channel_prob(int, Particle::OnePart *, Particle::OnePart *,
                       double, double, double, double, double);
+  int prob_neg_flag;       // 1 if a react_prob < 0 occurred on this proc
+                           //   during the current run
+  int prob_big_index;      // lowest rlist index of a reaction at which a
+                           //   pair's summed react_prob exceeded 1 on this
+                           //   proc during the current run, -1 if none
 };
 
 }
@@ -71,24 +76,18 @@ E: Unknown outcome in reaction
 The specified type of the reaction is not encoded in the reaction
 style.
 
-E: Reaction ...: temperature exponent ... must be > ..., else the
-gamma function is negative or infinite and the reaction probability
-is erroneous or NaN
+W: ... TCE reaction(s) have a temperature exponent below the bound
+-(z+3/2) for which the TCE model can reproduce their Arrhenius rate ...
 
-The argument of the gamma function in the TCE reaction probability is
-non-positive for this reaction, so the probability is certain to be
-erroneous (negative, infinite, or NaN).  The temperature exponent in
-the reaction file must be within the printed bound for the energy and
-vibrational models in use.
-
-W: Reaction ...: temperature exponent ... must be ...
-
-The temperature exponent of the reaction is outside the exact bounds
-of the TCE model for the energy and vibrational models in use, so the
-reaction probability will be erroneous.  See the warning message for
-the offending bound: the probability must vanish as the collision
-energy approaches the activation energy, and must not diverge as the
-collision energy approaches infinity.
+For each listed reaction the Arrhenius rate cannot be represented by
+the TCE model for the energy and vibrational models in use: the
+argument of the gamma function in the TCE reaction probability is
+non-positive, so the gamma function is clamped and the reaction rate
+is incorrect.  With discrete vibration this only happens when the
+vibrational energy is small.  Use reaction coefficients whose
+temperature exponent is above the printed bound, e.g. by increasing
+the number of internal degrees of freedom z where that is physically
+valid.  This warning is printed once, on the first run.
 
 E: Cannot open reaction file %s
 

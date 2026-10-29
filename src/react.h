@@ -78,6 +78,7 @@ class React : protected Pointers {
       keq_file = NULL; tgas = 0.0; }
   virtual ~React();
   virtual void init() {}
+  virtual void end_of_run() {}  // called by all procs at end of each run
   virtual int recomb_exist(int, int) = 0;
   virtual void ambi_check() = 0;
   virtual int attempt(Particle::OnePart *, Particle::OnePart *,

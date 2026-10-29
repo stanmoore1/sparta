@@ -43,14 +43,21 @@ void ReactTCEKokkos::init()
 
   ReactBirdKokkos::init();
 
+  // warn if temperature exponent of any reaction is out of bounds
+  //   for the TCE reaction probability
+
+  check_tce_bounds();
+
   vibstyle = collide->vibstyle;
   elecstyle = collide->elecstyle;
   boltz = update->boltz;
 
-  // one-time "probability exceeded 1" device warning flag (zero-initialized)
+  // invalid-probability flags, reported by end_of_run()
 
-  d_probwarn = DAT::t_int_scalar("react:probwarn");
-  Kokkos::deep_copy(d_probwarn,0);
+  d_probneg = DAT::t_int_scalar("react:probneg");
+  d_probbig = DAT::t_int_scalar("react:probbig");
+  Kokkos::deep_copy(d_probneg,0);
+  Kokkos::deep_copy(d_probbig,PROBBIG_NONE);
 
   // with partial_energy no, build the host microcanonical energy-factor
   // tables (shared ReactBird machinery) and mirror them into flat device
@@ -97,4 +104,20 @@ void ReactTCEKokkos::init()
     Kokkos::deep_copy(d_mtab_n,h_n);
     Kokkos::deep_copy(d_mtab_num_flag,h_num_flag);
   } else free_micro_tables();
+}
+
+/* ----------------------------------------------------------------------
+   warn once, over all procs, if any invalid TCE reaction probability
+     occurred during the run, matching ReactTCE::end_of_run()
+   called by Finish on all procs at the end of each run
+------------------------------------------------------------------------- */
+
+void ReactTCEKokkos::end_of_run()
+{
+  int negflag,bigindex;
+  Kokkos::deep_copy(negflag,d_probneg);
+  Kokkos::deep_copy(bigindex,d_probbig);
+  report_tce_prob_flags(negflag,bigindex == PROBBIG_NONE ? -1 : bigindex);
+  Kokkos::deep_copy(d_probneg,0);
+  Kokkos::deep_copy(d_probbig,PROBBIG_NONE);
 }

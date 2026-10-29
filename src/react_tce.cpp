@@ -15,12 +15,14 @@
 #include "math.h"
 #include "string.h"
 #include "stdlib.h"
+#include <string>
 #include "react_tce.h"
 #include "particle.h"
 #include "collide.h"
 #include "update.h"
 #include "random_knuth.h"
 #include "math_const.h"
+#include "comm.h"
 #include "error.h"
 
 using namespace SPARTA_NS;
@@ -32,7 +34,12 @@ enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
 /* ---------------------------------------------------------------------- */
 
 ReactTCE::ReactTCE(SPARTA *sparta, int narg, char **arg) :
-  ReactBird(sparta, narg, arg) { probwarnflag = 0; tce_style = 1; }
+  ReactBird(sparta, narg, arg)
+{
+  prob_neg_flag = 0;
+  prob_big_index = -1;
+  tce_style = 1;
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -41,7 +48,8 @@ void ReactTCE::init()
   if (!collide || strcmp(collide->style,"vss") != 0)
     error->all(FLERR,"React tce can only be used with collide vss");
 
-  probwarnflag = 0;
+  prob_neg_flag = 0;
+  prob_big_index = -1;
 
   ReactBird::init();
 
@@ -61,6 +69,24 @@ void ReactTCE::init()
 
   if (!partialEnergy) build_micro_tables();
   else free_micro_tables();
+
+  // warn if temperature exponent of any reaction is out of bounds
+  //   for the TCE reaction probability
+
+  check_tce_bounds();
+}
+
+/* ----------------------------------------------------------------------
+   warn once, over all procs, if any invalid TCE reaction probability
+     occurred during the run
+   called by Finish on all procs at the end of each run
+------------------------------------------------------------------------- */
+
+void ReactTCE::end_of_run()
+{
+  report_tce_prob_flags(prob_neg_flag,prob_big_index);
+  prob_neg_flag = 0;
+  prob_big_index = -1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -103,8 +129,12 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   for (int i = 0; i < n; i++) {
     double p = channel_prob(list[i],ip,jp,pre_etrans,pre_erot,
                             pre_evib,pre_eelec,pre_ave_rotdof);
+    if (p < 0.0) prob_neg_flag = 1;
     if (p > 1.0) { p = 1.0; capped = 1; }
     total_prob += p;
+    if ((capped || total_prob > 1.0) &&
+        (prob_big_index < 0 || list[i] < prob_big_index))
+      prob_big_index = list[i];
     if (isel < 0 && total_prob > random_prob) isel = i;
   }
 
@@ -128,14 +158,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     }
   }
 
-  if ((total_prob > 1.0 || capped) && !probwarnflag) {
-    probwarnflag = 1;
-    error->warning(FLERR,"TCE reaction probability exceeded 1 and was "
-                   "capped (reaction cross-section limited to the VHS "
-                   "cross-section); the simulated rate saturates at the "
-                   "collision rate - reduce the timestep or fnum, or "
-                   "refine the grid");
-  }
+  // the probability is per collision, so it does not depend on timestep
+  //   or fnum; only record it here, end_of_run() warns once over all procs
 
   if (isel < 0) return 0;
 
@@ -211,12 +235,10 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
 
   OneReaction *r = &rlist[rindex];
 
-    // an inactive channel (e.g. switched off by check_tce_bounds() for a
-    // temperature exponent outside the TCE validity range) must contribute
-    // nothing: its probability could be negative, which would also corrupt
-    // the pair's cumulative channel sum in attempt().  ReactBird::init()
-    // builds the per-pair lists after all deactivations, so this is only
-    // a safeguard (matched in ReactTCEKokkos::channel_prob_kk)
+    // an inactive channel (e.g. a reverse reaction that was switched off)
+    // must contribute nothing.  ReactBird::init() builds the per-pair
+    // lists after all deactivations, so this is only a safeguard (matched
+    // in ReactTCEKokkos::channel_prob_kk)
 
     if (!r->active) return 0.0;
 
@@ -307,16 +329,17 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
     double prefactor = r->coeff[2] * keq_resid;
 
     // compute probability of reaction
-    // gamma function denominator is negative or infinite (erroneous
-    //   probability) if the temperature exponent is out of bounds,
-    //   checked at init by ReactBird::check_tce_bounds()
+    // gamma function denominator is non-positive if the temperature
+    //   exponent is below the TCE bound, then it is clamped to 1.0e-6
+    //   and the reaction rate is incorrect, warned about at init by
+    //   ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        return prefactor * tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
+        return prefactor * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
           efactor;
       }
 
@@ -389,7 +412,7 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
         }
 
         return recomb_boost * recomb_density * prefactor *
-          tgamma(z+2.5-r->coeff[5]) / tgamma(z+r->coeff[3]+1.5) *
+          tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
           efactor;   // extended to general recombination case with non-zero activation energy
       }
 
