@@ -588,7 +588,10 @@ void SPARTA::destroy()
   delete react;
   delete output;
   delete timer;
-  delete python;   // create() allocates a new one, e.g. after clear command
+
+  // re-created by create(), so freed here as well as in the destructor
+
+  delete python;
   python = NULL;
 }
 

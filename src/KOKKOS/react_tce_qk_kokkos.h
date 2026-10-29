@@ -91,17 +91,15 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         case DISSOCIATION:
         case EXCHANGE:
           {
-            // same TCE expression as ReactTCE::attempt() with z = coeff[0],
-            //   consistent with coeff normalization in ReactBird::init()
-            //   mirrors ReactTCEQK::attempt_tce()
-
             const double z = r->d_coeff[0];
-            react_prob += r->d_coeff[2] * tgamma(z+2.5-r->d_coeff[5]) /
-              MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
-              pow(ecc2-r->d_coeff[1],r->d_coeff[3]-1+r->d_coeff[5]) *
-              pow(1.0-r->d_coeff[1]/ecc2,z+1.5-r->d_coeff[5]);
-            break;
+            const double eta = r->d_coeff[3];
+            const double omega = r->d_coeff[5];
+            react_prob += r->d_coeff[2] *
+              tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+eta+1.5)) *
+              pow(ecc2-r->d_coeff[1],eta-1.0+omega) *
+              pow(1.0-r->d_coeff[1]/ecc2,z+1.5-omega);
           }
+          break;
         default:
           Kokkos::abort("ReactTCEQKKokkos: Unknown outcome in reaction\n");
           break;
