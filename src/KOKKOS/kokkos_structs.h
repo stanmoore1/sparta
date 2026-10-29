@@ -39,6 +39,10 @@ typedef Surf::Line LineKK;
 
 typedef Surf::Tri TriKK;
 
+typedef Particle::Species SpeciesKK;
+
+typedef CollideVSS::Params ParamsKK;
+
 #elif defined(SPARTA_KOKKOS_SINGLE_DOUBLE)
 
 struct SPARTA_ALIGN(16) OnePartKK {
@@ -97,6 +101,119 @@ typedef Grid::ParentCell ParentCellKK;
 typedef Surf::Line LineKK;
 
 typedef Surf::Tri TriKK;
+
+struct SpeciesKK {
+  char id[16];
+  double molwt;
+  double mass;
+  KK_FLOAT specwt;
+  KK_FLOAT charge;
+  KK_FLOAT rotrel;
+  KK_FLOAT rottemp[3];
+  KK_FLOAT vibtemp[Particle::MAXVIBMODE];
+  KK_FLOAT vibrel[Particle::MAXVIBMODE];
+  int vibdegen[Particle::MAXVIBMODE];
+  int rotdof;
+  int vibdof;
+  int nrottemp;
+  int nvibmode;
+  int internaldof;
+  int vibdiscrete_read;
+  KK_FLOAT magmoment;
+};
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(SpeciesKK &dst, const Particle::Species &src)
+{
+  for (int k = 0; k < 16; k++) dst.id[k] = src.id[k];
+  kk_convert(dst.molwt,src.molwt);
+  kk_convert(dst.mass,src.mass);
+  kk_convert(dst.specwt,src.specwt);
+  kk_convert(dst.charge,src.charge);
+  kk_convert(dst.rotrel,src.rotrel);
+  for (int k = 0; k < 3; k++)
+    kk_convert(dst.rottemp[k],src.rottemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibtemp[k],src.vibtemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibrel[k],src.vibrel[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++) dst.vibdegen[k] = src.vibdegen[k];
+  dst.rotdof = src.rotdof;
+  dst.vibdof = src.vibdof;
+  dst.nrottemp = src.nrottemp;
+  dst.nvibmode = src.nvibmode;
+  dst.internaldof = src.internaldof;
+  dst.vibdiscrete_read = src.vibdiscrete_read;
+  kk_convert(dst.magmoment,src.magmoment);
+}
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(Particle::Species &dst, const SpeciesKK &src)
+{
+  for (int k = 0; k < 16; k++) dst.id[k] = src.id[k];
+  kk_convert(dst.molwt,src.molwt);
+  kk_convert(dst.mass,src.mass);
+  kk_convert(dst.specwt,src.specwt);
+  kk_convert(dst.charge,src.charge);
+  kk_convert(dst.rotrel,src.rotrel);
+  for (int k = 0; k < 3; k++)
+    kk_convert(dst.rottemp[k],src.rottemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibtemp[k],src.vibtemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibrel[k],src.vibrel[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++) dst.vibdegen[k] = src.vibdegen[k];
+  dst.rotdof = src.rotdof;
+  dst.vibdof = src.vibdof;
+  dst.nrottemp = src.nrottemp;
+  dst.nvibmode = src.nvibmode;
+  dst.internaldof = src.internaldof;
+  dst.vibdiscrete_read = src.vibdiscrete_read;
+  kk_convert(dst.magmoment,src.magmoment);
+}
+
+struct ParamsKK {
+  KK_FLOAT diam;
+  KK_FLOAT omega;
+  KK_FLOAT tref;
+  KK_FLOAT alpha;
+  KK_FLOAT rotc1;
+  KK_FLOAT rotc2;
+  KK_FLOAT rotc3;
+  KK_FLOAT vibc1;
+  KK_FLOAT vibc2;
+  KK_FLOAT mr;
+};
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(ParamsKK &dst, const CollideVSS::Params &src)
+{
+  kk_convert(dst.diam,src.diam);
+  kk_convert(dst.omega,src.omega);
+  kk_convert(dst.tref,src.tref);
+  kk_convert(dst.alpha,src.alpha);
+  kk_convert(dst.rotc1,src.rotc1);
+  kk_convert(dst.rotc2,src.rotc2);
+  kk_convert(dst.rotc3,src.rotc3);
+  kk_convert(dst.vibc1,src.vibc1);
+  kk_convert(dst.vibc2,src.vibc2);
+  kk_convert(dst.mr,src.mr);
+}
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(CollideVSS::Params &dst, const ParamsKK &src)
+{
+  kk_convert(dst.diam,src.diam);
+  kk_convert(dst.omega,src.omega);
+  kk_convert(dst.tref,src.tref);
+  kk_convert(dst.alpha,src.alpha);
+  kk_convert(dst.rotc1,src.rotc1);
+  kk_convert(dst.rotc2,src.rotc2);
+  kk_convert(dst.rotc3,src.rotc3);
+  kk_convert(dst.vibc1,src.vibc1);
+  kk_convert(dst.vibc2,src.vibc2);
+  kk_convert(dst.mr,src.mr);
+}
 
 #elif defined(SPARTA_KOKKOS_SINGLE_SINGLE)
 
@@ -353,6 +470,119 @@ void kk_convert(Surf::Tri &dst, const TriKK &src)
   dst.transparent = src.transparent;
 }
 
+struct SpeciesKK {
+  char id[16];
+  double molwt;
+  double mass;
+  KK_FLOAT specwt;
+  KK_FLOAT charge;
+  KK_FLOAT rotrel;
+  KK_FLOAT rottemp[3];
+  KK_FLOAT vibtemp[Particle::MAXVIBMODE];
+  KK_FLOAT vibrel[Particle::MAXVIBMODE];
+  int vibdegen[Particle::MAXVIBMODE];
+  int rotdof;
+  int vibdof;
+  int nrottemp;
+  int nvibmode;
+  int internaldof;
+  int vibdiscrete_read;
+  KK_FLOAT magmoment;
+};
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(SpeciesKK &dst, const Particle::Species &src)
+{
+  for (int k = 0; k < 16; k++) dst.id[k] = src.id[k];
+  kk_convert(dst.molwt,src.molwt);
+  kk_convert(dst.mass,src.mass);
+  kk_convert(dst.specwt,src.specwt);
+  kk_convert(dst.charge,src.charge);
+  kk_convert(dst.rotrel,src.rotrel);
+  for (int k = 0; k < 3; k++)
+    kk_convert(dst.rottemp[k],src.rottemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibtemp[k],src.vibtemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibrel[k],src.vibrel[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++) dst.vibdegen[k] = src.vibdegen[k];
+  dst.rotdof = src.rotdof;
+  dst.vibdof = src.vibdof;
+  dst.nrottemp = src.nrottemp;
+  dst.nvibmode = src.nvibmode;
+  dst.internaldof = src.internaldof;
+  dst.vibdiscrete_read = src.vibdiscrete_read;
+  kk_convert(dst.magmoment,src.magmoment);
+}
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(Particle::Species &dst, const SpeciesKK &src)
+{
+  for (int k = 0; k < 16; k++) dst.id[k] = src.id[k];
+  kk_convert(dst.molwt,src.molwt);
+  kk_convert(dst.mass,src.mass);
+  kk_convert(dst.specwt,src.specwt);
+  kk_convert(dst.charge,src.charge);
+  kk_convert(dst.rotrel,src.rotrel);
+  for (int k = 0; k < 3; k++)
+    kk_convert(dst.rottemp[k],src.rottemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibtemp[k],src.vibtemp[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++)
+    kk_convert(dst.vibrel[k],src.vibrel[k]);
+  for (int k = 0; k < Particle::MAXVIBMODE; k++) dst.vibdegen[k] = src.vibdegen[k];
+  dst.rotdof = src.rotdof;
+  dst.vibdof = src.vibdof;
+  dst.nrottemp = src.nrottemp;
+  dst.nvibmode = src.nvibmode;
+  dst.internaldof = src.internaldof;
+  dst.vibdiscrete_read = src.vibdiscrete_read;
+  kk_convert(dst.magmoment,src.magmoment);
+}
+
+struct ParamsKK {
+  KK_FLOAT diam;
+  KK_FLOAT omega;
+  KK_FLOAT tref;
+  KK_FLOAT alpha;
+  KK_FLOAT rotc1;
+  KK_FLOAT rotc2;
+  KK_FLOAT rotc3;
+  KK_FLOAT vibc1;
+  KK_FLOAT vibc2;
+  KK_FLOAT mr;
+};
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(ParamsKK &dst, const CollideVSS::Params &src)
+{
+  kk_convert(dst.diam,src.diam);
+  kk_convert(dst.omega,src.omega);
+  kk_convert(dst.tref,src.tref);
+  kk_convert(dst.alpha,src.alpha);
+  kk_convert(dst.rotc1,src.rotc1);
+  kk_convert(dst.rotc2,src.rotc2);
+  kk_convert(dst.rotc3,src.rotc3);
+  kk_convert(dst.vibc1,src.vibc1);
+  kk_convert(dst.vibc2,src.vibc2);
+  kk_convert(dst.mr,src.mr);
+}
+
+KOKKOS_INLINE_FUNCTION
+void kk_convert(CollideVSS::Params &dst, const ParamsKK &src)
+{
+  kk_convert(dst.diam,src.diam);
+  kk_convert(dst.omega,src.omega);
+  kk_convert(dst.tref,src.tref);
+  kk_convert(dst.alpha,src.alpha);
+  kk_convert(dst.rotc1,src.rotc1);
+  kk_convert(dst.rotc2,src.rotc2);
+  kk_convert(dst.rotc3,src.rotc3);
+  kk_convert(dst.vibc1,src.vibc1);
+  kk_convert(dst.vibc2,src.vibc2);
+  kk_convert(dst.mr,src.mr);
+}
+
 #endif
 
 // in a double precision build the KK structs are the host structs
@@ -364,6 +594,8 @@ static_assert(std::is_same_v<SplitInfoKK,Grid::SplitInfo>);
 static_assert(std::is_same_v<ParentCellKK,Grid::ParentCell>);
 static_assert(std::is_same_v<LineKK,Surf::Line>);
 static_assert(std::is_same_v<TriKK,Surf::Tri>);
+static_assert(std::is_same_v<SpeciesKK,Particle::Species>);
+static_assert(std::is_same_v<ParamsKK,CollideVSS::Params>);
 #endif
 
 }

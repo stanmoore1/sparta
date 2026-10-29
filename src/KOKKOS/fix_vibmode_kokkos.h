@@ -41,7 +41,7 @@ class FixVibmodeKokkos : public FixVibmode {
   void update_custom_kokkos(int, KK_FLOAT, KK_FLOAT, KK_FLOAT, const double *) const;  // KK_DOUBLE: vstream is host data
 
  private:
-  double boltz;
+  KK_FLOAT boltz;
 
 #ifndef SPARTA_KOKKOS_EXACT
   Kokkos::Random_XorShift64_Pool<DeviceType> rand_pool;

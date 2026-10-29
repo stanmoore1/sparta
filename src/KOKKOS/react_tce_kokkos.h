@@ -48,7 +48,7 @@ typedef double tce_float;  // KK_DOUBLE: see comment above
 
 KOKKOS_INLINE_FUNCTION
 tce_float bird_Evib(const int& nmode, const tce_float& Tvib,
-                 const double vibtemp[],  // KK_DOUBLE: Species data is double
+                 const KK_FLOAT vibtemp[],
                  const tce_float& Evib) const
 {
   // Comutes f for Newton's search method outlined in newtonTvib()
@@ -67,7 +67,7 @@ tce_float bird_Evib(const int& nmode, const tce_float& Tvib,
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-tce_float bird_dEvib(const int& nmode, const tce_float& Tvib, const double vibtemp[]) const  // KK_DOUBLE: Species data is double
+tce_float bird_dEvib(const int& nmode, const tce_float& Tvib, const KK_FLOAT vibtemp[]) const
 {
   // Comutes df for Newton's search method
 
@@ -91,7 +91,7 @@ tce_float bird_dEvib(const int& nmode, const tce_float& Tvib, const double vibte
 /* ---------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-tce_float newtonTvib(const int &nmode, const tce_float& Evib, const double vibTemp[],  // KK_DOUBLE: Species data is double
+tce_float newtonTvib(const int &nmode, const tce_float& Evib, const KK_FLOAT vibTemp[],
                const tce_float &Tvib0,
                const tce_float &tol,
                const int& nmax) const
@@ -354,7 +354,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
 
  protected:
   int vibstyle;
-  double boltz;
+  KK_FLOAT boltz;
 
   DAT::tdual_int_scalar k_error_flag;
   DAT::t_int_scalar d_error_flag;

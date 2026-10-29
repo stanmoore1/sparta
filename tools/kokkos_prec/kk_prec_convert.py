@@ -78,6 +78,7 @@ class Converter:
         self.param_table = {}
         self.view_class = {}
         self.int_names = set()
+        self.member_class = self.member_classes(cfg)
 
     # ------------------------------------------------------------------
     # classification of an identifier to a precision class
@@ -482,6 +483,105 @@ class Converter:
                 best = c
         return best
 
+    def member_classes(self, cfg):
+        """precision class of members and variables declared with a KK type
+        or double in the KOKKOS headers, and of the generated struct fields;
+        a name declared with different classes is left out"""
+        found = {}
+        decl = re.compile(r"^\s*(?:const\s+)?(KK_FLOAT|KK_POS_FLOAT|KK_ACC_FLOAT|double)"
+                          r"\s+([^;(){}]+);", re.M)
+        for f in K.kokkos_files():
+            if not f.endswith(".h"):
+                continue
+            text = open(f).read()
+            for m in decl.finditer(text):
+                cls = "double" if m.group(1) == "double" else TYPE_CLASS[m.group(1)]
+                for item in m.group(2).split(","):
+                    nm = re.match(r"\s*[*&]?\s*(\w+)", item)
+                    if nm:
+                        found.setdefault(nm.group(1), set()).add(cls)
+        for info in cfg["structs"].values():
+            for fname, cls in info["fields"].items():
+                found.setdefault(fname, set()).add(cls)
+        return {k: next(iter(v)) for k, v in found.items() if len(v) == 1}
+
+    def comparison_class(self, text, mask, s, decl_class):
+        """class of the other operand when the literal at s is the right
+        operand of a comparison with a plain variable, member or element
+        access, e.g. 'd_species[sp].vibtemp[m] > 0.0'; None otherwise"""
+        j = s - 1
+        while j >= 0 and (not mask[j] or text[j].isspace()):
+            j -= 1
+        if j < 0:
+            return None
+        if text[j - 1:j + 1] in ("<=", ">=", "==", "!="):
+            j -= 2
+        elif text[j] in "<>" and text[j - 1:j + 1] not in ("->", "<<", ">>"):
+            j -= 1
+        else:
+            return None
+        # walk back over the operand: identifiers, '.', '->', [] and ()
+        name = None
+        call = None   # argument span of a call right of the name
+        while j >= 0:
+            if not mask[j] or text[j].isspace():
+                j -= 1
+                continue
+            c = text[j]
+            if c in "])":
+                close = j
+                depth, j = 0, j
+                while j >= 0:
+                    if mask[j]:
+                        if text[j] in "])":
+                            depth += 1
+                        elif text[j] in "[(":
+                            depth -= 1
+                            if depth == 0:
+                                break
+                    j -= 1
+                if name is None and text[close] == ")":
+                    call = (j + 1, close)
+                j -= 1
+                continue
+            if c.isalnum() or c == "_":
+                k = j
+                while k >= 0 and (text[k].isalnum() or text[k] == "_"):
+                    k -= 1
+                if name is None:
+                    name = text[k + 1:j + 1]
+                j = k
+                continue
+            if c == ".":
+                j -= 1
+                continue
+            if c == ">" and j > 0 and text[j - 1] == "-":
+                j -= 2
+                continue
+            break
+        if name is None or name[0].isdigit():
+            return None
+        # the operand must not be part of a larger expression
+        if j >= 0 and text[j] not in "(!&|?:,;{}=" and \
+                prev_code_token(text, mask, j + 1) not in ("return",):
+            return None
+        if call:
+            # a call such as MathExtraKokkos::dot3(a,b): the widest class
+            #   of its arguments, if all of them are known
+            best = None
+            for x in K.IDENT.findall(text[call[0]:call[1]]):
+                if x in K.CPP_KEYWORDS:
+                    continue
+                c = (decl_class.get(x) or self.view_class.get(x) or
+                     self.member_class.get(x))
+                if c is None:
+                    return None
+                if best is None or RANK[c] > RANK[best]:
+                    best = c
+            return best
+        return (decl_class.get(name) or self.view_class.get(name) or
+                self.member_class.get(name))
+
     def lookup(self, name, decl_class):
         return (decl_class.get(name) or self.view_class.get(name) or
                 self.classify(name, self.fname))
@@ -507,7 +607,8 @@ class Converter:
             if not (K.FLOAT_LITERAL.fullmatch(inner) or
                     inner.split("::")[-1] in (self.math_consts | consts)):
                 continue
-            cls = self.statement_class(text, mask, s, decl_class)
+            cls = (self.comparison_class(text, mask, s, decl_class) or
+                   self.statement_class(text, mask, s, decl_class))
             if cls == "double":
                 edits.append((s, e, inner))
             elif CLASS_TYPE[cls] != m.group(1):
@@ -519,7 +620,8 @@ class Converter:
                 continue
             if self.skip_literal(text, mask, s, e):
                 continue
-            cls = self.statement_class(text, mask, s, decl_class)
+            cls = (self.comparison_class(text, mask, s, decl_class) or
+                   self.statement_class(text, mask, s, decl_class))
             if cls == "double":
                 continue
             if lit[-1] in "fF" and lit[0].isdigit():

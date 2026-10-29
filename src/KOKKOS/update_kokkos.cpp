@@ -344,6 +344,16 @@ void UpdateKokkos::setup()
   GridKokkos* grid_kk = (GridKokkos*) grid;
   SurfKokkos* surf_kk = (SurfKokkos*) surf;
 
+  // species can be changed on the host between runs (species_modify,
+  //   rotation/vibration files) without a modify(Host); the host species
+  //   are a separate copy in a reduced precision build and on a GPU, so
+  //   send them to the device at the start of every run (nspecies is small)
+
+  if (!sparta->kokkos->prewrap) {
+    particle_kk->sync(Host,SPECIES_MASK);
+    particle_kk->modify(Host,SPECIES_MASK);
+  }
+
   particle_kk->sync(Device,ALL_MASK);
   particle_kk->sorted_kk = 0;
 
@@ -581,6 +591,7 @@ template < int DIM, int SURF, int REACT, int OPT > void UpdateKokkos::move()
   // move/migrate iterations
 
   dt = update->dt;
+  for (int k = 0; k < 3; k++) kk_field[k] = field[k];
 
   // which global boundary faces the fast path may handle itself, see the OPT
   //   block in the move kernel below
@@ -1546,7 +1557,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     }
 
     if (DIM == 1) {
-      if (x[1] == lo[1] && (pflag == PEXIT || v[1] < static_cast<KK_POS_FLOAT>(0.0))) {
+      if (x[1] == lo[1] && (pflag == PEXIT || v[1] < static_cast<KK_FLOAT>(0.0))) {
         frac = 0.0;
         outface = YLO;
       } else if (GeometryKokkos::
@@ -1558,7 +1569,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
         }
       }
 
-      if (x[1] == hi[1] && (pflag == PEXIT || v[1] > static_cast<KK_POS_FLOAT>(0.0))) {
+      if (x[1] == hi[1] && (pflag == PEXIT || v[1] > static_cast<KK_FLOAT>(0.0))) {
         frac = 0.0;
         outface = YHI;
       } else {
@@ -1607,7 +1618,7 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
     //   positions, so a double precision build is unchanged.
 
     if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
-      if (dtremain == 0.0) outface = INTERIOR;
+      if (dtremain == static_cast<KK_POS_FLOAT>(0.0)) outface = INTERIOR;
     }
 
 #ifdef MOVE_DEBUG

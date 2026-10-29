@@ -37,8 +37,11 @@ build a `TransformView` is exactly a `DualView` and costs nothing.
 
 The per-particle, per-grid-cell and per-surf structs (`Particle::OnePart`,
 `Grid::ChildCell`, `Grid::SplitInfo`, `Grid::ParentCell`, `Surf::Line`,
-`Surf::Tri`) have KK precision device copies (`OnePartKK`, ...) generated
-into `src/KOKKOS/kokkos_structs.h`.
+`Surf::Tri`), the species data (`Particle::Species`) and the VSS collision
+parameters (`CollideVSS::Params`) have KK precision device copies
+(`OnePartKK`, ..., `SpeciesKK`, `ParamsKK`) generated into
+`src/KOKKOS/kokkos_structs.h`.  A field can also be kept double
+(class `double` in `precision_map.json`), e.g. `Species::mass`.
 
 ## Files
 
@@ -47,7 +50,8 @@ into `src/KOKKOS/kokkos_structs.h`.
 | `precision_map.json`  | the single source of truth: struct field precisions, type renames, which identifiers are positions / accumulators / kept double, per-file overrides |
 | `gen_kk_structs.py`   | regenerates `src/KOKKOS/kokkos_structs.h` from the host struct definitions; fails if a host struct gains a double field with no mapping. `--check` verifies the file is current |
 | `kk_prec_convert.py`  | the bulk rewriter (dry run by default, `--apply` to write); writes `review.md` (not tracked), the list of constructs to review by hand |
-| `kk_prec_audit.py`    | linter: fails if device code contains an unjustified `double`, a bare C math call, an unwrapped literal, or legacy types. Run it on new KOKKOS code |
+| `kk_prec_audit.py`    | linter: fails if device code contains an unjustified `double`, a bare C math call, an unwrapped literal, or legacy types. Run it on new KOKKOS code. With `--promotions BUILD_LOG --mode mixed\|single` it checks a `-Wdouble-promotion` build log for double arithmetic in device code against `promotions_allowlist.json` |
+| `promotions_allowlist.json` | per file and mode, the number of device code double promotions that are on purpose (masses, accumulators, attempt counts, mixed mode positions); CI fails if a file exceeds it. Update with `kk_prec_audit.py --promotions BUILD_LOG --mode M --update-allowlist` after review |
 | `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
 | `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
@@ -70,6 +74,10 @@ Device code is the signature and body of `KOKKOS_INLINE_FUNCTION`,
 - choose tolerances by precision with `kk_eps<T>(eps_double, eps_float)`
 - floating point Kokkos arrays are `DAT::ttransform_kkfloat_*` /
   `DAT::ttransform_kkacc_*`; their `view_host()` is double
+- a host scalar that a kernel combines with KK precision values (e.g.
+  `boltz`, `dt`, a scale factor) is a KK precision member, set on the host
+  before the kernel runs; a double member there makes the arithmetic
+  double (check with `kk_prec_audit.py --promotions`)
 
 ## Reduced precision pitfalls found in SPARTA
 

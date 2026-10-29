@@ -121,7 +121,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
           }
         case EXCHANGE:
           {
-            if (r->d_coeff[4] < static_cast<KK_FLOAT>(0.0) && d_species[isp].rotdof > 0) {
+            if (r->d_coeff[4] < 0.0 && d_species[isp].rotdof > 0) {
               eccq = pre_etrans + ip->evib;
               maxlev = static_cast<int> (eccq * inverse_kT);
               if (eccq > r->d_coeff[1]) {
@@ -138,7 +138,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
                 ilevel = static_cast<int> (Kokkos::fabs(r->d_coeff[4]) * inverse_kT);
                 if (iv >= ilevel) react_prob = 1.0;
               }
-            } else if (r->d_coeff[4] > static_cast<KK_FLOAT>(0.0) && d_species[isp].rotdof > 0) {
+            } else if (r->d_coeff[4] > 0.0 && d_species[isp].rotdof > 0) {
               eccq = pre_etrans + ip->evib;
               int mspec = r->d_products[0];
               if (d_species[mspec].rotdof < 2.0) mspec = r->d_products[1];
@@ -181,7 +181,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
 }
 
  protected:
-  double boltz;
+  KK_FLOAT boltz;
   DAT::t_kkfloat_2d d_omega;     // VSS omega for each species pair
 };
 

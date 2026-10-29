@@ -427,7 +427,7 @@ void CollideVSSKokkos::init()
 
   for (int i = 0; i < nparams; i++) {
     for (int j = 0; j < nparams; j++){
-      k_params.view_host()(i,j) = params[i][j];
+      kk_convert(k_params.view_host()(i,j),params[i][j]);
       k_prefactor.view_host()(i,j) = prefactor[i][j];
     }
   }
@@ -4006,7 +4006,7 @@ int CollideVSSKokkos::perform_collision_kokkos(OnePartKK *&ip,
     setup_collision_kokkos(ip,p3,precoln,postcoln);
     postcoln.etotal += partial_energy;
 
-    if (precoln.ave_dof > static_cast<KK_POS_FLOAT>(0.0)) EEXCHANGE_ReactingEDisposal(ip,p3,jp,precoln,postcoln,rand_gen);
+    if (precoln.ave_dof > static_cast<KK_FLOAT>(0.0)) EEXCHANGE_ReactingEDisposal(ip,p3,jp,precoln,postcoln,rand_gen);
     SCATTER_TwoBodyScattering(ip,p3,precoln,postcoln,rand_gen);
 
   } else {
@@ -4378,7 +4378,7 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(OnePartKK *ip,
       int sp = plist[i]->ispecies;
       if ((d_species[sp].vibdof > 0) && (vibstyle == DISCRETE))
         for (int m = 0; m < d_species[sp].nvibmode; m++)
-          if (d_species[sp].vibtemp[m] > 0.0) theta[nflat++] = d_species[sp].vibtemp[m];
+          if (d_species[sp].vibtemp[m] > static_cast<KK_FLOAT>(0.0)) theta[nflat++] = d_species[sp].vibtemp[m];
     }
 
     // solve for the pool collision temperature, then add each discrete mode's
@@ -4556,9 +4556,9 @@ KOKKOS_INLINE_FUNCTION
 KK_FLOAT CollideVSSKokkos::sample_bl(rand_type &rand_gen, KK_FLOAT Exp_1, KK_FLOAT Exp_2) const
 {
   KK_FLOAT Exp_s = Exp_1 + Exp_2;
-  KK_POS_FLOAT x; KK_FLOAT y;
+  KK_FLOAT x, y;
   do {
-    x = static_cast<KK_POS_FLOAT>(rand_gen.drand());
+    x = static_cast<KK_FLOAT>(rand_gen.drand());
     y = Kokkos::pow(x*Exp_s/Exp_1, Exp_1)*Kokkos::pow((static_cast<KK_FLOAT>(1.0)-x)*Exp_s/Exp_2, Exp_2);
   } while (y < static_cast<KK_FLOAT>(rand_gen.drand()));
   return x;

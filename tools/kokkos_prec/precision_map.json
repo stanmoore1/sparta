@@ -60,6 +60,39 @@
         "p3": "pos",
         "norm": "pos"
       }
+    },
+    "Species": {
+      "header": "src/particle.h",
+      "scope": "Particle",
+      "kk_name": "SpeciesKK",
+      "fields": {
+        "molwt": "double",
+        "mass": "double",
+        "specwt": "float",
+        "charge": "float",
+        "rotrel": "float",
+        "rottemp": "float",
+        "vibtemp": "float",
+        "vibrel": "float",
+        "magmoment": "float"
+      }
+    },
+    "Params": {
+      "header": "src/collide_vss.h",
+      "scope": "CollideVSS",
+      "kk_name": "ParamsKK",
+      "fields": {
+        "diam": "float",
+        "omega": "float",
+        "tref": "float",
+        "alpha": "float",
+        "rotc1": "float",
+        "rotc2": "float",
+        "rotc3": "float",
+        "vibc1": "float",
+        "vibc2": "float",
+        "mr": "float"
+      }
     }
   },
   "precision_classes": {

@@ -114,13 +114,14 @@ class UpdateKokkos : public Update {
 
  private:
 
-  double dt;
+  KK_POS_FLOAT dt;
+  KK_FLOAT kk_field[3];  // Update::field in KK precision, set in run()
   int field_active[3];
 
   // data for optimized particle moves
 
-  double dx,dy,dz,Lx,Ly,Lz;
-  double xlo,ylo,zlo,xhi,yhi,zhi;
+  KK_POS_FLOAT dx,dy,dz,Lx,Ly,Lz;
+  KK_POS_FLOAT xlo,ylo,zlo,xhi,yhi,zhi;
   int ncx,ncy,ncz;
 
   // what the fast path may do for itself on each global boundary face, indexed
@@ -441,21 +442,23 @@ class UpdateKokkos : public Update {
   KOKKOS_INLINE_FUNCTION
   void field2d(KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const {
     const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
-    x[0] += dtsq*field[0];
-    x[1] += dtsq*field[1];
-    v[0] += dt*field[0];
-    v[1] += dt*field[1];
+    const KK_FLOAT dtv = static_cast<KK_FLOAT>(dt);
+    x[0] += dtsq*kk_field[0];
+    x[1] += dtsq*kk_field[1];
+    v[0] += dtv*kk_field[0];
+    v[1] += dtv*kk_field[1];
   };
 
   KOKKOS_INLINE_FUNCTION
   void field3d(KK_POS_FLOAT dt, KK_POS_FLOAT *x, KK_FLOAT *v) const {
     const KK_POS_FLOAT dtsq = static_cast<KK_POS_FLOAT>(0.5)*dt*dt;
-    x[0] += dtsq*field[0];
-    x[1] += dtsq*field[1];
-    x[2] += dtsq*field[2];
-    v[0] += dt*field[0];
-    v[1] += dt*field[1];
-    v[2] += dt*field[2];
+    const KK_FLOAT dtv = static_cast<KK_FLOAT>(dt);
+    x[0] += dtsq*kk_field[0];
+    x[1] += dtsq*kk_field[1];
+    x[2] += dtsq*kk_field[2];
+    v[0] += dtv*kk_field[0];
+    v[1] += dtv*kk_field[1];
+    v[2] += dtv*kk_field[2];
   };
 
   /* ----------------------------------------------------------------------

@@ -719,7 +719,7 @@ void ParticleKokkos::post_weight()
       d_map[i].ratio = ratio;
       d_map[i].id = d_particles[i].id;
       d_map[i].i = i;
-      if (ratio != 1.0) lsum++;
+      if (ratio != static_cast<KK_FLOAT>(1.0)) lsum++;
     },nchanged);
 
     if (!nchanged) {

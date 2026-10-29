@@ -42,7 +42,7 @@ class FixTempGlobalRescaleKokkos : public FixTempGlobalRescale {
   void operator()(TagFixTempGlobalRescale_scale, const int&) const;
 
  private:
-  double vscale;
+  KK_FLOAT vscale;  // host computed scale factor, applied to KK velocities
 
   t_particle_1d d_particles;
   t_species_1d d_species;

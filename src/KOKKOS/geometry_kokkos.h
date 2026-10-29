@@ -149,9 +149,9 @@ bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
   // if start point is inside or outside then side = same
   // if particle started on line B, side = ONSURF OUT/IN based on dotstop
 
-  if (dotstart < 0.0) side = INSIDE;
-  else if (dotstart > 0.0) side = OUTSIDE;
-  else if (dotstop > 0.0) side = ONSURF2OUT;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0)) side = INSIDE;
+  else if (dotstart > static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
+  else if (dotstop > static_cast<KK_POS_FLOAT>(0.0)) side = ONSURF2OUT;
   else side = ONSURF2IN;
 
   return true;
@@ -447,7 +447,7 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
   // use velocity vector at collision pt to determine side
 
   KK_POS_FLOAT dot = MathExtraKokkos::dot3(norm,vc);
-  if (dot < 0.0) side = OUTSIDE;
+  if (dot < static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
   else side = INSIDE;
 
   param = t1/tdelta;
@@ -542,9 +542,9 @@ bool line_tri_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
   // if start point is inside or outside then side = same
   // if particle started on triangle, side = ONSURF OUT/IN based on dotstop
 
-  if (dotstart < 0.0) side = INSIDE;
-  else if (dotstart > 0.0) side = OUTSIDE;
-  else if (dotstop > 0.0) side = ONSURF2OUT;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0)) side = INSIDE;
+  else if (dotstart > static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
+  else if (dotstop > static_cast<KK_POS_FLOAT>(0.0)) side = ONSURF2OUT;
   else side = ONSURF2IN;
 
   return true;
@@ -1205,17 +1205,17 @@ KK_POS_FLOAT distsq_point_tri(KK_POS_FLOAT *x, KK_POS_FLOAT *p1, KK_POS_FLOAT *p
   MathExtraKokkos::sub3(p2,p1,edge);
   MathExtraKokkos::sub3(point,p1,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   MathExtraKokkos::sub3(p3,p2,edge);
   MathExtraKokkos::sub3(point,p2,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   MathExtraKokkos::sub3(p1,p3,edge);
   MathExtraKokkos::sub3(point,p3,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   if (inside) return pdistsq;
 

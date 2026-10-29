@@ -182,7 +182,7 @@ class ParticleKokkos : public Particle {
   int nbytes;
   int maxcellcount,ngrid;
   int collide_rot,vibstyle;
-  double boltz;
+  KK_FLOAT boltz;
 
   DAT::t_int_2d d_plist;
   DAT::t_int_1d d_cellcount;

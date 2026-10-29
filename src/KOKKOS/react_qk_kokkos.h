@@ -91,7 +91,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
       }
     case EXCHANGE:
       {
-        if (r->d_coeff[4] < static_cast<KK_FLOAT>(0.0) && d_species[isp].rotdof > 0) {
+        if (r->d_coeff[4] < 0.0 && d_species[isp].rotdof > 0) {
 
           // endothermic reaction
 
@@ -114,7 +114,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
             if (iv >= ilevel) react_prob = 1.0;
           }
 
-        } else if (r->d_coeff[4] > static_cast<KK_FLOAT>(0.0) && d_species[isp].rotdof > 0) {
+        } else if (r->d_coeff[4] > 0.0 && d_species[isp].rotdof > 0) {
 
           ecc = pre_etrans + ip->evib;
 
@@ -161,7 +161,7 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
 }
 
  protected:
-  double boltz;
+  KK_FLOAT boltz;
   DAT::t_kkfloat_2d d_omega;     // VSS omega for each species pair
 };
 

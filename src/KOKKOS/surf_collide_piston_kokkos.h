@@ -165,15 +165,15 @@ class SurfCollidePistonKokkos : public SurfCollidePiston {
 
     if (norm[0] != static_cast<KK_POS_FLOAT>(0.0)) {
       dim = 0;
-      if (norm[0] < 0.0) which = 1;
+      if (norm[0] < static_cast<KK_POS_FLOAT>(0.0)) which = 1;
       else which = 0;
     } else if (norm[1] != static_cast<KK_POS_FLOAT>(0.0)) {
       dim = 1;
-      if (norm[1] < 0.0) which = 1;
+      if (norm[1] < static_cast<KK_POS_FLOAT>(0.0)) which = 1;
       else which = 0;
     } else {
       dim = 2;
-      if (norm[2] < 0.0) which = 1;
+      if (norm[2] < static_cast<KK_POS_FLOAT>(0.0)) which = 1;
       else which = 0;
     }
 

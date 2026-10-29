@@ -69,6 +69,12 @@ def dims_of(dimstr):
     return re.findall(r"\[([^\]]+)\]", dimstr)
 
 
+def qualify(dimstr, scope):
+    """qualify array dimensions named by class constants, e.g. MAXVIBMODE
+    in Particle::Species, with the scope of the host struct"""
+    return re.sub(r"\[\s*([A-Za-z_]\w*)\s*\]", r"[%s::\1]" % scope, dimstr)
+
+
 def main():
     cfg = json.load(open(MAP))
     modes = cfg["modes"]
@@ -121,7 +127,7 @@ def main():
         for name, info, attr, fields in structs:
             host = "%s::%s" % (info["scope"], name)
             kk = info["kk_name"]
-            changed = any(mtypes[c] != "double" for c in info["fields"].values())
+            changed = any(mtypes.get(c, "double") != "double" for c in info["fields"].values())
             w("")
             if not changed:
                 w("typedef %s %s;" % (host, kk))
@@ -130,7 +136,7 @@ def main():
             for ctype, fname, dims in fields:
                 if fname in info["fields"]:
                     ctype = ctypes[info["fields"][fname]]
-                w("  %s %s%s;" % (ctype, fname, dims))
+                w("  %s %s%s;" % (ctype, fname, qualify(dims, info["scope"])))
             w("};")
             for dst, src, dname, sname in ((kk, host, "KK", "legacy"),
                                           (host, kk, "legacy", "KK")):
@@ -139,7 +145,7 @@ def main():
                 w("void kk_convert(%s &dst, const %s &src)" % (dst, src))
                 w("{")
                 for ctype, fname, dims in fields:
-                    d = dims_of(dims)
+                    d = dims_of(qualify(dims, info["scope"]))
                     if fname in info["fields"]:
                         # kk_convert() keeps a double value whose single
                         #   precision image is unchanged

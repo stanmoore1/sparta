@@ -350,7 +350,7 @@ class SurfCollideImpulsiveKokkos : public SurfCollideImpulsive {
       if (vibstyle == NONE || vibdof < 2) {
         p->evib = 0.0;
       } else {
-        const double *vibtemp = d_species[ispecies].vibtemp;  // KK_DOUBLE: Species data is double
+        const KK_FLOAT *vibtemp = d_species[ispecies].vibtemp;
         KK_FLOAT evib_val = p->evib + vib_frac*extra_energy;
 
         if (vibstyle == SMOOTH) {

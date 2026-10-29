@@ -183,7 +183,7 @@ class CollideVSSKokkos : public CollideVSS {
   void operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, ATOMIC_REDUCTION >, const int&, COLLIDE_REDUCE&) const;
 
   typedef Kokkos::
-    DualView<Params**, Kokkos::LayoutRight, DeviceType> tdual_params_2d;
+    DualView<ParamsKK**, Kokkos::LayoutRight, DeviceType> tdual_params_2d;
   typedef tdual_params_2d::t_dev t_params_2d;
   typedef tdual_params_2d::t_dev_const t_params_2d_const;
   t_params_2d_const d_params_const;
@@ -431,7 +431,8 @@ class CollideVSSKokkos : public CollideVSS {
   tdual_params_2d k_params;
   t_params_2d d_params;
 
-  double dt,fnum,boltz;
+  double dt,fnum;   // collision attempt counts are double
+  KK_FLOAT boltz;
   int maxcellcount,react_defined;
 
   KOKKOS_INLINE_FUNCTION

@@ -112,7 +112,7 @@ int region_prim_match_kk(const RegionPrimKK &p,
 
   } else if (p.style == RKK_PLANE) {
     const KK_POS_FLOAT dot = (x-p.a)*p.n0 + (y-p.b)*p.n1 + (z-p.c)*p.n2;
-    if (dot >= 0.0) inside = 1;
+    if (dot >= static_cast<KK_POS_FLOAT>(0.0)) inside = 1;
 
   } else {   // RKK_SPHERE
     const KK_POS_FLOAT delx = x - p.a;

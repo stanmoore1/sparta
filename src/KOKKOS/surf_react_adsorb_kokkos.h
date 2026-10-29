@@ -823,7 +823,7 @@ class SurfReactAdsorbKokkos : public SurfReactAdsorb {
       if (vibstyle_ == SRA_KK::NONE || vibdof < 2) {
         p->evib = 0.0;
       } else {
-        const double *vibtemp = d_species[ispecies].vibtemp;  // KK_DOUBLE: Species data is double
+        const KK_FLOAT *vibtemp = d_species[ispecies].vibtemp;
         const KK_FLOAT evib_val = p->evib + vib_frac*extra_energy;
         if (vibstyle_ == SRA_KK::SMOOTH) {
           p->evib = evib_val;

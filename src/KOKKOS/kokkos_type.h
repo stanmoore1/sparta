@@ -21,6 +21,7 @@
 #include "particle.h"
 #include "grid.h"
 #include "surf.h"
+#include "collide_vss.h"
 #include "spatype.h"
 #include "accelerator_kokkos_defs.h"
 
@@ -880,8 +881,8 @@ namespace SPARTA_NS {
   typedef tdual_particle_2d::t_dev t_particle_2d;
   typedef tdual_particle_2d::t_host t_host_particle_2d;
 
-  typedef Kokkos::
-    DualView<Particle::Species*, DeviceType::array_layout, DeviceType> tdual_species_1d;
+  typedef TransformView<SpeciesKK*, Particle::Species*, DeviceType::array_layout>
+    tdual_species_1d;
   typedef tdual_species_1d::t_dev t_species_1d;
   typedef tdual_species_1d::t_dev_const t_species_1d_const;
   typedef tdual_species_1d::t_host t_host_species_1d;

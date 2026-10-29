@@ -187,10 +187,21 @@ jobs:
           -DKokkos_ENABLE_SERIAL=ON \
           -DKokkos_ENABLE_OPENMP=OFF \
           -DPKG_FFT=ON \
+          -DCMAKE_CXX_FLAGS=-Wdouble-promotion \
           ../cmake
 
     - name: Build
-      run: cd build; make -j4
+      run: |
+        set -o pipefail
+        cd build
+        make -j4 2>&1 | tee build.log
+
+    - name: Check double arithmetic in device code
+      # double promotions in KOKKOS device code must not grow beyond
+      # tools/kokkos_prec/promotions_allowlist.json
+      run: |
+        python3 tools/kokkos_prec/kk_prec_audit.py \
+          --promotions build/build.log --mode ${{ matrix.prec }}
 
     - name: Test
       run: |
