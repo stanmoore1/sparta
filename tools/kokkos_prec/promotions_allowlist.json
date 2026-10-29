@@ -24,7 +24,7 @@
     "fix_temp_global_rescale_kokkos.cpp": 1,
     "fix_temp_rescale_kokkos.cpp": 17,
     "fix_vibmode_kokkos.h": 2,
-    "geometry_kokkos.h": 17,
+    "geometry_kokkos.h": 9,
     "math_extra_kokkos.h": 24,
     "particle_kokkos.cpp": 2,
     "particle_kokkos.h": 6,
@@ -71,6 +71,7 @@
     "fix_temp_global_rescale_kokkos.cpp": 1,
     "fix_temp_rescale_kokkos.cpp": 17,
     "fix_vibmode_kokkos.h": 2,
+    "geometry_kokkos.h": 29,
     "math_extra_kokkos.h": 12,
     "particle_kokkos.cpp": 2,
     "particle_kokkos.h": 6,
@@ -89,7 +90,7 @@
     "surf_collide_td_kokkos.h": 24,
     "surf_react_adsorb_kokkos.h": 69,
     "surf_react_global_kokkos.h": 2,
-    "update_kokkos.cpp": 27,
+    "update_kokkos.cpp": 29,
     "update_kokkos.h": 24
   }
 }
