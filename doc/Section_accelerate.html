@@ -748,7 +748,13 @@ precision throughput is much lower than their single precision
 throughput, and it reduces the memory used per particle. Mixed
 precision is recommended over single precision: single precision
 particle positions lose resolution in large domains and near surface
-elements. As with any change in round-off, a reduced precision run
+elements. Single precision positions resolve about 1e-7 of their
+magnitude, so the coordinates must stay small compared to the cell and
+surface element sizes divided by 1e-7: e.g. for 0.5 m cells around a
+circle (examples/circle), a box offset 1000 m from the origin still
+gives the double precision results, while at 10000 m particles leak
+through the surface and the run stops with an error.  Place the box
+near the origin, or use mixed precision. As with any change in round-off, a reduced precision run
 diverges from a double precision run after a few timesteps, so
 results should be compared statistically (e.g. time averaged
 temperature, collision rates, surface fluxes), and a reduced
