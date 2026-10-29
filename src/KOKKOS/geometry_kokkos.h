@@ -33,7 +33,8 @@ namespace GeometryKokkos {
 //   nearly equal squares of coordinates (b*b - a*c); in single precision
 //   that round-off can push a crossing time past the end of the move and
 //   the particle passes through the surface, so they are solved in double
-//   (a no-op in double and mixed precision, where positions are double)
+//   (a no-op in double; in mixed precision it also forms the velocity
+//   products in double, since velocities are float there)
 
 typedef double axi_float;  // KK_DOUBLE: cancellation in the axisymmetric quadratics
 
@@ -396,9 +397,9 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
     if (v1[0] == v2[0]) xc[0] = v1[0];
     const axi_float ynew = x[1] + t1*v[1];
     const axi_float znew = x[2] + t1*v[2];
-    const axi_float rc = Kokkos::sqrt(ynew*ynew + znew*znew);
+    axi_float rc = Kokkos::sqrt(ynew*ynew + znew*znew);
+    if (v1[1] == v2[1]) rc = v1[1];
     xc[1] = rc;
-    if (v1[1] == v2[1]) xc[1] = v1[1];
     xc[2] = 0.0;
 
     vc[0] = v[0];
