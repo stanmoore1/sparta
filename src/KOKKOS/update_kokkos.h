@@ -115,7 +115,7 @@ class UpdateKokkos : public Update {
  private:
 
   KK_POS_FLOAT dt;
-  KK_FLOAT kk_field[3];  // Update::field in KK precision, set in run()
+  KK_FLOAT kk_field[3];  // Update::field in KK precision, set in move()
   int field_active[3];
 
   // data for optimized particle moves

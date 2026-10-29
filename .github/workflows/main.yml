@@ -187,7 +187,7 @@ jobs:
           -DKokkos_ENABLE_SERIAL=ON \
           -DKokkos_ENABLE_OPENMP=OFF \
           -DPKG_FFT=ON \
-          -DCMAKE_CXX_FLAGS=-Wdouble-promotion \
+          -DCMAKE_CXX_FLAGS='-g -O3 -Wdouble-promotion' \
           ../cmake
 
     - name: Build

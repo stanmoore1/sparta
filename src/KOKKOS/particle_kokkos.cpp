@@ -940,7 +940,14 @@ void ParticleKokkos::grow_species()
       this->sync(Device,SPECIES_MASK); // force resize on device
       Kokkos::resize(Kokkos::view_alloc(Kokkos::WithoutInitializing),
                      k_species,maxspecies);
-      this->modify(Device,SPECIES_MASK); // needed for auto sync
+      // a DualView keeps only the device copy and recreates the host view,
+      //   which the device copy then refills (auto sync); a TransformView
+      //   keeps the double host copy, which must not be overwritten by its
+      //   KK precision image, so the host copy is the modified side
+      if constexpr (tdual_species_1d::NEED_TRANSFORM)
+        this->modify(Host,SPECIES_MASK);
+      else
+        this->modify(Device,SPECIES_MASK); // needed for auto sync
     }
     species = k_species.view_host().data();
   }
@@ -953,7 +960,11 @@ void ParticleKokkos::wrap_kokkos()
   // species
 
   if (species != k_species.view_host().data()) {
-    memoryKK->wrap_kokkos(k_species,species,nspecies,"particle:species");
+    // allocate maxspecies, not nspecies: add_species() grows the array
+    //   only when nspecies would exceed maxspecies
+    k_species = tdual_species_1d(Kokkos::NoInit(std::string("particle:species")),
+                                 maxspecies);
+    for (int i = 0; i < nspecies; i++) k_species.view_host()(i) = species[i];
     k_species.modify_host();
     k_species.sync_device();
     memory->sfree(species);

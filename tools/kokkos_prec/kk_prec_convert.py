@@ -523,11 +523,16 @@ class Converter:
         # walk back over the operand: identifiers, '.', '->', [] and ()
         name = None
         call = None   # argument span of a call right of the name
+        last = None   # kind of the last token walked over
         while j >= 0:
             if not mask[j] or text[j].isspace():
                 j -= 1
                 continue
             c = text[j]
+            if c == ")" and name is not None and last not in (".", "->"):
+                # a parenthesized group left of the name, e.g. a cast
+                #   '(double) x': the operand is not a plain access
+                return None
             if c in "])":
                 close = j
                 depth, j = 0, j
@@ -543,27 +548,43 @@ class Converter:
                 if name is None and text[close] == ")":
                     call = (j + 1, close)
                 j -= 1
+                last = "[]"
                 continue
             if c.isalnum() or c == "_":
                 k = j
                 while k >= 0 and (text[k].isalnum() or text[k] == "_"):
                     k -= 1
+                word = text[k + 1:j + 1]
+                if last == "id":
+                    # two identifiers in a row ('const x', 'return x'):
+                    #   the operand ended at the previous one
+                    if word in ("return", "case"):
+                        break
+                    return None
                 if name is None:
-                    name = text[k + 1:j + 1]
+                    name = word
                 j = k
+                last = "id"
                 continue
             if c == ".":
                 j -= 1
+                last = "."
                 continue
             if c == ">" and j > 0 and text[j - 1] == "-":
                 j -= 2
+                last = "->"
+                continue
+            if c == ":" and j > 0 and text[j - 1] == ":":
+                j -= 2
+                last = "::"
                 continue
             break
         if name is None or name[0].isdigit():
             return None
         # the operand must not be part of a larger expression
-        if j >= 0 and text[j] not in "(!&|?:,;{}=" and \
-                prev_code_token(text, mask, j + 1) not in ("return",):
+        if j >= 0 and (text[j].isalnum() or text[j] == "_"):
+            pass   # stopped at 'return' or 'case'
+        elif j >= 0 and text[j] not in "(!&|?:,;{}=":
             return None
         if call:
             # a call such as MathExtraKokkos::dot3(a,b): the widest class

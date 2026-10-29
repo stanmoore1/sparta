@@ -4532,8 +4532,9 @@ KK_FLOAT CollideVSSKokkos::vib_pool_temp(KK_FLOAT shape_classical, int nmode,
     KK_FLOAT f = boltz * shape_classical * T - E;
     KK_FLOAT df = boltz * shape_classical;
     for (int m = 0; m < nmode; m++) {
-      KK_POS_FLOAT x = theta[m] / T;
-      if (x > static_cast<KK_POS_FLOAT>(200.0)) continue;             // frozen mode: exp overflow, ~0 term
+      KK_FLOAT x = theta[m] / T;
+      // frozen mode, ~0 term; exp(x) overflows float above ~88
+      if (x > kk_eps<KK_FLOAT>(200.0,80.0)) continue;
       KK_FLOAT ex = Kokkos::exp(x);
       KK_FLOAT den = ex - static_cast<KK_FLOAT>(1.0);
       f  += boltz * theta[m] / den;
