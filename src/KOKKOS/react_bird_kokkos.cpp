@@ -196,21 +196,37 @@ double ReactBirdKokkos::extract_tally(int m)
 
 void ReactBirdKokkos::check_prob_warn(int flag)
 {
-  if (prob_warn_flag || !flag) return;
+  // only record it here, end_of_run() warns once over all procs,
+  //   same as ReactTCE::end_of_run()
 
-  // negative is reported in preference to > 1 if both occurred,
-  //   one warning per run as in ReactTCE
+  prob_warn_flag |= flag;
+}
 
-  prob_warn_flag = 1;
-  if (flag & 1)
-    error->warning(FLERR,"Negative TCE reaction probability, "
-                   "check reaction file coefficients "
-                   "(further warnings suppressed)");
-  else
-    error->warning(FLERR,"TCE reaction probability exceeded 1.0, "
-                   "chemistry may be under-resolved, "
-                   "consider reducing timestep or fnum "
-                   "(further warnings suppressed)");
+/* ----------------------------------------------------------------------
+   warn once, over all procs, if any invalid TCE reaction probability
+     occurred during the run, same text as ReactTCE::end_of_run()
+   the device flag does not record which reaction, so none is named
+   called by Finish on all procs at the end of each run
+------------------------------------------------------------------------- */
+
+void ReactBirdKokkos::end_of_run()
+{
+  int flagall;
+  MPI_Allreduce(&prob_warn_flag,&flagall,1,MPI_INT,MPI_BOR,world);
+
+  if (comm->me == 0) {
+    if (flagall & 1)
+      error->warning(FLERR,"Negative TCE reaction probability occurred "
+                     "during this run, check reaction file coefficients");
+    if (flagall & 2)
+      error->warning(FLERR,"Summed TCE reaction probability exceeded 1.0 "
+                     "during this run: the Arrhenius rates exceed the "
+                     "collision rate at some collision energies, so some "
+                     "reactions are under-sampled; this is independent of "
+                     "timestep and fnum");
+  }
+
+  prob_warn_flag = 0;
 }
 
 /* ---------------------------------------------------------------------- */
