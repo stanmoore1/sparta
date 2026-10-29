@@ -18,6 +18,7 @@ CLUSTER_NAMES = {
 RESOLVED_BY = {
   'G12x-F-G16-2': 'FU-1 (AB10)', 'G12x-F-G14-1': 'FU-4 (AB10)', 'F-G09-4a': 'FU-8 (AB10)',
   'F-G22-2': 'FU-10 (AB10)', 'FU-3': 'FU-3b (AB11)', 'F-G19-4': 'FU-15: accepted behaviour change',
+  'F-G20-5': 'R2-2 (round 2)',
 }
 
 def cat(v):
@@ -26,6 +27,8 @@ def cat(v):
   if 'COMPLETENESS-PARTIAL' in v: return 'np'
   if v.startswith('INCOMPLETE') or 'INCOMPLETE' in v.split('(')[0]: return 'inc'
   if v.startswith('NOT-SHOWN-NECESSARY'): return 'nsn'
+  if v.startswith('NOT-CATCHABLE'): return 'gpu'
+  if v.startswith('NECESSARY') and 'COMPLETE' in v and 'INCOMPLETE' not in v: return 'nc'
   if v.startswith('FIX-FAILS'): return 'fail'
   return 'other'
 
@@ -62,8 +65,14 @@ clusters = []
 for p in files:
   clusters.append(parse(p))
 
-# addendum (MPI) verdicts override primary verdicts by ID
+# addendum verdicts override primary verdicts by ID: MPI pass, then GPU split-memory passes
 addendum = {}
+gpusim = {}
+for gf in ['GS-fixes.md', 'GS-poison.md']:
+  p = os.path.join(ROOT, 'gpusim', gf)
+  if os.path.exists(p):
+    for e in parse(p)[1]:
+      gpusim[e['id'].split()[0]] = e
 for cl, ents, _ in clusters:
   if cl.startswith('AB12'):
     for e in ents:
@@ -78,21 +87,54 @@ for cl, ents, st in clusters:
     final = e['verdict']
     ad = addendum.get(e['id'].split()[0])
     if ad: final = ad['verdict']
+    gs = gpusim.get(e['id'].split()[0])
+    if gs and (cat(final) in ('nsn', 'other') or (cat(final) == 'np' and cat(gs['verdict']) == 'nc')):
+      final = gs['verdict']
+      ad = ad or {}
+      ad = dict(ad, necessary=(ad.get('necessary','') + ' GPU split-memory test: ' + gs.get('necessary','')).strip(), complete=gs.get('complete',''))
     c = cat(final)
     res = RESOLVED_BY.get(e['id'])
     if c == 'inc' and res: c = 'acc' if 'accepted' in res else 'res'
+    if c == 'np' and res and res.startswith('R2'): c = 'res'
     counts[c] += 1
     rows.append((e, final, c, ad, res))
   rows_by_cluster.append((cl, rows, st))
 LABEL['res'] = 'Incomplete, closed by follow-up'
 LABEL['acc'] = 'Behaviour change accepted'
+LABEL['gpu'] = 'Needs a real GPU to show'
 
 def esc(s): return html.escape(s or '')
 def code(s):  # backticks -> <code>
   return re.sub(r'`([^`]+)`', lambda m: '<code>' + m.group(1) + '</code>', esc(s))
 
+BACKOUT = [
+ # id, why not shown, what the fix protects against, recommendation
+ ('F-G00-2', 'Needs a real GPU', 'Kernel dereferenced the host Update pointer; illegal address on CUDA/HIP', 'Keep'),
+ ('F-G00-4', 'Needs a real GPU', 'Host code did atomics on device-only views; fault on a discrete GPU', 'Keep'),
+ ('F-G02-2', 'Race not observable on the host backend', 'Non-atomic += on shared grow counters across GPU threads (undefined behaviour)', 'Keep'),
+ ('F-G01-4 / F-G02-1', 'No valid input makes a zero-volume cell with particles', 'GPU spins ~2^31 attempts before the error surfaces', 'Keep'),
+ ('F-G21-7', 'Needs a SPARTA_KOKKOS_EXACT + MPI build', 'EXACT-build migration compacted unsynced host data and never pushed it back', 'Keep'),
+ ('FU-9', 'No device reader of the grid custom index arrays today', 'Same missing sync as F-G13-4 on the particle side, which the detector showed necessary', 'Keep'),
+ ('F-G19-7', 'Benign with FFTW 3.3.10 here', 'Calling fftw cleanup_threads per plan is undefined per the FFTW docs and invalidates other live plans', 'Keep'),
+ ('F-G00-17', 'Unreachable: vremax==0 gives zero attempts', 'Same guard the CPU collide_vss has; costs nothing', 'Keep (CPU parity)'),
+ ('F-G11-4', 'nrho is already infinite when the guard fires', 'Same guard the CPU fix emit/surf has', 'Keep (CPU parity)'),
+ ('F-G12-1', 'nrho is already infinite when the guard fires', 'Same guard the CPU fix emit/face has', 'Keep (CPU parity)'),
+ ('F-G17-2', 'mvv2e is 1.0 in every unit system', 'int storage of a double; would truncate if units ever change', 'Keep (type correctness)'),
+ ('F-G22-3', 'Not reachable end to end', 'CPU Surf::grow zeroes the new tail; unit test shows the Kokkos tail uninitialized', 'Keep (CPU parity)'),
+ ('FU-10', 'Hygiene; no reader of the uninitialized tail', 'CPU Grid::grow_* zero the first allocation', 'Keep (CPU parity)'),
+ ('F-G06-1', 'Only compiled with -DSPARTA_KOKKOS_FIXED_LISTS; no failing path found', 'Unused tally slots kept raw handles of computes that may be reallocated', 'Optional: keep (2 placeholder members)'),
+ ('F-G00-16-note', 'Unreachable: at least one cell always counts', 'Divide by zero in temp/rescale ave mode if no cell counts', 'Optional: could be dropped (2-line guard, CPU + kk)'),
+ ('F-G00-20', 'Unreachable: the parser never produces CUSTOM inputs', 'fix ave/grid/kk CUSTOM branch read etype[-1] and used the double view for int arrays', 'Optional: could be dropped (dead code), or kept so the branch is correct if the parser is extended'),
+]
+rows = ''.join(f'<tr><td class="id">{esc(a)}</td><td>{esc(b)}</td><td>{esc(c)}</td><td>{esc(d)}</td></tr>' for a,b,c,d in BACKOUT)
+BACKOUT_HTML = ('<section class="cluster"><div class="chead"><h2>Back-out review: fixes not proven necessary</h2>'
+  '<span class="meta">16 fixes · none harmful · none recommended for back-out</span></div>'
+  '<p class="lede">Every fix below passed its negative control: the pre-fix and fixed builds give identical results off the buggy path, and the 141 example decks are identical before and after. So none changes behaviour that was correct. They could not be shown necessary because the failure needs a GPU, an EXACT build, or an input the code cannot currently receive. The three marked optional are the only candidates for dropping to keep the diff small; nothing is gained in correctness by removing them.</p>'
+  '<div class="tbl"><table><thead><tr><th>Fix</th><th>Why not shown</th><th>What it guards against</th><th>Recommendation</th></tr></thead><tbody>'
+  + rows + '</tbody></table></div></section>')
+
 total = sum(counts.values())
-order = ['nc', 'np', 'res', 'acc', 'inc', 'nsn', 'fail', 'other']
+order = ['nc', 'np', 'res', 'acc', 'inc', 'gpu', 'nsn', 'fail', 'other']
 
 followups = open(os.path.join(ROOT, 'AB_FOLLOWUPS.md'), errors='replace').read()
 fu = re.findall(r'^- (FU-\S+|Install\.sh|Notes|FU-1\.\.6)[^\n]*', followups, re.M)
@@ -134,7 +176,7 @@ code{font:0.88em var(--f-mono);background:var(--na-bg);padding:0 .25em;border-ra
 .chip{display:inline-block;font:500 .72rem var(--f-mono);letter-spacing:.02em;padding:2px 7px;border-radius:999px;white-space:nowrap}
 .c-nc{color:var(--ok);background:var(--ok-bg)} .c-np{color:var(--part);background:var(--part-bg)}
 .c-inc,.c-fail{color:var(--bad);background:var(--bad-bg)} .c-nsn,.c-other{color:var(--na);background:var(--na-bg)}
-.c-res{color:var(--res);background:var(--res-bg)} .c-acc{color:var(--part);background:var(--part-bg)}
+.c-res{color:var(--res);background:var(--res-bg)} .c-gpu{color:var(--na);background:var(--na-bg)} .c-acc{color:var(--part);background:var(--part-bg)}
 .tile.k-nc b{color:var(--ok)} .tile.k-np b{color:var(--part)} .tile.k-inc b{color:var(--bad)} .tile.k-nsn b{color:var(--na)} .tile.k-res b{color:var(--res)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .filters button{font:500 .8rem var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer}
@@ -205,6 +247,28 @@ for cl, rows, st in rows_by_cluster:
              f'<td class="ev">{code(ev)}<details><summary>Controls and details</summary><div class="more">{"".join(more)}</div></details></td></tr>')
   o.append('</tbody></table></div></section>')
 
+
+ROUND2 = [
+ ('R2-1', 'Implicit-surf tally collate put tallies of cells migrated by fix balance into local cell 0 (compute isurf/grid, react/isurf/grid, fix ave/grid); collate_vector_implicit dropped ghost tallies', 'e7d8acdb',
+  'A: 9.5k-29k wrong cells per run (2d/3d, np2/np4, CPU/kk); fix ave/grid 1,700-10,300; segfault when fix ablate post-processed before balance. B: 0 mismatches everywhere; no-balance and np1 runs byte-identical.', 'r2/R2-1.md'),
+ ('R2-2', 'FFT remap collective mode: idle-rank crash, rank mix-up giving wrong FFTs, leaked MPI groups and communicator, uninitialised 2d plan field', '80739203',
+  'A: SIGSEGV at remap3d_kokkos.cpp:689 on idle-rank collective plans; 2 groups leaked per plan. B: 1,488 harness runs match the CPU FFT bitwise, collective == point-to-point, 0 leaks; examples/fft unchanged.', 'r2/R2-2.md'),
+ ('R2-3', 'Surf counts in compute react/surf and Surf::init depended on the rank count', '8df7d59e',
+  'A: 25/26/28 and 600/978/1370 on 1/2/4 ranks. B: true count on every rank count; tallies bit-identical.', 'r2/R2-3.md'),
+ ('auto_sync', 'Particle/Grid/SurfKokkos::sync(Device) claimed the host while the device held a claim (Kokkos abort); grid lost restart custom values before wrap', 'cc4ae24f',
+  'A and pre-review: abort on custom-vector growth, adapt with custom grid vectors, and 4 stock examples/custom/*restart decks. B: all run and match the non-Kokkos run. Surf class unexercised (fixed on the LAMMPS precedent).', 'gpusim/GS-autosync.md'),
+ ('GPU-coh', 'Latent host/device coherence faults: custom vectors resized on the device, surf custom values never sent to the device on the first run, handles taken before sync, stale writes in emit destructors, unclaimed scratch edits', '3859618b',
+  'Split-memory detector: A shows watch/stale/poison reports on targeted decks; C is clean; 134 examples np1 + 21 np4 stats identical to stock.', 'gpusim/GS-coh.md'),
+ ('R8b', 'fix custom surf set / fix surf/temp wrote surf custom values on the host during a run without claiming them', '647697c1',
+  'A: watch reports on the 4 in.custom.circle.*.fix* decks at np1/np4. B: 0 reports; stats identical to stock; 130 other decks unchanged.', 'gpusim/GS-r8b.md'),
+]
+
+o.append('<section class="cluster"><div class="chead"><h2>Round 2: requested fixes and GPU split-memory findings</h2><span class="meta">6 fixes · all necessary and complete except where noted</span></div>')
+o.append('<div class="tbl"><table><thead><tr><th>Fix</th><th>Bug</th><th>Commit</th><th>Evidence</th></tr></thead><tbody>')
+for rid, bug, cm, ev, src in ROUND2:
+  o.append(f'<tr data-k="nc"><td class="id">{esc(rid)}</td><td>{code(bug)}</td><td class="id">{cm}</td><td class="ev">{code(ev)}<div style="font-size:.78rem;color:var(--muted);margin-top:4px">Record: <code>.kokkos-review/{src}</code></div></td></tr>')
+o.append('</tbody></table></div></section>')
+o.append(BACKOUT_HTML)
 o.append('<section class="note"><h2>Follow-ups found by A/B testing</h2><ul>')
 for line in followups.splitlines():
   if line.startswith('- '):
@@ -221,8 +285,8 @@ o.append('''<section style="display:flex;flex-direction:column;gap:12px"><h2>Met
 <div><h3>Builds</h3><p>A: commit e071055f. B: all review fixes. C: B plus follow-ups. Each as an OpenMP build with MPI stubs, and as a real-MPI build with Kokkos <code>DEBUG_BOUNDS_CHECK</code> so out-of-bounds view accesses abort.</p></div>
 <div><h3>Controls</h3><p>Positive control: an input on the buggy path where A fails (wrong value vs CPU or analytic, crash, bounds abort, NaN, hang, leak). Negative control: same code path without the trigger; A and B must agree.</p></div>
 <div><h3>Coverage</h3><p>Kernel paths (atomic, duplicated, sorted), 1 and 4 threads, 1 to 4 MPI ranks, 2D and 3D, each surface collision model. Standalone unit drivers for unreachable or library-only paths.</p></div>
-<div><h3>Regression</h3><p>All 141 example inputs with Kokkos on: thermo output identical between A and B except ambi, which now runs further; identical between B and the final build with all follow-up fixes (141/141).</p></div>
-<div><h3>Limits</h3><p>No GPU on the test machine, so bugs that need separate host and device memory cannot fail here. No <code>SPARTA_KOKKOS_EXACT</code> build was made.</p></div>
+<div><h3>Regression</h3><p>All 141 example inputs with Kokkos on: thermo output identical between A and B except ambi, which now runs further; identical between B and the final build with all follow-up fixes, and again after round 2 (141/141).</p></div>\n<div><h3>GPU memory</h3><p>Split-memory detector builds (separate host allocation, software DualView state machine; watch, stale, audit and AddressSanitizer poison modes) of the pre-fix and fixed code. All 134 examples at 1 rank and 21 at 4 ranks match stock stats on the fixed code.</p></div>
+<div><h3>Limits</h3><p>No GPU on the test machine. The split-memory tool reproduces most host/device coherence bugs, but not a kernel dereferencing a host pointer or host code touching device-only memory. No <code>SPARTA_KOKKOS_EXACT</code> build was made.</p></div>
 <div><h3>Records</h3><p>Per-fix evidence: <code>.kokkos-review/ab/AB*.md</code>. Fix list and commits: <code>.kokkos-review/FIXES.md</code>.</p></div>
 </div></section>
 </main>
