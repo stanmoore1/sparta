@@ -219,8 +219,16 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
     //   There is no host/device transfer to avoid here, so the device path
     //   only adds the irregular-comm plan rebuild.  Users can still ask for
     //   it with "package kokkos comm threaded".
+    //
+    //   That holds only when the host and device particle views share memory.
+    //   In mixed and single precision they do not: the host view keeps the
+    //   double Particle::OnePart layout, so the host path converts the whole
+    //   particle list device -> host -> device every step, even on 1 proc
+    //   with nothing to migrate (circle example, mixed: Comm 1.47 s vs
+    //   0.008 s for the device path, loop time 2.18 s vs 0.71 s).  The
+    //   device path never touches the host particles, so use it there.
 
-    comm_serial = 1;
+    comm_serial = tdual_particle_1d::NEED_TRANSFORM ? 0 : 1;
     atomic_reduction = 0;
   }
 
