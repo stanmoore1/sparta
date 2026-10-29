@@ -749,10 +749,12 @@ void FixAblate::create_surfs(int outflag)
     grid->remove_ghosts();
 
     // cleanup() can add/delete tris, so reset surf->nsurf and surf->nown
+    //   and resize custom per-surf data again (no-op if nown is unchanged)
 
     surf->nown = surf->nlocal;
     nlocal = surf->nlocal;
     MPI_Allreduce(&nlocal,&surf->nsurf,1,MPI_SPARTA_BIGINT,MPI_SUM,world);
+    surf->reallocate_custom();
   }
 
   // assign optional surf group to masks of new surfs
