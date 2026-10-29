@@ -1212,7 +1212,8 @@ void UpdateKokkos::operator()(TagUpdateMove<DIM,SURF,REACT,OPT,ATOMIC_REDUCTION>
   bool hitflag;
   int icell,icell_original,outface,bflag,nflag,pflag,itmp;
   int side,minsurf,nsurf,cflag,isurf,exclude,stuck_iterate;
-  KK_POS_FLOAT dtremain,frac,newfrac,param,minparam,rnew,dtsurf,tc,tmp;
+  KK_POS_FLOAT dtremain,frac,newfrac,param,minparam,rnew,dtsurf;
+  GeometryKokkos::axi_float tc,tmp;   // axisymmetric cell edge crossing times
   KK_POS_FLOAT xnew[3]; KK_POS_FLOAT xhold[3]; KK_POS_FLOAT xc[3]; KK_FLOAT vc[3]; KK_POS_FLOAT minxc[3]; KK_FLOAT minvc[3];
   KK_POS_FLOAT *x; KK_FLOAT *v;
   TriKK *tri;

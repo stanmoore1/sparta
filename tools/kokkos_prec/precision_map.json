@@ -435,6 +435,12 @@
         "jerot": "float",
         "ievib": "float",
         "jevib": "float"
+      },
+      "geometry_kokkos.h": {
+        "t1": "double",
+        "t2": "double",
+        "tone": "double",
+        "ttwo": "double"
       }
     },
     "post_substitutions": {},

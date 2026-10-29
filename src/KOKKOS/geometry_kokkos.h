@@ -29,6 +29,14 @@ enum{OUTSIDE,INSIDE,ONSURF2OUT,ONSURF2IN};    // same as Update
 
 namespace GeometryKokkos {
 
+// the quadratic equations of the axisymmetric crossings below subtract
+//   nearly equal squares of coordinates (b*b - a*c); in single precision
+//   that round-off can push a crossing time past the end of the move and
+//   the particle passes through the surface, so they are solved in double
+//   (a no-op in double and mixed precision, where positions are double)
+
+typedef double axi_float;  // KK_DOUBLE: cancellation in the axisymmetric quadratics
+
 /* ----------------------------------------------------------------------
    tolerance of the point-in-line and point-in-triangle tests below, which
      compare a dot product of two length vectors of the element with 0
@@ -174,22 +182,23 @@ bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
 
 KOKKOS_INLINE_FUNCTION
 bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
-                         KK_POS_FLOAT yhoriz, int &nc, KK_POS_FLOAT &t1, KK_POS_FLOAT &t2)
+                         KK_POS_FLOAT yhoriz, int &nc, axi_float &t1, axi_float &t2)
 {
-  KK_POS_FLOAT a = v[1]*v[1] + v[2]*v[2];
-  if (a == static_cast<KK_POS_FLOAT>(0.0)) return false;
-  KK_POS_FLOAT b = -v[1]*x[1];
-  KK_POS_FLOAT arg = yhoriz*yhoriz*a - v[2]*v[2]*x[1]*x[1];
-  if (arg < static_cast<KK_POS_FLOAT>(0.0)) return false;
-  KK_POS_FLOAT sarg = Kokkos::sqrt(arg);
-  KK_POS_FLOAT c = x[1]*x[1] - yhoriz*yhoriz;
+  const axi_float x1 = x[1], vy = v[1], vz = v[2], yh = yhoriz;
+  axi_float a = vy*vy + vz*vz;
+  if (a == static_cast<axi_float>(0.0)) return false;
+  axi_float b = -vy*x1;
+  axi_float arg = yh*yh*a - vz*vz*x1*x1;
+  if (arg < static_cast<axi_float>(0.0)) return false;
+  axi_float sarg = Kokkos::sqrt(arg);
+  axi_float c = x1*x1 - yh*yh;
 
   nc = 2;
-  KK_POS_FLOAT tone, ttwo;
-  if (b > static_cast<KK_POS_FLOAT>(0.0)) {
+  axi_float tone, ttwo;
+  if (b > static_cast<axi_float>(0.0)) {
     ttwo = (b + sarg) / a;
     tone = c / (b + sarg);
-  } else if (b < static_cast<KK_POS_FLOAT>(0.0)) {
+  } else if (b < static_cast<axi_float>(0.0)) {
     tone = (b - sarg) / a;
     ttwo = c / (b - sarg);
   } else {
@@ -221,10 +230,10 @@ bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
 
   // require first collision time >= 0.0 and <= tdelta
 
-  if (t1 < static_cast<KK_POS_FLOAT>(0.0) || t1 > tdelta) {
+  if (t1 < 0.0 || t1 > tdelta) {
     if (nc == 1) return false;
     t1 = t2;
-    if (t1 < static_cast<KK_POS_FLOAT>(0.0) || t1 > tdelta) return false;
+    if (t1 < 0.0 || t1 > tdelta) return false;
     nc = 1;
   }
 
@@ -262,7 +271,7 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
   // if 2, set t1 and t2 with t1 < t2
 
   int nc;
-  KK_POS_FLOAT t1,t2;
+  axi_float t1,t2;
 
   // vertical line segment
   // no collision if starting on surface
@@ -273,8 +282,8 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
     else if (outface == 1 && v1[0] == hi[0]) t1 = tdelta;
     else {
       if (v[0] == static_cast<KK_POS_FLOAT>(0.0)) return false;
-      t1 = (v1[0] - x[0]) / v[0];
-      if (selfflag && t1 == static_cast<KK_POS_FLOAT>(0.0)) return false;
+      t1 = (static_cast<axi_float>(v1[0]) - x[0]) / v[0];
+      if (selfflag && t1 == 0.0) return false;
     }
 
   // horizontal line segment
@@ -294,31 +303,32 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
   // general line segment
 
   } else {
-    KK_POS_FLOAT x21 = v2[0] - v1[0];
-    KK_POS_FLOAT y21 = v2[1] - v1[1];
-    KK_POS_FLOAT x21sq = x21*x21;
-    KK_POS_FLOAT y21sq = y21*y21;
-    KK_POS_FLOAT dconst = x21*v1[1] - y21*v1[0];
+    const axi_float x0 = x[0], x1 = x[1], vx = v[0], vy = v[1], vz = v[2];
+    axi_float x21 = static_cast<axi_float>(v2[0]) - v1[0];
+    axi_float y21 = static_cast<axi_float>(v2[1]) - v1[1];
+    axi_float x21sq = x21*x21;
+    axi_float y21sq = y21*y21;
+    axi_float dconst = x21*v1[1] - y21*v1[0];
 
-    KK_POS_FLOAT a = x21sq*(v[1]*v[1] + v[2]*v[2]) - y21sq*v[0]*v[0];
-    KK_POS_FLOAT b = x21sq*x[1]*v[1] - y21sq*x[0]*v[0] - y21*v[0]*dconst;
-    KK_POS_FLOAT c = x21sq*x[1]*x[1] - y21sq*x[0]*x[0] -
-      static_cast<KK_POS_FLOAT>(2.0)*y21*x[0]*dconst - dconst*dconst;
+    axi_float a = x21sq*(vy*vy + vz*vz) - y21sq*vx*vx;
+    axi_float b = x21sq*x1*vy - y21sq*x0*vx - y21*vx*dconst;
+    axi_float c = x21sq*x1*x1 - y21sq*x0*x0 -
+      static_cast<axi_float>(2.0)*y21*x0*dconst - dconst*dconst;
 
-    if (a == static_cast<KK_POS_FLOAT>(0.0)) {
-      if (b == static_cast<KK_POS_FLOAT>(0.0)) return false;
+    if (a == static_cast<axi_float>(0.0)) {
+      if (b == static_cast<axi_float>(0.0)) return false;
       nc = 1;
-      t1 = t2 = -static_cast<KK_POS_FLOAT>(0.5) * c / b;
+      t1 = t2 = -static_cast<axi_float>(0.5) * c / b;
     } else {
-      KK_POS_FLOAT arg = b*b - a*c;
-      if (arg < static_cast<KK_POS_FLOAT>(0.0)) return false;
-      KK_POS_FLOAT sarg = Kokkos::sqrt(arg);
+      axi_float arg = b*b - a*c;
+      if (arg < static_cast<axi_float>(0.0)) return false;
+      axi_float sarg = Kokkos::sqrt(arg);
       nc = 2;
-      KK_POS_FLOAT tone, ttwo;
-      if (b > static_cast<KK_POS_FLOAT>(0.0)) {
+      axi_float tone, ttwo;
+      if (b > static_cast<axi_float>(0.0)) {
         tone = (-b - sarg) / a;
         ttwo = c / (-b - sarg);
-      } else if (b < static_cast<KK_POS_FLOAT>(0.0)) {
+      } else if (b < static_cast<axi_float>(0.0)) {
         tone = c / (-b + sarg);
         ttwo = (-b + sarg) / a;
       } else {
@@ -355,7 +365,7 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
     // test for collision time >= 0.0 and <= tdelta
 
     if (t1 > tdelta) return false;
-    if (t1 < static_cast<KK_POS_FLOAT>(0.0)) {
+    if (t1 < 0.0) {
       if (nc == 1) return false;
       t1 = t2;
       nc--;
@@ -384,16 +394,17 @@ bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
 
     xc[0] = x[0] + t1*v[0];
     if (v1[0] == v2[0]) xc[0] = v1[0];
-    KK_POS_FLOAT ynew = x[1] + t1*v[1];
-    KK_POS_FLOAT znew = x[2] + t1*v[2];
-    xc[1] = Kokkos::sqrt(ynew*ynew + znew*znew);
+    const axi_float ynew = x[1] + t1*v[1];
+    const axi_float znew = x[2] + t1*v[2];
+    const axi_float rc = Kokkos::sqrt(ynew*ynew + znew*znew);
+    xc[1] = rc;
     if (v1[1] == v2[1]) xc[1] = v1[1];
     xc[2] = 0.0;
 
     vc[0] = v[0];
-    if (xc[1] > static_cast<KK_POS_FLOAT>(0.0)) {
-      KK_POS_FLOAT rn = ynew / xc[1];
-      KK_POS_FLOAT wn = znew / xc[1];
+    if (rc > static_cast<axi_float>(0.0)) {
+      const axi_float rn = ynew / rc;
+      const axi_float wn = znew / rc;
       vc[1] = v[1]*rn + v[2]*wn;
       vc[2] = -v[1]*wn + v[2]*rn;
     } else {
