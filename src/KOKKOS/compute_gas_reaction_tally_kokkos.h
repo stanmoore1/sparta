@@ -76,9 +76,9 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void gas_tally_kk(int icell, int reaction,
-                    Particle::OnePart *iorig, Particle::OnePart *jorig,
-                    Particle::OnePart *ip, Particle::OnePart *jp,
-                    Particle::OnePart *kp) const
+                    OnePartKK *iorig, OnePartKK *jorig,
+                    OnePartKK *ip, OnePartKK *jp,
+                    OnePartKK *kp) const
   {
     // this compute tallies only collisions that induce a reaction;
     //   plain collisions belong to compute gas/collision/tally
@@ -126,12 +126,12 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
       case VX1POST:    d_array_tally(itally,m) = ip->v[0]; break;
       case VY1POST:    d_array_tally(itally,m) = ip->v[1]; break;
       case VZ1POST:    d_array_tally(itally,m) = ip->v[2]; break;
-      case VX2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[0]; break;
-      case VY2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[1]; break;
-      case VZ2POST:    d_array_tally(itally,m) = (jp == NULL) ? 0.0 : jp->v[2]; break;
-      case VX3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[0]; break;
-      case VY3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[1]; break;
-      case VZ3POST:    d_array_tally(itally,m) = (kp == NULL) ? 0.0 : kp->v[2]; break;
+      case VX2POST:    d_array_tally(itally,m) = (jp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : jp->v[0]; break;
+      case VY2POST:    d_array_tally(itally,m) = (jp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : jp->v[1]; break;
+      case VZ2POST:    d_array_tally(itally,m) = (jp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : jp->v[2]; break;
+      case VX3POST:    d_array_tally(itally,m) = (kp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : kp->v[0]; break;
+      case VY3POST:    d_array_tally(itally,m) = (kp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : kp->v[1]; break;
+      case VZ3POST:    d_array_tally(itally,m) = (kp == NULL) ? static_cast<KK_ACC_FLOAT>(0.0) : kp->v[2]; break;
       }
     }
   }
@@ -144,8 +144,8 @@ class ComputeGasReactionTallyKokkos : public ComputeGasReactionTally, public Kok
        VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST,VX3POST,VY3POST,VZ3POST};
 
   int maxtally_host;                 // rows array_tally is allocated for
-  DAT::tdual_float_2d_lr k_array_tally;
-  DAT::t_float_2d_lr d_array_tally;
+  DAT::ttransform_kkacc_2d_lr k_array_tally;
+  DAT::t_kkacc_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;
   int ntally_mark;
   HAT::t_int_scalar h_ntally;

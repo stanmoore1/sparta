@@ -36,13 +36,13 @@ class FixTempGlobalRescaleKokkos : public FixTempGlobalRescale {
   void end_of_step() override;
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixTempGlobalRescale_reduce, const int&, double&) const;
+  void operator()(TagFixTempGlobalRescale_reduce, const int&, double&) const;  // KK_DOUBLE: reduction value
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixTempGlobalRescale_scale, const int&) const;
 
  private:
-  double vscale;
+  KK_FLOAT vscale;  // host computed scale factor, applied to KK velocities
 
   t_particle_1d d_particles;
   t_species_1d d_species;

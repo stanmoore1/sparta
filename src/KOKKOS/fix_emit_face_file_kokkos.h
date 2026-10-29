@@ -116,25 +116,25 @@ class FixEmitFaceFileKokkos : public FixEmitFaceFile {
   //   on writing through those pointers: the file mesh setup stays entirely
   //   host-side and is flattened once, at task-build time, not per step.
 
-  DAT::tdual_float_2d_lr k_ntargetsp;   // # of mols to insert for each species
-  DAT::tdual_float_2d_lr k_vscale;      // vscale for each species
-  DAT::tdual_float_2d_lr k_cummulative; // cummulative fraction for each species
-  DAT::tdual_float_2d_lr k_fraction;    // fraction for each species
-  DAT::t_float_2d_lr d_ntargetsp;
-  DAT::t_float_2d_lr d_vscale;
-  DAT::t_float_2d_lr d_cummulative;
-  DAT::t_float_2d_lr d_fraction;
+  DAT::ttransform_kkacc_2d_lr k_ntargetsp;   // # of mols to insert for each species
+  DAT::ttransform_kkacc_2d_lr k_vscale;      // vscale for each species
+  DAT::ttransform_kkacc_2d_lr k_cummulative; // cummulative fraction for each species
+  DAT::ttransform_kkacc_2d_lr k_fraction;    // fraction for each species
+  DAT::t_kkacc_2d_lr d_ntargetsp;
+  DAT::t_kkacc_2d_lr d_vscale;
+  DAT::t_kkacc_2d_lr d_cummulative;
+  DAT::t_kkacc_2d_lr d_fraction;
 
   Kokkos::View<int*, DeviceType> d_ninsert;
   DAT::t_int_1d d_task2cand;
 
-  DAT::t_float_2d d_x;
-  DAT::t_float_1d d_beta_un;
-  DAT::t_float_1d d_theta;
-  DAT::t_float_1d d_vr;
-  DAT::t_float_1d d_erot;
-  DAT::t_float_1d d_evib;
-  DAT::t_float_1d d_dtremain;
+  DAT::t_kkpos_2d d_x;
+  DAT::t_kkfloat_1d d_beta_un;
+  DAT::t_kkfloat_1d d_theta;
+  DAT::t_kkfloat_1d d_vr;
+  DAT::t_kkfloat_1d d_erot;
+  DAT::t_kkfloat_1d d_evib;
+  DAT::t_kkpos_1d d_dtremain;
   DAT::t_int_1d   d_id;
   DAT::t_int_1d   d_isp;
   DAT::t_int_1d   d_task;
@@ -150,7 +150,7 @@ class FixEmitFaceFileKokkos : public FixEmitFaceFile {
   t_cinfo_1d d_cinfo;
   DAT::t_int_2d d_plist;
   DAT::t_int_1d d_cellcount;
-  DAT::t_float_scalar d_tempmax;
+  DAT::t_kkfloat_scalar d_tempmax;
   int plist_descending;   // 1 if the host walks d_plist high index -> low
 
   void create_tasks() override;

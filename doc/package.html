@@ -24,7 +24,7 @@
     keywords = <I>comm</I> or <I>react/extra</I> or <I>react/retry</I> or <I>gpu/aware</I>
       <I>comm</I> value = <I>threaded</I> or <I>serial</I>
         threaded = perform pack/unpack using KOKKOS (e.g. on GPU or using OpenMP) (default for GPUs)
-        serial = perform communication pack/unpack in non-KOKKOS mode (default for CPUs)
+        serial = perform communication pack/unpack in non-KOKKOS mode (default for CPUs in double precision)
       <I>react/extra</I> = <I>factor</I>
         factor = increase memory used for collisions by this factor (default)
       <I>react/retry</I> = <I>yes</I> or <I>no</I>
@@ -116,6 +116,11 @@ fastest. When using GPUs, the <I>threaded</I> value will typically be
 optimal. In this case data can stay on the GPU for many timesteps
 without being fully moved between the host and GPU.
 </P>
+<P>In a mixed or single precision KOKKOS build (see <A HREF = "Section_accelerate.html#acc_3">Section 5.3</A>) the host keeps
+particles in double precision and the device in KK precision, so the
+<I>serial</I> option converts every particle between the two each
+timestep.  <I>Threaded</I> is therefore the default on CPUs in those builds.
+</P>
 <P>The <I>gpu/aware</I> keyword chooses whether GPU-aware MPI will be used. When 
 this keyword is set to <I>on</I>, buffers in GPU memory are passed directly 
 through MPI send/receive calls. This can reduce overhead of first 
@@ -142,7 +147,7 @@ setting</A>
 <P><B>Default:</B>
 </P>
 <P>For the KOKKOS package, the option defaults are react/extra = 1.1,
-react/retry = no, and gpu/aware yes. For CPUs: comm = serial, and for
+react/retry = no, and gpu/aware yes. For CPUs: comm = serial (threaded in mixed or single precision), and for
 GPUs: comm = threaded.  These settings are made automatically by the
 required "-k on" <A HREF = "Section_start.html#start_7">command-line switch</A>. You
 can change them by using the package kokkos command in your input script

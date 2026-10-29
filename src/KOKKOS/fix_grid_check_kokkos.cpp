@@ -108,9 +108,9 @@ void FixGridCheckKokkos::end_of_step()
     }
 
     // does particle coord match icell bounds
-    double* lo = d_cells[icell].lo;
-    double* hi = d_cells[icell].hi;
-    double* x = d_particles[i].x;
+    KK_POS_FLOAT* lo = d_cells[icell].lo;
+    KK_POS_FLOAT* hi = d_cells[icell].hi;
+    KK_POS_FLOAT* x = d_particles[i].x;
     if (x[0] < lo[0] || x[0] > hi[0] ||
         x[1] < lo[1] || x[1] > hi[1] ||
         x[2] < lo[2] || x[2] > hi[2]) {

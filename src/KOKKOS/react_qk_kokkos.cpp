@@ -54,7 +54,7 @@ void ReactQKKokkos::init()
   // flatten VSS omega for all species pairs to device
 
   int nspecies = particle->nspecies;
-  d_omega = DAT::t_float_2d("react/qk:omega",nspecies,nspecies);
+  d_omega = DAT::t_kkfloat_2d("react/qk:omega",nspecies,nspecies);
   auto h_omega = Kokkos::create_mirror_view(d_omega);
   for (int i = 0; i < nspecies; i++)
     for (int j = 0; j < nspecies; j++)

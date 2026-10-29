@@ -65,7 +65,7 @@ class SurfCollideTDKokkos : public SurfCollideTD {
 
   RanKnuth* random_backup;
 
-  DAT::t_float_1d d_t_persurf;
+  DAT::t_kkfloat_1d d_t_persurf;
 
   // bigint scalars: mirror SurfCollide::nsingle and Surf::nreact_one,
   //   which can exceed 2^31 in one step at large per-proc particle counts
@@ -125,8 +125,8 @@ class SurfCollideTDKokkos : public SurfCollideTD {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &,
-                                    int isurf, const double *norm, int isr, int &reaction,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, KK_POS_FLOAT &,
+                                    int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     if (ATOMIC_REDUCTION == 0)
@@ -138,13 +138,13 @@ class SurfCollideTDKokkos : public SurfCollideTD {
     // reaction = 1 to N for which reaction took place, 0 for none
     // velreset = 1 if reaction reset post-collision velocity, else 0
 
-    Particle::OnePart iorig;
-    Particle::OnePart *jp = NULL;
+    OnePartKK iorig;
+    OnePartKK *jp = NULL;
     reaction = 0;
     int velreset = 0;
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -170,10 +170,10 @@ class SurfCollideTDKokkos : public SurfCollideTD {
 
     // set temperature of isurf if VARSURF or CUSTOM
 
-    double tsurf_local = tsurf;
+    KK_FLOAT tsurf_local = tsurf;
     if (persurf_temperature) {
       tsurf_local = d_t_persurf[isurf];
-      if (tsurf_local <= 0.0) Kokkos::abort("Surf_collide tsurf <= 0.0");
+      if (tsurf_local <= static_cast<KK_FLOAT>(0.0)) Kokkos::abort("Surf_collide tsurf <= 0.0");
     }
 
     // TD reflection for each particle
@@ -226,55 +226,55 @@ class SurfCollideTDKokkos : public SurfCollideTD {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void td(Particle::OnePart *p, const double *norm, const double twall) const
+  void td(OnePartKK *p, const KK_POS_FLOAT *norm, const KK_FLOAT twall) const
   {
     rand_type rand_gen = rand_pool.get_state();
 
-    double tangent1[3],tangent2[3];
+    KK_FLOAT tangent1[3],tangent2[3];
     int ispecies = p->ispecies;
 
-    double *v = p->v;
-    double dot = MathExtraKokkos::dot3(v,norm);
+    KK_FLOAT *v = p->v;
+    KK_FLOAT dot = MathExtraKokkos::dot3(v,norm);
 
     tangent1[0] = v[0] - dot*norm[0];
     tangent1[1] = v[1] - dot*norm[1];
     tangent1[2] = v[2] - dot*norm[2];
 
-    if (MathExtraKokkos::lensq3(tangent1) == 0.0) {
-      tangent2[0] = rand_gen.drand();
-      tangent2[1] = rand_gen.drand();
-      tangent2[2] = rand_gen.drand();
+    if (MathExtraKokkos::lensq3(tangent1) == static_cast<KK_FLOAT>(0.0)) {
+      tangent2[0] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[1] = static_cast<KK_FLOAT>(rand_gen.drand());
+      tangent2[2] = static_cast<KK_FLOAT>(rand_gen.drand());
       MathExtraKokkos::cross3(norm,tangent2,tangent1);
     }
 
     MathExtraKokkos::norm3(tangent1);
     MathExtraKokkos::cross3(norm,tangent1,tangent2);
 
-    double mass = d_species[ispecies].mass;
-    double E_i = 0.5 * mass * MathExtraKokkos::lensq3(v);
+    KK_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT E_i = static_cast<KK_FLOAT>(0.5) * mass * MathExtraKokkos::lensq3(v);
 
-    double E_t = boltz * twall;
+    KK_FLOAT E_t = boltz * twall;
     if (bond_flag) E_t += boltz*bond_trans;
     if (initen_flag) E_t += E_i*initen_trans;
 
-    double E_n = E_t;
+    KK_FLOAT E_n = E_t;
     if (barrier_flag) E_n += boltz*barrier_val;
 
-    double vrm_n = sqrt(2.0*E_n / mass);
-    double vrm_t = sqrt(2.0*E_t / mass);
-    double vperp = vrm_n * sqrt(-log(rand_gen.drand()));
+    KK_FLOAT vrm_n = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0)*E_n / mass);
+    KK_FLOAT vrm_t = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0)*E_t / mass);
+    KK_FLOAT vperp = vrm_n * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
 
-    double theta = MathConst::MY_2PI * rand_gen.drand();
-    double vtangent = vrm_t * sqrt(-log(rand_gen.drand()));
-    double vtan1 = vtangent * sin(theta);
-    double vtan2 = vtangent * cos(theta);
+    KK_FLOAT theta = static_cast<KK_FLOAT>(MathConst::MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
+    KK_FLOAT vtangent = vrm_t * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
+    KK_FLOAT vtan1 = vtangent * Kokkos::sin(theta);
+    KK_FLOAT vtan2 = vtangent * Kokkos::cos(theta);
 
     v[0] = vperp*norm[0] + vtan1*tangent1[0] + vtan2*tangent2[0];
     v[1] = vperp*norm[1] + vtan1*tangent1[1] + vtan2*tangent2[1];
     v[2] = vperp*norm[2] + vtan1*tangent1[2] + vtan2*tangent2[2];
 
-    double twall_rot = twall;
-    double twall_vib = twall;
+    KK_FLOAT twall_rot = twall;
+    KK_FLOAT twall_vib = twall;
 
     if (bond_flag) {
       twall_rot += bond_rot;
@@ -298,29 +298,29 @@ class SurfCollideTDKokkos : public SurfCollideTD {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  double erot(int isp, double temp_thermal, rand_type &rand_gen, double boltz) const
+  KK_FLOAT erot(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const  // KK_DOUBLE: host constant
   {
-    double eng,a,erm,b;
+    KK_FLOAT eng,a,erm,b;
 
     if (rotstyle == NONE) return 0.0;
     if (d_species[isp].rotdof < 2) return 0.0;
 
     if (rotstyle == DISCRETE && d_species[isp].rotdof == 2) {
-      int irot = -log(rand_gen.drand()) * temp_thermal /
+      int irot = -Kokkos::log(rand_gen.drand()) * temp_thermal /
         d_species[isp].rottemp[0];
       eng = irot * boltz * d_species[isp].rottemp[0];
     } else if (rotstyle == SMOOTH && d_species[isp].rotdof == 2) {
-      eng = -log(rand_gen.drand()) * boltz * temp_thermal;
+      eng = -Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())) * boltz * temp_thermal;
     } else {
-      a = 0.5*d_species[isp].rotdof-1.0;
+      a = static_cast<KK_FLOAT>(0.5)*d_species[isp].rotdof-static_cast<KK_FLOAT>(1.0);
       // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
       // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
       // at 10 kT, which is below the mean for large dof
-      double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
+      KK_FLOAT xmax = a + static_cast<KK_FLOAT>(1.0) + static_cast<KK_FLOAT>(9.0)*Kokkos::sqrt(a+static_cast<KK_FLOAT>(1.0));
       while (1) {
-        erm = xmax*rand_gen.drand();
-        b = pow(erm/a,a) * exp(a-erm);
-        if (b > rand_gen.drand()) break;
+        erm = xmax*static_cast<KK_FLOAT>(rand_gen.drand());
+        b = Kokkos::pow(erm/a,a) * Kokkos::exp(a-erm);
+        if (b > static_cast<KK_FLOAT>(rand_gen.drand())) break;
       }
       eng = erm * boltz * temp_thermal;
     }
@@ -336,9 +336,9 @@ class SurfCollideTDKokkos : public SurfCollideTD {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  double evib(int isp, double temp_thermal, rand_type &rand_gen, double boltz) const
+  KK_FLOAT evib(int isp, KK_FLOAT temp_thermal, rand_type &rand_gen, double boltz) const  // KK_DOUBLE: host constant
   {
-    double eng,a,erm,b;
+    KK_FLOAT eng,a,erm,b;
 
     if (vibstyle == NONE || d_species[isp].vibdof < 2) return 0.0;
 
@@ -348,22 +348,22 @@ class SurfCollideTDKokkos : public SurfCollideTD {
     eng = 0.0;
 
     if (vibstyle == DISCRETE && d_species[isp].vibdof == 2) {
-      int ivib = -log(rand_gen.drand()) * temp_thermal /
+      int ivib = -Kokkos::log(rand_gen.drand()) * temp_thermal /
         d_species[isp].vibtemp[0];
       eng = ivib * boltz * d_species[isp].vibtemp[0];
     } else if (vibstyle == SMOOTH || d_species[isp].vibdof >= 2) {
       if (d_species[isp].vibdof == 2)
-        eng = -log(rand_gen.drand()) * boltz * temp_thermal;
+        eng = -Kokkos::log(rand_gen.drand()) * boltz * temp_thermal;
       else if (d_species[isp].vibdof > 2) {
-        a = 0.5*d_species[isp].vibdof-1.;
+        a = static_cast<KK_FLOAT>(0.5)*d_species[isp].vibdof-static_cast<KK_FLOAT>(1.);
         // candidate range must cover the tail of x^a*exp(-x) (mode a, mean a+1,
         // std dev sqrt(a+1)); scale the cut-off with dof rather than fixing it
         // at 10 kT, which is below the mean for large dof
-        double xmax = a + 1.0 + 9.0*sqrt(a+1.0);
+        KK_FLOAT xmax = a + static_cast<KK_FLOAT>(1.0) + static_cast<KK_FLOAT>(9.0)*Kokkos::sqrt(a+static_cast<KK_FLOAT>(1.0));
         while (1) {
-          erm = xmax*rand_gen.drand();
-          b = pow(erm/a,a) * exp(a-erm);
-          if (b > rand_gen.drand()) break;
+          erm = xmax*static_cast<KK_FLOAT>(rand_gen.drand());
+          b = Kokkos::pow(erm/a,a) * Kokkos::exp(a-erm);
+          if (b > static_cast<KK_FLOAT>(rand_gen.drand())) break;
         }
         eng = erm * boltz * temp_thermal;
       }

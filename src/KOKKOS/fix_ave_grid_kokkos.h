@@ -93,29 +93,29 @@ class FixAveGridKokkos : public FixAveGrid, public KokkosBase {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixAveGrid_Norm_array_grid, const int&) const;
 
-  DAT::tdual_float_1d k_vector_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
 
-  DAT::tdual_float_2d_lr k_array_grid;
+  DAT::ttransform_kkacc_2d_lr k_array_grid;
 
  private:
-  DAT::tdual_float_2d_lr k_tally;
-  DAT::t_float_2d_lr d_tally;
+  DAT::ttransform_kkacc_2d_lr k_tally;
+  DAT::t_kkacc_2d_lr d_tally;
 
-  DAT::t_float_2d_lr d_ctally;
+  DAT::t_kkacc_2d_lr d_ctally;
 
-  DAT::t_float_1d d_compute_vector;
-  DAT::t_float_2d_lr d_compute_array;
+  DAT::t_kkacc_1d d_compute_vector;
+  DAT::t_kkacc_2d_lr d_compute_array;
 
-  DAT::t_float_1d d_fix_vector;
-  DAT::t_float_2d_lr d_fix_array;
+  DAT::t_kkacc_1d d_fix_vector;
+  DAT::t_kkacc_2d_lr d_fix_array;
 
   t_cinfo_1d d_cinfo;
 
-  DAT::tdual_float_1d k_numap;
-  DAT::t_float_1d d_numap;
+  DAT::ttransform_kkacc_1d k_numap;
+  DAT::t_kkacc_1d d_numap;
 
-  DAT::tdual_float_2d k_umap,k_uomap;
-  DAT::t_float_2d d_umap,d_uomap;
+  DAT::ttransform_kkacc_2d k_umap,k_uomap;
+  DAT::t_kkacc_2d d_umap,d_uomap;
 
   int j,k,kk,jm1,m,ntally;
 

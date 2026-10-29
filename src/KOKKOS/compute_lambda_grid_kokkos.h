@@ -42,8 +42,8 @@ namespace SPARTA_NS {
     KOKKOS_INLINE_FUNCTION
     void operator()(TagComputeLambdaGrid_ComputePerGrid, const int&) const;
 
-    DAT::tdual_float_1d k_vector_grid;
-    DAT::tdual_float_2d_lr k_array_grid;
+    DAT::ttransform_kkacc_1d k_vector_grid;
+    DAT::ttransform_kkacc_2d_lr k_array_grid;
 
   private:
     int nspecies;
@@ -52,14 +52,14 @@ namespace SPARTA_NS {
     t_species_1d d_species;
     CollideVSSKokkos::t_params_2d_const d_params_const;
 
-    DAT::t_float_1d d_temp,d_lambda_grid;
-    DAT::t_float_2d d_array_grid1,d_lambdainv,d_tauinv;
-    DAT::t_float_2d_lr d_nrho;
+    DAT::t_kkacc_1d d_temp,d_lambda_grid;
+    DAT::t_kkacc_2d d_array_grid1,d_lambdainv,d_tauinv;
+    DAT::t_kkacc_2d_lr d_nrho;
 
-    DAT::t_float_2d d_diam,d_tref,d_omega;
+    DAT::t_kkacc_2d d_diam,d_tref,d_omega;
 
-    DAT::t_float_1d d_numap;
-    DAT::t_float_2d d_umap,d_uomap;
+    DAT::t_kkacc_1d d_numap;
+    DAT::t_kkacc_2d d_umap,d_uomap;
 
     DAT::t_int_1d d_output_order;
 };

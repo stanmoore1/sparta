@@ -325,15 +325,15 @@ void FixEmitFaceFileKokkos::perform_task()
   //   see Bird 1994, p 259, eq 12.5
 
   if (d_x.extent(0) < ncands || d_x.extent(1) < l_dimension)
-    d_x = DAT::t_float_2d("emit/face/file:x", ncands, l_dimension);
+    d_x = DAT::t_kkpos_2d("emit/face/file:x", ncands, l_dimension);
 
   if (d_task.extent(0) < ncands) {
-    d_beta_un  = DAT::t_float_1d("emit/face/file:beta_un", ncands);
-    d_theta    = DAT::t_float_1d("emit/face/file:theta", ncands);
-    d_vr       = DAT::t_float_1d("emit/face/file:vr", ncands);
-    d_erot     = DAT::t_float_1d("emit/face/file:erot", ncands);
-    d_evib     = DAT::t_float_1d("emit/face/file:evib", ncands);
-    d_dtremain = DAT::t_float_1d("emit/face/file:dtremain", ncands);
+    d_beta_un  = DAT::t_kkfloat_1d("emit/face/file:beta_un", ncands);
+    d_theta    = DAT::t_kkfloat_1d("emit/face/file:theta", ncands);
+    d_vr       = DAT::t_kkfloat_1d("emit/face/file:vr", ncands);
+    d_erot     = DAT::t_kkfloat_1d("emit/face/file:erot", ncands);
+    d_evib     = DAT::t_kkfloat_1d("emit/face/file:evib", ncands);
+    d_dtremain = DAT::t_kkpos_1d("emit/face/file:dtremain", ncands);
     d_id       = DAT::t_int_1d("emit/face/file:id", ncands);
     d_isp      = DAT::t_int_1d("emit/face/file:isp", ncands);
     d_task     = DAT::t_int_1d("emit/face/file:task", ncands);
@@ -401,13 +401,13 @@ void FixEmitFaceFileKokkos::perform_task()
     Task task_i = ld_tasks(i);
 
     const int pcell = task_i.pcell;
-    double *vstream = task_i.vstream;
+    double *vstream = task_i.vstream;  // KK_DOUBLE: Task data is double
 
     auto isp = ld_isp(cand);
     auto vscale_val = ld_vscale(i, isp);
     auto ispecies = ld_mspecies(isp);
 
-    double x[3];
+    KK_POS_FLOAT x[3];
     for (int d = 0; d < l_dimension; ++d) x[d] = ld_x(cand, d);
     for (int d = l_dimension; d < 3; ++d) x[d] = 0;
 
@@ -419,10 +419,10 @@ void FixEmitFaceFileKokkos::perform_task()
     auto id = ld_id(cand);
     auto dtremain = ld_dtremain(cand);
 
-    double v[3];
+    KK_FLOAT v[3];
     v[l_ndim] = beta_un*vscale_val*l_normal_ndim + vstream[l_ndim];
-    v[l_pdim] = vr * sin(theta) + vstream[l_pdim];
-    v[l_qdim] = vr * cos(theta) + vstream[l_qdim];
+    v[l_pdim] = vr * Kokkos::sin(theta) + vstream[l_pdim];
+    v[l_qdim] = vr * Kokkos::cos(theta) + vstream[l_qdim];
 
     auto inew = ld_cands2new(cand);
     auto ilocal = nlocal_before + inew;
@@ -487,11 +487,11 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_ninsert, const int &i)
 
   if (perspecies) {
     for (int isp = 0; isp < nspecies; isp++) {
-      const double ntarget = d_ntargetsp(i,isp) + rand_gen.drand();
+      const KK_FLOAT ntarget = d_ntargetsp(i,isp) + static_cast<KK_FLOAT>(rand_gen.drand());
       d_ninsert(i * nspecies + isp) = static_cast<int> (ntarget);
     }
   } else {
-    const double ntarget = d_tasks(i).ntarget + rand_gen.drand();
+    const KK_FLOAT ntarget = d_tasks(i).ntarget + static_cast<KK_FLOAT>(rand_gen.drand());
     d_ninsert(i) = static_cast<int> (ntarget);
   }
 
@@ -508,16 +508,16 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
 
   Task task_i = d_tasks(i);
 
-  double *lo = task_i.lo;
-  double *hi = task_i.hi;
-  double *vstream = task_i.vstream;
+  double *lo = task_i.lo;  // KK_DOUBLE: Task data is double
+  double *hi = task_i.hi;  // KK_DOUBLE: Task data is double
+  double *vstream = task_i.vstream;  // KK_DOUBLE: Task data is double
 
-  const double temp_rot = task_i.temp_rot;
-  const double temp_vib = task_i.temp_vib;
+  const KK_FLOAT temp_rot = task_i.temp_rot;
+  const KK_FLOAT temp_vib = task_i.temp_vib;
 
   // normal is fix-wide for this style, not per task
 
-  const double indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
+  const KK_FLOAT indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
     vstream[2]*normal[2];
 
   if (perspecies) {
@@ -527,8 +527,8 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
       // per-task vscale, not the mixture's: the file can set a per-face
       //   temperature, which interpolate() folded into the task
 
-      const double vscale_val = d_vscale(i,isp);
-      const double scosine = indot / vscale_val;
+      const KK_FLOAT vscale_val = d_vscale(i,isp);
+      const KK_FLOAT scosine = indot / vscale_val;
 
       const int ninsert = d_ninsert(i * nspecies + isp);
       const int start = d_task2cand(i * nspecies + isp);
@@ -537,12 +537,12 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
       for (int m = 0; m < ninsert; m++) {
         const int cand = start + m;
 
-        double x[3];
-        x[0] = lo[0] + rand_gen.drand() * (hi[0]-lo[0]);
+        KK_POS_FLOAT x[3];
+        x[0] = lo[0] + static_cast<KK_POS_FLOAT>(rand_gen.drand()) * (hi[0]-lo[0]);
         if (axisymmetric)
-          x[1] = sqrt(lo[1]*lo[1] +
+          x[1] = Kokkos::sqrt(lo[1]*lo[1] +
                       rand_gen.drand() * (hi[1]*hi[1]-lo[1]*lo[1]));
-        else x[1] = lo[1] + rand_gen.drand() * (hi[1]-lo[1]);
+        else x[1] = lo[1] + static_cast<KK_POS_FLOAT>(rand_gen.drand()) * (hi[1]-lo[1]);
         if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
         else x[2] = 0.0;
 
@@ -560,24 +560,24 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
         d_isp(cand) = isp;
         for (int d = 0; d < dimension; ++d) d_x(cand, d) = x[d];
 
-        double beta_un, normalized_distbn_fn;
+        KK_FLOAT beta_un, normalized_distbn_fn;
         do {
-          do beta_un = (6.0*rand_gen.drand() - 3.0);
-          while (beta_un + scosine < 0.0);
-          normalized_distbn_fn = 2.0 * (beta_un + scosine) /
-            (scosine + sqrt(scosine*scosine + 2.0)) *
-            exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
+          do beta_un = (static_cast<KK_FLOAT>(6.0)*static_cast<KK_FLOAT>(rand_gen.drand()) - static_cast<KK_FLOAT>(3.0));
+          while (beta_un + scosine < static_cast<KK_FLOAT>(0.0));
+          normalized_distbn_fn = static_cast<KK_FLOAT>(2.0) * (beta_un + scosine) /
+            (scosine + Kokkos::sqrt(scosine*scosine + static_cast<KK_FLOAT>(2.0))) *
+            Kokkos::exp(static_cast<KK_FLOAT>(0.5) + (static_cast<KK_FLOAT>(0.5)*scosine)*(scosine-Kokkos::sqrt(scosine*scosine + static_cast<KK_FLOAT>(2.0))) -
                 beta_un*beta_un);
-        } while (normalized_distbn_fn < rand_gen.drand());
+        } while (normalized_distbn_fn < static_cast<KK_FLOAT>(rand_gen.drand()));
 
         d_beta_un(cand) = beta_un;
 
-        d_theta(cand) = MY_2PI * rand_gen.drand();
-        d_vr(cand) = vscale_val * sqrt(-log(rand_gen.drand()));
+        d_theta(cand) = static_cast<KK_FLOAT>(MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
+        d_vr(cand) = vscale_val * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
         d_erot(cand) = particle_kk_copy.obj.erot(ispecies,temp_rot,rand_gen);
         d_evib(cand) = particle_kk_copy.obj.evib(ispecies,temp_vib,rand_gen);
         d_id(cand) = MAXSMALLINT*rand_gen.drand();
-        d_dtremain(cand) = dt_step * rand_gen.drand();
+        d_dtremain(cand) = dt_step * static_cast<KK_POS_FLOAT>(rand_gen.drand());
       }
 
       nsingle_reduce += nactual;
@@ -594,20 +594,20 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
       // per-task cummulative, not the mixture's: the file can set per-face
       //   species fractions, which interpolate() folded into the task
 
-      const double rn = rand_gen.drand();
+      const double rn = rand_gen.drand(); // KK_DOUBLE: selects an index, can round to 1 in float
       int isp = 0;
       while (d_cummulative(i,isp) < rn) isp++;
 
       const int ispecies = d_mspecies[isp];
-      const double vscale_val = d_vscale(i,isp);
-      const double scosine = indot / vscale_val;
+      const KK_FLOAT vscale_val = d_vscale(i,isp);
+      const KK_FLOAT scosine = indot / vscale_val;
 
-      double x[3];
-      x[0] = lo[0] + rand_gen.drand() * (hi[0]-lo[0]);
+      KK_POS_FLOAT x[3];
+      x[0] = lo[0] + static_cast<KK_POS_FLOAT>(rand_gen.drand()) * (hi[0]-lo[0]);
       if (axisymmetric)
-        x[1] = sqrt(lo[1]*lo[1] +
+        x[1] = Kokkos::sqrt(lo[1]*lo[1] +
                     rand_gen.drand() * (hi[1]*hi[1]-lo[1]*lo[1]));
-      else x[1] = lo[1] + rand_gen.drand() * (hi[1]-lo[1]);
+      else x[1] = lo[1] + static_cast<KK_POS_FLOAT>(rand_gen.drand()) * (hi[1]-lo[1]);
       if (dimension == 3) x[2] = lo[2] + rand_gen.drand() * (hi[2]-lo[2]);
       else x[2] = 0.0;
 
@@ -624,24 +624,24 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_perform_task,
       d_isp(cand) = isp;
       for (int d = 0; d < dimension; ++d) d_x(cand, d) = x[d];
 
-      double beta_un, normalized_distbn_fn;
+      KK_FLOAT beta_un, normalized_distbn_fn;
       do {
-        do beta_un = (6.0*rand_gen.drand() - 3.0);
-        while (beta_un + scosine < 0.0);
-        normalized_distbn_fn = 2.0 * (beta_un + scosine) /
-          (scosine + sqrt(scosine*scosine + 2.0)) *
-          exp(0.5 + (0.5*scosine)*(scosine-sqrt(scosine*scosine + 2.0)) -
+        do beta_un = (static_cast<KK_FLOAT>(6.0)*static_cast<KK_FLOAT>(rand_gen.drand()) - static_cast<KK_FLOAT>(3.0));
+        while (beta_un + scosine < static_cast<KK_FLOAT>(0.0));
+        normalized_distbn_fn = static_cast<KK_FLOAT>(2.0) * (beta_un + scosine) /
+          (scosine + Kokkos::sqrt(scosine*scosine + static_cast<KK_FLOAT>(2.0))) *
+          Kokkos::exp(static_cast<KK_FLOAT>(0.5) + (static_cast<KK_FLOAT>(0.5)*scosine)*(scosine-Kokkos::sqrt(scosine*scosine + static_cast<KK_FLOAT>(2.0))) -
               beta_un*beta_un);
-      } while (normalized_distbn_fn < rand_gen.drand());
+      } while (normalized_distbn_fn < static_cast<KK_FLOAT>(rand_gen.drand()));
 
       d_beta_un(cand) = beta_un;
 
-      d_theta(cand) = MY_2PI * rand_gen.drand();
-      d_vr(cand) = vscale_val * sqrt(-log(rand_gen.drand()));
+      d_theta(cand) = static_cast<KK_FLOAT>(MY_2PI) * static_cast<KK_FLOAT>(rand_gen.drand());
+      d_vr(cand) = vscale_val * Kokkos::sqrt(-Kokkos::log(static_cast<KK_FLOAT>(rand_gen.drand())));
       d_erot(cand) = particle_kk_copy.obj.erot(ispecies,temp_rot,rand_gen);
       d_evib(cand) = particle_kk_copy.obj.evib(ispecies,temp_vib,rand_gen);
       d_id(cand) = MAXSMALLINT*rand_gen.drand();
-      d_dtremain(cand) = dt_step * rand_gen.drand();
+      d_dtremain(cand) = dt_step * static_cast<KK_POS_FLOAT>(rand_gen.drand());
     }
 
     nsingle_reduce += nactual;
@@ -703,23 +703,23 @@ KOKKOS_INLINE_FUNCTION
 void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_inflow,
                                        const int &i) const
 {
-  double *vstream = d_tasks(i).vstream;
-  const double indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
+  const KK_FLOAT indot = vstream[0]*normal[0] + vstream[1]*normal[1] +
     vstream[2]*normal[2];
 
-  const double area = d_tasks(i).area;
-  const double nrho = d_tasks(i).nrho;
-  const double temp_thermal = d_tasks(i).temp_thermal;
+  const KK_FLOAT area = d_tasks(i).area;
+  const KK_FLOAT nrho = d_tasks(i).nrho;
+  const KK_FLOAT temp_thermal = d_tasks(i).temp_thermal;
   const int icell = d_tasks(i).icell;
 
   // fraction is per task here, since the file can set per-face species
   //   fractions -- fix emit/face uses the mixture-wide vector instead
 
-  double ntarget = 0.0;
+  KK_FLOAT ntarget = 0.0;
   for (int isp = 0; isp < nspecies; isp++) {
-    const double mass = d_species_all[d_mspecies[isp]].mass;
-    const double vscale = sqrt(2.0 * boltz * temp_thermal / mass);
-    double ntargetsp = mol_inflow_kokkos(indot,vscale,d_fraction(i,isp));
+    const KK_ACC_FLOAT mass = d_species_all[d_mspecies[isp]].mass;
+    const KK_FLOAT vscale = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0) * boltz * temp_thermal / mass);
+    KK_FLOAT ntargetsp = mol_inflow_kokkos(indot,vscale,d_fraction(i,isp));
     ntargetsp *= nrho*area*dt / fnum;
     ntargetsp /= d_cinfo[icell].weight;
     ntarget += ntargetsp;
@@ -799,7 +799,7 @@ void FixEmitFaceFileKokkos::subsonic_grid()
 
   if (!subsonic_warning) {
     if (d_tempmax.data() == nullptr)
-      d_tempmax = DAT::t_float_scalar("emit/face/file:tempmax");
+      d_tempmax = DAT::t_kkfloat_scalar("emit/face/file:tempmax");
     Kokkos::deep_copy(d_tempmax,0.0);
   }
 
@@ -821,8 +821,9 @@ void FixEmitFaceFileKokkos::subsonic_grid()
   // test if any task has invalid thermal temperature for first time
 
   if (!subsonic_warning) {
-    double tempmax = 0.0;
-    Kokkos::deep_copy(tempmax,d_tempmax);
+    KK_FLOAT tempmax_kk = 0.0;
+    Kokkos::deep_copy(tempmax_kk,d_tempmax);
+    const double tempmax = tempmax_kk;
     int temp_exceed_flag = 0;
     if (tempmax > TEMPLIMIT) temp_exceed_flag = 1;
     subsonic_warning = subsonic_temperature_check(temp_exceed_flag,tempmax);
@@ -842,10 +843,10 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
   // mv = mass*velocity terms, masstot = total mass
   // gamma = rotational/tranlational DOFs
 
-  double mv[4];
+  KK_ACC_FLOAT mv[4];
   mv[0] = mv[1] = mv[2] = mv[3] = 0.0;
-  double masstot = 0.0;
-  double gamma = 0.0;
+  KK_ACC_FLOAT masstot = 0.0;
+  KK_FLOAT gamma = 0.0;
 
   // d_plist orders particles by increasing index.  The non-Kokkos path walks
   // whichever linked list is current: the one Particle::sort() builds (head =
@@ -864,14 +865,14 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
 #endif
     const int ip = d_plist(icell,n);
     const int ispecies = d_particles[ip].ispecies;
-    const double mass = d_species_all[ispecies].mass;
-    const double *v = d_particles[ip].v;
+    const KK_ACC_FLOAT mass = d_species_all[ispecies].mass;
+    const KK_FLOAT *v = d_particles[ip].v;
     mv[0] += mass*v[0];
     mv[1] += mass*v[1];
     mv[2] += mass*v[2];
     mv[3] += mass * (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
     masstot += mass;
-    gamma += 1.0 + 2.0 / (3.0 + d_species_all[ispecies].rotdof);
+    gamma += static_cast<KK_FLOAT>(1.0) + static_cast<KK_FLOAT>(2.0) / (static_cast<KK_FLOAT>(3.0) + d_species_all[ispecies].rotdof);
   }
 
   // compute/store nrho, 3 temps, vstream for task
@@ -879,7 +880,7 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
   // if sound speed = 0.0 due to <= 1 particle in cell or
   //   all particles having COM velocity, set via mixture properties
 
-  double *vstream = d_tasks(i).vstream;
+  double *vstream = d_tasks(i).vstream;  // KK_DOUBLE: Task data is double
   if (np) {
     vstream[0] = mv[0] / masstot;
     vstream[1] = mv[1] / masstot;
@@ -889,49 +890,49 @@ void FixEmitFaceFileKokkos::operator()(TagFixEmitFaceFile_subsonic_grid,
   // press is the file-interpolated pressure for THIS task, which is what
   //   distinguishes this style from fix emit/face's global psubsonic
 
-  const double press = d_tasks(i).press;
+  const KK_FLOAT press = d_tasks(i).press;
 
-  double temp_thermal_cell;
+  KK_ACC_FLOAT temp_thermal_cell;
 
   if (subsonic_style == PTBOTH) {
     d_tasks(i).nrho = press / (boltz * d_tasks(i).temp_thermal);
     temp_thermal_cell = d_tasks(i).temp_thermal;
 
   } else {
-    const double nrho_cell = np * fnum / d_cinfo[icell].volume;
-    const double massrho_cell = masstot * fnum / d_cinfo[icell].volume;
+    const KK_ACC_FLOAT nrho_cell = np * fnum / d_cinfo[icell].volume;
+    const KK_ACC_FLOAT massrho_cell = masstot * fnum / d_cinfo[icell].volume;
     if (np > 1) {
-      const double ke = mv[3]/np -
+      const KK_ACC_FLOAT ke = mv[3]/np -
         (mv[0]*mv[0] + mv[1]*mv[1] + mv[2]*mv[2])/np/masstot;
       temp_thermal_cell = tprefactor * ke;
     } else temp_thermal_cell = temp_thermal_mix;
 
-    const double press_cell = nrho_cell * boltz * temp_thermal_cell;
-    double soundspeed_cell;
+    const KK_ACC_FLOAT press_cell = nrho_cell * boltz * temp_thermal_cell;
+    KK_ACC_FLOAT soundspeed_cell;
     if (np) {
-      const double mass_cell = masstot / np;
-      const double gamma_cell = gamma / np;
-      soundspeed_cell = sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
+      const KK_ACC_FLOAT mass_cell = masstot / np;
+      const KK_ACC_FLOAT gamma_cell = gamma / np;
+      soundspeed_cell = Kokkos::sqrt(gamma_cell*boltz*temp_thermal_cell / mass_cell);
     } else soundspeed_cell = soundspeed_mixture;
 
     d_tasks(i).nrho = nrho_cell +
       (press - press_cell) / (soundspeed_cell*soundspeed_cell);
     temp_thermal_cell = press / (boltz * d_tasks(i).nrho);
-    if (!subsonic_warning && temp_thermal_cell > TEMPLIMIT)
+    if (!subsonic_warning && temp_thermal_cell > static_cast<KK_ACC_FLOAT>(TEMPLIMIT))
       Kokkos::atomic_max(&d_tempmax(),temp_thermal_cell);
 
     // the non-Kokkos code guards this update with massrho_cell*soundspeed
     //   > 0.0 as well as np, unlike fix emit/face.  keep the extra guard
 
-    if (np && massrho_cell*soundspeed_cell > 0.0) {
-      const double sign = normal[ndim];
+    if (np && massrho_cell*soundspeed_cell > static_cast<KK_ACC_FLOAT>(0.0)) {
+      const KK_FLOAT sign = normal[ndim];
       vstream[ndim] += sign *
         (press - press_cell) / (massrho_cell*soundspeed_cell);
     }
 
     for (int m = 0; m < nspecies; m++) {
       const int ispecies = d_mspecies[m];
-      d_vscale(i,m) = sqrt(2.0 * boltz * temp_thermal_cell /
+      d_vscale(i,m) = Kokkos::sqrt(static_cast<KK_ACC_FLOAT>(2.0) * boltz * temp_thermal_cell /
                            d_species_all[ispecies].mass);
     }
   }
@@ -1009,23 +1010,23 @@ void FixEmitFaceFileKokkos::grow_task()
 void FixEmitFaceFileKokkos::realloc_species_views()
 {
   if (perspecies) {
-    k_ntargetsp = DAT::tdual_float_2d_lr("emit/face/file:ntargetsp",
+    k_ntargetsp = DAT::ttransform_kkacc_2d_lr("emit/face/file:ntargetsp",
                                          ntaskmax,nspecies);
     d_ntargetsp = k_ntargetsp.view_device();
     for (int i = 0; i < ntaskmax; i++)
       tasks[i].ntargetsp = &k_ntargetsp.view_host()(i,0);
   } else {
-    k_ntargetsp = DAT::tdual_float_2d_lr();
-    d_ntargetsp = DAT::t_float_2d_lr();
+    k_ntargetsp = DAT::ttransform_kkacc_2d_lr();
+    d_ntargetsp = DAT::t_kkacc_2d_lr();
     for (int i = 0; i < ntaskmax; i++)
       tasks[i].ntargetsp = NULL;
   }
 
-  k_vscale = DAT::tdual_float_2d_lr("emit/face/file:vscale",
+  k_vscale = DAT::ttransform_kkacc_2d_lr("emit/face/file:vscale",
                                     ntaskmax,nspecies);
-  k_cummulative = DAT::tdual_float_2d_lr("emit/face/file:cummulative",
+  k_cummulative = DAT::ttransform_kkacc_2d_lr("emit/face/file:cummulative",
                                          ntaskmax,nspecies);
-  k_fraction = DAT::tdual_float_2d_lr("emit/face/file:fraction",
+  k_fraction = DAT::ttransform_kkacc_2d_lr("emit/face/file:fraction",
                                       ntaskmax,nspecies);
 
   d_vscale = k_vscale.view_device();

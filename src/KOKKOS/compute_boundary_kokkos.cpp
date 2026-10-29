@@ -82,7 +82,7 @@ void ComputeBoundaryKokkos::compute_array()
 
   if (sparta->kokkos->gpu_aware_flag) {
     MPI_Allreduce(d_myarray.data(),d_array.data(),nrow*ntotal,
-                  MPI_DOUBLE,MPI_SUM,world);
+                  MPI_KK_ACC_FLOAT,MPI_SUM,world);
     k_array.modify_device();
     k_array.sync_host();
   } else {

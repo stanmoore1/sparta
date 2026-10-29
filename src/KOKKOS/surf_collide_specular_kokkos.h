@@ -107,8 +107,8 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
 
   template<int REACT, int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
-  Particle::OnePart* collide_kokkos(Particle::OnePart *&ip, double &,
-                                    int isurf, const double *norm, int isr, int &reaction,
+  OnePartKK* collide_kokkos(OnePartKK *&ip, KK_POS_FLOAT &,
+                                    int isurf, const KK_POS_FLOAT *norm, int isr, int &reaction,
                                     const DAT::t_int_scalar &d_retry, const DAT::t_int_scalar &d_nlocal) const
   {
     if (ATOMIC_REDUCTION == 0)
@@ -120,8 +120,8 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
     // reaction = 1 to N for which reaction took place, 0 for none
     // velreset = 1 if reaction reset post-collision velocity, else 0
 
-    Particle::OnePart iorig;
-    Particle::OnePart *jp = NULL;
+    OnePartKK iorig;
+    OnePartKK *jp = NULL;
     reaction = 0;
     int velreset = 0;
 
@@ -133,7 +133,7 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
     //   KK_SR_TYPE(-1) reads out of bounds and dispatches on garbage
 
     if (REACT && isr >= 0) {
-      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(Particle::OnePart));
+      if (ambi_flag || vibmode_flag) memcpy(&iorig,ip,sizeof(OnePartKK));
 
       int sr_type = KK_SR_TYPE(isr);
       int m = KK_SR_MAP(isr);
@@ -236,8 +236,8 @@ class SurfCollideSpecularKokkos : public SurfCollideSpecular {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void wrapper_kokkos(Particle::OnePart *p, const double *norm,
-                      int *, double *) const
+  void wrapper_kokkos(OnePartKK *p, const KK_POS_FLOAT *norm,
+                      int *, KK_FLOAT *) const
   {
     MathExtraKokkos::reflect3(p->v,norm);
   }

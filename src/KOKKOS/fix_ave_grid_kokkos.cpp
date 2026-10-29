@@ -91,9 +91,9 @@ FixAveGridKokkos::FixAveGridKokkos(SPARTA *sparta, int narg, char **arg) :
   memoryKK->create_kokkos(k_tally,tally,nglocal,ntotal,"ave/grid:tally");
   d_tally = k_tally.view_device();
 
-  k_numap = DAT::tdual_float_1d("ave/grid:numap",nvalues);
-  k_umap = DAT::tdual_float_2d("ave/grid:umap",nvalues,tmax);
-  k_uomap = DAT::tdual_float_2d("ave/grid:uomap",nvalues,tmax);
+  k_numap = DAT::ttransform_kkacc_1d("ave/grid:numap",nvalues);
+  k_umap = DAT::ttransform_kkacc_2d("ave/grid:umap",nvalues,tmax);
+  k_uomap = DAT::ttransform_kkacc_2d("ave/grid:uomap",nvalues,tmax);
 
   for (int i = 0; i < nvalues; i++) {
     k_numap.view_host()(i) = numap[i];

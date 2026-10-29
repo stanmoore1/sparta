@@ -7,17 +7,26 @@
 # using fftw3. FFTW3_FOUND         - True if fftw3 found.
 #
 
+# with FFT_SINGLE the single precision fftw3f library is used, whose
+# fftwf_* API the code calls when FFT_SCALAR is float
+
+if(FFT_SINGLE)
+  set(FFTW3_PREC_SUFFIX "f")
+else()
+  set(FFTW3_PREC_SUFFIX "")
+endif()
+
 find_package(PkgConfig)
 
-pkg_check_modules(PC_FFTW3 fftw3)
+pkg_check_modules(PC_FFTW3 fftw3${FFTW3_PREC_SUFFIX})
 find_path(FFTW3_INCLUDE_DIR fftw3.h HINTS ${PC_FFTW3_INCLUDE_DIRS})
 find_library(
   FFTW3_LIBRARY
-  NAMES fftw3
+  NAMES fftw3${FFTW3_PREC_SUFFIX}
   HINTS ${PC_FFTW3_LIBRARY_DIRS})
 find_library(
   FFTW3_OMP_LIBRARY
-  NAMES fftw3_omp
+  NAMES fftw3${FFTW3_PREC_SUFFIX}_omp
   HINTS ${PC_FFTW3_LIBRARY_DIRS})
 
 include(FindPackageHandleStandardArgs)

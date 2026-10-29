@@ -14,14 +14,49 @@
 
 #include "math_extra_kokkos.h"
 
+// tolerances of the geometry tests, which work in KK_POS_FLOAT
+// the double values are those of the non-KOKKOS Geometry and Update code,
+//   tuned to double precision round-off; for single precision positions
+//   (KOKKOS_PREC=single) EPSTIME is larger to exceed the round-off of times
+//   of order a timestep, and EPSSQ is replaced by epssq(), see below
+
 #define EPSSQ 1.0e-16
 #define EPSSQNEG -1.0e-16
 #define EPSSELF 1.0e-6
-#define EPSTIME 1.0e-16
+#define EPSTIME kk_eps<KK_POS_FLOAT>(1.0e-16,1.0e-13)
 
 enum{OUTSIDE,INSIDE,ONSURF2OUT,ONSURF2IN};    // same as Update
 
 namespace GeometryKokkos {
+
+// the quadratic equations of the axisymmetric crossings below subtract
+//   nearly equal squares of coordinates (b*b - a*c); in single precision
+//   that round-off can push a crossing time past the end of the move and
+//   the particle passes through the surface, so they are solved in double
+//   (a no-op in double; in mixed precision it also forms the velocity
+//   products in double, since velocities are float there)
+
+typedef double axi_float;  // KK_DOUBLE: cancellation in the axisymmetric quadratics
+
+/* ----------------------------------------------------------------------
+   tolerance of the point-in-line and point-in-triangle tests below, which
+     compare a dot product of two length vectors of the element with 0
+   EPSSQ is an absolute value, tuned for double precision round-off
+   for single precision positions the round-off of the dot product scales
+     with the element size and with the magnitude of its coordinates, so
+     the tolerance is made relative to them
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+KK_POS_FLOAT epssq(const KK_POS_FLOAT *edge, const KK_POS_FLOAT *v0)
+{
+  if constexpr (std::is_same_v<KK_POS_FLOAT,float>) {
+    const KK_POS_FLOAT len = Kokkos::sqrt(MathExtraKokkos::lensq3(edge));
+    KK_POS_FLOAT scale = len;
+    for (int i = 0; i < 3; i++) scale = MAX(scale,Kokkos::fabs(v0[i]));
+    return static_cast<KK_POS_FLOAT>(1.0e-6) * len * scale;
+  } else return EPSSQ;
+}
 
 /* ----------------------------------------------------------------------
    determine which side of plane the point x,y,z is on
@@ -30,16 +65,16 @@ namespace GeometryKokkos {
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int whichside(double *v, double *norm, double x, double y, double z)
+int whichside(KK_POS_FLOAT *v, KK_POS_FLOAT *norm, KK_POS_FLOAT x, KK_POS_FLOAT y, KK_POS_FLOAT z)
 {
-  double vec[3];
+  KK_POS_FLOAT vec[3];
   vec[0] = x - v[0];
   vec[1] = y - v[1];
   vec[2] = z - v[2];
 
-  double dotproduct = MathExtraKokkos::dot3(norm,vec);
-  if (dotproduct < 0.0) return -1;
-  else if (dotproduct > 0.0) return 1;
+  KK_POS_FLOAT dotproduct = MathExtraKokkos::dot3(norm,vec);
+  if (dotproduct < static_cast<KK_POS_FLOAT>(0.0)) return -1;
+  else if (dotproduct > static_cast<KK_POS_FLOAT>(0.0)) return 1;
   else return 0;
 };
 
@@ -62,24 +97,24 @@ int whichside(double *v, double *norm, double x, double y, double z)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool line_line_intersect(double *start, double *stop,
-                         double *v0, double *v1, double *norm,
-                         double *point, double &param, int &side, int id=0)
+bool line_line_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
+                         KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *norm,
+                         KK_POS_FLOAT *point, KK_POS_FLOAT &param, int &side, int id=0)
 {
   (void)id;
-  double vec[3],start2stop[3],edge[3],pvec[3];
+  KK_POS_FLOAT vec[3],start2stop[3],edge[3],pvec[3];
 
   // if start,stop are on same side of line B, no intersection
   // if start,stop are both on infinite line B, no intersection
 
   MathExtraKokkos::sub3(start,v0,vec);
-  double dotstart = MathExtraKokkos::dot3(norm,vec);
+  KK_POS_FLOAT dotstart = MathExtraKokkos::dot3(norm,vec);
   MathExtraKokkos::sub3(stop,v0,vec);
-  double dotstop = MathExtraKokkos::dot3(norm,vec);
+  KK_POS_FLOAT dotstop = MathExtraKokkos::dot3(norm,vec);
 
-  if (dotstart < 0.0 && dotstop < 0.0) return false;
-  if (dotstart > 0.0 && dotstop > 0.0) return false;
-  if (dotstart == 0.0 && dotstop == 0.0) return false;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0) && dotstop < static_cast<KK_POS_FLOAT>(0.0)) return false;
+  if (dotstart > static_cast<KK_POS_FLOAT>(0.0) && dotstop > static_cast<KK_POS_FLOAT>(0.0)) return false;
+  if (dotstart == static_cast<KK_POS_FLOAT>(0.0) && dotstop == static_cast<KK_POS_FLOAT>(0.0)) return false;
 
   // param = parametric distance from start to stop
   //   at which line B is intersected
@@ -89,7 +124,7 @@ bool line_line_intersect(double *start, double *stop,
   MathExtraKokkos::sub3(stop,start,start2stop);
   param = MathExtraKokkos::dot3(norm,vec) / MathExtraKokkos::dot3(norm,start2stop);
 
-  if (param < 0.0 || param > 1.0) return false;
+  if (param < static_cast<KK_POS_FLOAT>(0.0) || param > static_cast<KK_POS_FLOAT>(1.0)) return false;
 
   // point = intersection pt with line B
 
@@ -114,18 +149,18 @@ bool line_line_intersect(double *start, double *stop,
 
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) < -epssq(edge,v0)) return false;
   MathExtraKokkos::sub3(point,v1,pvec);
-  if (MathExtraKokkos::dot3(edge,pvec) > EPSSQ) return false;
+  if (MathExtraKokkos::dot3(edge,pvec) > epssq(edge,v0)) return false;
 
   // there is a valid intersection with line B
   // set side to ONSUFR, OUTSIDE, or INSIDE
   // if start point is inside or outside then side = same
   // if particle started on line B, side = ONSURF OUT/IN based on dotstop
 
-  if (dotstart < 0.0) side = INSIDE;
-  else if (dotstart > 0.0) side = OUTSIDE;
-  else if (dotstop > 0.0) side = ONSURF2OUT;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0)) side = INSIDE;
+  else if (dotstart > static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
+  else if (dotstop > static_cast<KK_POS_FLOAT>(0.0)) side = ONSURF2OUT;
   else side = ONSURF2IN;
 
   return true;
@@ -147,23 +182,24 @@ bool line_line_intersect(double *start, double *stop,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool axi_horizontal_line(double tdelta, double *x, double *v,
-                         double yhoriz, int &nc, double &t1, double &t2)
+bool axi_horizontal_line(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
+                         KK_POS_FLOAT yhoriz, int &nc, axi_float &t1, axi_float &t2)
 {
-  double a = v[1]*v[1] + v[2]*v[2];
-  if (a == 0.0) return false;
-  double b = -v[1]*x[1];
-  double arg = yhoriz*yhoriz*a - v[2]*v[2]*x[1]*x[1];
-  if (arg < 0.0) return false;
-  double sarg = sqrt(arg);
-  double c = x[1]*x[1] - yhoriz*yhoriz;
+  const axi_float x1 = x[1], vy = v[1], vz = v[2], yh = yhoriz;
+  axi_float a = vy*vy + vz*vz;
+  if (a == static_cast<axi_float>(0.0)) return false;
+  axi_float b = -vy*x1;
+  axi_float arg = yh*yh*a - vz*vz*x1*x1;
+  if (arg < static_cast<axi_float>(0.0)) return false;
+  axi_float sarg = Kokkos::sqrt(arg);
+  axi_float c = x1*x1 - yh*yh;
 
   nc = 2;
-  double tone, ttwo;
-  if (b > 0.0) {
+  axi_float tone, ttwo;
+  if (b > static_cast<axi_float>(0.0)) {
     ttwo = (b + sarg) / a;
     tone = c / (b + sarg);
-  } else if (b < 0.0) {
+  } else if (b < static_cast<axi_float>(0.0)) {
     tone = (b - sarg) / a;
     ttwo = c / (b - sarg);
   } else {
@@ -178,7 +214,7 @@ bool axi_horizontal_line(double tdelta, double *x, double *v,
   // due to cell crossing or selfflag in axi_line_intersect() caller
 
   if (x[1] == yhoriz) {
-    if (fabs(t1) < fabs(t2)) t1 = t2;
+    if (Kokkos::fabs(t1) < Kokkos::fabs(t2)) t1 = t2;
     nc = 1;
   }
 
@@ -188,9 +224,9 @@ bool axi_horizontal_line(double tdelta, double *x, double *v,
   //   can cause t1 or t2 to be EPSTIME greater than tdelta and miss collision
   // force a collision in this special case by setting t1/t2 = tdelta
 
-  if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > 0.0)
+  if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
     t1 = tdelta;
-  else if (t2 > tdelta && (t2-tdelta) < EPSTIME && tdelta > 0.0)
+  else if (t2 > tdelta && (t2-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
     t2 = tdelta;
 
   // require first collision time >= 0.0 and <= tdelta
@@ -225,10 +261,10 @@ bool axi_horizontal_line(double tdelta, double *x, double *v,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool axi_line_intersect(double tdelta, double *x, double *v,
-                        int outface, double *lo, double *hi,
-                        double *v1, double *v2, double *norm, int selfflag,
-                        double *xc, double *vc, double &param, int &side)
+bool axi_line_intersect(KK_POS_FLOAT tdelta, KK_POS_FLOAT *x, KK_FLOAT *v,
+                        int outface, KK_POS_FLOAT *lo, KK_POS_FLOAT *hi,
+                        KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, KK_POS_FLOAT *norm, int selfflag,
+                        KK_POS_FLOAT *xc, KK_FLOAT *vc, KK_POS_FLOAT &param, int &side)
 {
   // compute nc = # of collisions with infinite line
   // if 0, return false
@@ -236,7 +272,7 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
   // if 2, set t1 and t2 with t1 < t2
 
   int nc;
-  double t1,t2;
+  axi_float t1,t2;
 
   // vertical line segment
   // no collision if starting on surface
@@ -246,8 +282,8 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
     if (outface == 0 && v1[0] == lo[0]) t1 = tdelta;
     else if (outface == 1 && v1[0] == hi[0]) t1 = tdelta;
     else {
-      if (v[0] == 0.0) return false;
-      t1 = (v1[0] - x[0]) / v[0];
+      if (v[0] == static_cast<KK_POS_FLOAT>(0.0)) return false;
+      t1 = (static_cast<axi_float>(v1[0]) - x[0]) / v[0];
       if (selfflag && t1 == 0.0) return false;
     }
 
@@ -268,31 +304,32 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
   // general line segment
 
   } else {
-    double x21 = v2[0] - v1[0];
-    double y21 = v2[1] - v1[1];
-    double x21sq = x21*x21;
-    double y21sq = y21*y21;
-    double dconst = x21*v1[1] - y21*v1[0];
+    const axi_float x0 = x[0], x1 = x[1], vx = v[0], vy = v[1], vz = v[2];
+    axi_float x21 = static_cast<axi_float>(v2[0]) - v1[0];
+    axi_float y21 = static_cast<axi_float>(v2[1]) - v1[1];
+    axi_float x21sq = x21*x21;
+    axi_float y21sq = y21*y21;
+    axi_float dconst = x21*v1[1] - y21*v1[0];
 
-    double a = x21sq*(v[1]*v[1] + v[2]*v[2]) - y21sq*v[0]*v[0];
-    double b = x21sq*x[1]*v[1] - y21sq*x[0]*v[0] - y21*v[0]*dconst;
-    double c = x21sq*x[1]*x[1] - y21sq*x[0]*x[0] -
-      2.0*y21*x[0]*dconst - dconst*dconst;
+    axi_float a = x21sq*(vy*vy + vz*vz) - y21sq*vx*vx;
+    axi_float b = x21sq*x1*vy - y21sq*x0*vx - y21*vx*dconst;
+    axi_float c = x21sq*x1*x1 - y21sq*x0*x0 -
+      static_cast<axi_float>(2.0)*y21*x0*dconst - dconst*dconst;
 
-    if (a == 0.0) {
-      if (b == 0.0) return false;
+    if (a == static_cast<axi_float>(0.0)) {
+      if (b == static_cast<axi_float>(0.0)) return false;
       nc = 1;
-      t1 = t2 = -0.5 * c / b;
+      t1 = t2 = -static_cast<axi_float>(0.5) * c / b;
     } else {
-      double arg = b*b - a*c;
-      if (arg < 0.0) return false;
-      double sarg = sqrt(arg);
+      axi_float arg = b*b - a*c;
+      if (arg < static_cast<axi_float>(0.0)) return false;
+      axi_float sarg = Kokkos::sqrt(arg);
       nc = 2;
-      double tone, ttwo;
-      if (b > 0.0) {
+      axi_float tone, ttwo;
+      if (b > static_cast<axi_float>(0.0)) {
         tone = (-b - sarg) / a;
         ttwo = c / (-b - sarg);
-      } else if (b < 0.0) {
+      } else if (b < static_cast<axi_float>(0.0)) {
         tone = c / (-b + sarg);
         ttwo = (-b + sarg) / a;
       } else {
@@ -309,7 +346,7 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
   // nc=2 test b/c horizontal line has already discarded this collision pt
 
   if (selfflag && nc == 2) {
-    if (fabs(t1) < fabs(t2)) t1 = t2;
+    if (Kokkos::fabs(t1) < Kokkos::fabs(t2)) t1 = t2;
     nc = 1;
   }
 
@@ -323,7 +360,7 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
     //   can cause t1 to be EPSTIME greater than tdelta and miss collision
     // force a collision in this special case by setting t1 = tdelta
 
-    if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > 0.0)
+    if (t1 > tdelta && (t1-tdelta) < EPSTIME && tdelta > static_cast<KK_POS_FLOAT>(0.0))
       t1 = tdelta;
 
     // test for collision time >= 0.0 and <= tdelta
@@ -358,16 +395,17 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
 
     xc[0] = x[0] + t1*v[0];
     if (v1[0] == v2[0]) xc[0] = v1[0];
-    double ynew = x[1] + t1*v[1];
-    double znew = x[2] + t1*v[2];
-    xc[1] = sqrt(ynew*ynew + znew*znew);
-    if (v1[1] == v2[1]) xc[1] = v1[1];
+    const axi_float ynew = x[1] + t1*v[1];
+    const axi_float znew = x[2] + t1*v[2];
+    axi_float rc = Kokkos::sqrt(ynew*ynew + znew*znew);
+    if (v1[1] == v2[1]) rc = v1[1];
+    xc[1] = rc;
     xc[2] = 0.0;
 
     vc[0] = v[0];
-    if (xc[1] > 0.0) {
-      double rn = ynew / xc[1];
-      double wn = znew / xc[1];
+    if (rc > static_cast<axi_float>(0.0)) {
+      const axi_float rn = ynew / rc;
+      const axi_float wn = znew / rc;
       vc[1] = v[1]*rn + v[2]*wn;
       vc[2] = -v[1]*wn + v[2]*rn;
     } else {
@@ -420,8 +458,8 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
   // regardless of where particle starts, it can hit front or back of surf
   // use velocity vector at collision pt to determine side
 
-  double dot = MathExtraKokkos::dot3(norm,vc);
-  if (dot < 0.0) side = OUTSIDE;
+  KK_POS_FLOAT dot = MathExtraKokkos::dot3(norm,vc);
+  if (dot < static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
   else side = INSIDE;
 
   param = t1/tdelta;
@@ -446,23 +484,23 @@ bool axi_line_intersect(double tdelta, double *x, double *v,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-bool line_tri_intersect(double *start, double *stop,
-                        double *v0, double *v1, double *v2, double *norm,
-                        double *point, double &param, int &side)
+bool line_tri_intersect(KK_POS_FLOAT *start, KK_POS_FLOAT *stop,
+                        KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, KK_POS_FLOAT *norm,
+                        KK_POS_FLOAT *point, KK_POS_FLOAT &param, int &side)
 {
-  double vec[3],start2stop[3],edge[3],pvec[3],xproduct[3];
+  KK_POS_FLOAT vec[3],start2stop[3],edge[3],pvec[3],xproduct[3];
 
   // if start,stop are on same side of triangle, no intersection
   // if start,stop are both in plane of triangle, no intersection
 
   MathExtraKokkos::sub3(start,v0,vec);
-  double dotstart = MathExtraKokkos::dot3(norm,vec);
+  KK_POS_FLOAT dotstart = MathExtraKokkos::dot3(norm,vec);
   MathExtraKokkos::sub3(stop,v0,vec);
-  double dotstop = MathExtraKokkos::dot3(norm,vec);
+  KK_POS_FLOAT dotstop = MathExtraKokkos::dot3(norm,vec);
 
-  if (dotstart < 0.0 && dotstop < 0.0) return false;
-  if (dotstart > 0.0 && dotstop > 0.0) return false;
-  if (dotstart == 0.0 && dotstop == 0.0) return false;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0) && dotstop < static_cast<KK_POS_FLOAT>(0.0)) return false;
+  if (dotstart > static_cast<KK_POS_FLOAT>(0.0) && dotstop > static_cast<KK_POS_FLOAT>(0.0)) return false;
+  if (dotstart == static_cast<KK_POS_FLOAT>(0.0) && dotstop == static_cast<KK_POS_FLOAT>(0.0)) return false;
 
   // param = parametric distance from start to stop
   //   at which tri plane is intersected
@@ -471,8 +509,8 @@ bool line_tri_intersect(double *start, double *stop,
   MathExtraKokkos::sub3(v0,start,vec);
   MathExtraKokkos::sub3(stop,start,start2stop);
   param = MathExtraKokkos::dot3(norm,vec) / MathExtraKokkos::dot3(norm,start2stop);
-  param = MAX(param,0.0);
-  param = MIN(param,1.0);
+  param = MAX(param,static_cast<KK_POS_FLOAT>(0.0));
+  param = MIN(param,static_cast<KK_POS_FLOAT>(1.0));
 
   // point = intersection pt with plane of triangle
 
@@ -499,26 +537,26 @@ bool line_tri_intersect(double *start, double *stop,
   MathExtraKokkos::sub3(v1,v0,edge);
   MathExtraKokkos::sub3(point,v0,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v0)) return false;
 
   MathExtraKokkos::sub3(v2,v1,edge);
   MathExtraKokkos::sub3(point,v1,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v1)) return false;
 
   MathExtraKokkos::sub3(v0,v2,edge);
   MathExtraKokkos::sub3(point,v2,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < EPSSQNEG) return false;
+  if (MathExtraKokkos::dot3(xproduct,norm) < -epssq(edge,v2)) return false;
 
   // there is a valid intersection with triangle
   // set side to ONSUFR, OUTSIDE, or INSIDE
   // if start point is inside or outside then side = same
   // if particle started on triangle, side = ONSURF OUT/IN based on dotstop
 
-  if (dotstart < 0.0) side = INSIDE;
-  else if (dotstart > 0.0) side = OUTSIDE;
-  else if (dotstop > 0.0) side = ONSURF2OUT;
+  if (dotstart < static_cast<KK_POS_FLOAT>(0.0)) side = INSIDE;
+  else if (dotstart > static_cast<KK_POS_FLOAT>(0.0)) side = OUTSIDE;
+  else if (dotstop > static_cast<KK_POS_FLOAT>(0.0)) side = ONSURF2OUT;
   else side = ONSURF2IN;
 
   return true;
@@ -535,12 +573,12 @@ bool line_tri_intersect(double *start, double *stop,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int line_quad_intersect(double *v0, double *v1, double *norm,
-                        double *lo, double *hi)
+int line_quad_intersect(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *norm,
+                        KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   int sum,side;
-  double xlo,xhi,ylo,yhi,param;
-  double b[3],e[3],point[3];
+  KK_POS_FLOAT xlo,xhi,ylo,yhi,param;
+  KK_POS_FLOAT b[3],e[3],point[3];
 
   xlo = lo[0];
   xhi = hi[0];
@@ -595,12 +633,12 @@ int line_quad_intersect(double *v0, double *v1, double *norm,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int quad_line_intersect_point(double *v0, double *v1, double *norm,
-                              double *lo, double *hi, double *xc)
+int quad_line_intersect_point(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *norm,
+                              KK_POS_FLOAT *lo, KK_POS_FLOAT *hi, KK_POS_FLOAT *xc)
 {
   int side;
-  double xlo,xhi,ylo,yhi,param;
-  double b[3],e[3];
+  KK_POS_FLOAT xlo,xhi,ylo,yhi,param;
+  KK_POS_FLOAT b[3],e[3];
 
   xlo = lo[0];
   xhi = hi[0];
@@ -640,14 +678,14 @@ int quad_line_intersect_point(double *v0, double *v1, double *norm,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int line_quad_face_touch(double *v0, double *v1, int iface,
-                         double *lo, double *hi)
+int line_quad_face_touch(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, int iface,
+                         KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   // value = position of face
 
   int dim = iface / 2;
   int other = dim ? 0 : 1;
-  double value = iface % 2 ? hi[dim] : lo[dim];
+  KK_POS_FLOAT value = iface % 2 ? hi[dim] : lo[dim];
 
   // check if either line vertex is within face
 
@@ -672,12 +710,12 @@ int line_quad_face_touch(double *v0, double *v1, int iface,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int tri_hex_intersect(double *v0, double *v1, double *v2, double *norm,
-                      double *lo, double *hi)
+int tri_hex_intersect(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, KK_POS_FLOAT *norm,
+                      KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   int sum,side;
-  double xlo,xhi,ylo,yhi,zlo,zhi,param;
-  double b[3],e[3],h0[3],h1[3],h2[3],h3[3],n[3],point[3];
+  KK_POS_FLOAT xlo,xhi,ylo,yhi,zlo,zhi,param;
+  KK_POS_FLOAT b[3],e[3],h0[3],h1[3],h2[3],h3[3],n[3],point[3];
 
   xlo = lo[0];
   xhi = hi[0];
@@ -846,12 +884,12 @@ int tri_hex_intersect(double *v0, double *v1, double *v2, double *norm,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int hex_tri_intersect_point(double *v0, double *v1, double *v2, double *norm,
-                            double *lo, double *hi, double *xc)
+int hex_tri_intersect_point(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, KK_POS_FLOAT *norm,
+                            KK_POS_FLOAT *lo, KK_POS_FLOAT *hi, KK_POS_FLOAT *xc)
 {
   int side;
-  double xlo,xhi,ylo,yhi,zlo,zhi,param;
-  double b[3],e[3],h0[3],h1[3],h2[3],h3[3],n[3];
+  KK_POS_FLOAT xlo,xhi,ylo,yhi,zlo,zhi,param;
+  KK_POS_FLOAT b[3],e[3],h0[3],h1[3],h2[3],h3[3],n[3];
 
   xlo = lo[0];
   xhi = hi[0];
@@ -996,8 +1034,8 @@ int hex_tri_intersect_point(double *v0, double *v1, double *v2, double *norm,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int tri_hex_face_touch(double *v0, double *v1, double *v2, int iface,
-                       double *lo, double *hi)
+int tri_hex_face_touch(KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *v2, int iface,
+                       KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   // value = position of face
 
@@ -1010,7 +1048,7 @@ int tri_hex_face_touch(double *v0, double *v1, double *v2, int iface,
   } else if (dim == 2) {
     other1 = 0; other2 = 1;
   }
-  double value = iface % 2 ? hi[dim] : lo[dim];
+  KK_POS_FLOAT value = iface % 2 ? hi[dim] : lo[dim];
 
   // check if any triangle vertex is within face
 
@@ -1036,7 +1074,7 @@ int tri_hex_face_touch(double *v0, double *v1, double *v2, int iface,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int point_on_hex(double *x, double *lo, double *hi)
+int point_on_hex(KK_POS_FLOAT *x, KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   if ((x[0] == lo[0] || x[0] == hi[0]) &&
       x[1] >= lo[1] && x[1] <= hi[1] && x[2] >= lo[2] && x[2] <= hi[2])
@@ -1056,7 +1094,7 @@ int point_on_hex(double *x, double *lo, double *hi)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int point_in_hex(double *x, double *lo, double *hi)
+int point_in_hex(KK_POS_FLOAT *x, KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
   if (x[0] >= lo[0] && x[0] <= hi[0] &&
       x[1] >= lo[1] && x[1] <= hi[1] &&
@@ -1070,7 +1108,7 @@ int point_in_hex(double *x, double *lo, double *hi)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int point_in_tri(double *x, double *p1, double *p2, double *p3, double *norm)
+int point_in_tri(KK_POS_FLOAT *x, KK_POS_FLOAT *p1, KK_POS_FLOAT *p2, KK_POS_FLOAT *p3, KK_POS_FLOAT *norm)
 {
   // if not in plane of tri, then not inside tri
 
@@ -1080,9 +1118,9 @@ int point_in_tri(double *x, double *p1, double *p2, double *p3, double *norm)
   // are in plane of tri, pointing towards center of tri
   // enorms are NOT unit vectors
 
-  double enorm1[3],enorm2[3],enorm3[3];
+  KK_POS_FLOAT enorm1[3],enorm2[3],enorm3[3];
 
-  double diff[3];
+  KK_POS_FLOAT diff[3];
   MathExtraKokkos::sub3(p2,p1,diff);
   MathExtraKokkos::cross3(norm,diff,enorm1);
   MathExtraKokkos::sub3(p3,p2,diff);
@@ -1093,11 +1131,11 @@ int point_in_tri(double *x, double *p1, double *p2, double *p3, double *norm)
   // if (pt - vertex) dotted into tri edge normal < 0, then outside tri
 
   MathExtraKokkos::sub3(p1,x,diff);
-  if (MathExtraKokkos::dot3(diff,enorm1) < 0.0) return 0;
+  if (MathExtraKokkos::dot3(diff,enorm1) < static_cast<KK_POS_FLOAT>(0.0)) return 0;
   MathExtraKokkos::sub3(p2,x,diff);
-  if (MathExtraKokkos::dot3(diff,enorm2) < 0.0) return 0;
+  if (MathExtraKokkos::dot3(diff,enorm2) < static_cast<KK_POS_FLOAT>(0.0)) return 0;
   MathExtraKokkos::sub3(p3,x,diff);
-  if (MathExtraKokkos::dot3(diff,enorm3) < 0.0) return 0;
+  if (MathExtraKokkos::dot3(diff,enorm3) < static_cast<KK_POS_FLOAT>(0.0)) return 0;
   return 1;
 };
 
@@ -1107,12 +1145,12 @@ int point_in_tri(double *x, double *p1, double *p2, double *p3, double *norm)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double distsq_point_line(double *x, double *p1, double *p2)
+KK_POS_FLOAT distsq_point_line(KK_POS_FLOAT *x, KK_POS_FLOAT *p1, KK_POS_FLOAT *p2)
 {
   // A = vector from P1 to X
   // B = vector from P1 to P2
 
-  double a[3],b[3],c[3];
+  KK_POS_FLOAT a[3],b[3],c[3];
   MathExtraKokkos::sub3(x,p1,a);
   MathExtraKokkos::sub3(p2,p1,b);
 
@@ -1120,15 +1158,15 @@ double distsq_point_line(double *x, double *p1, double *p2)
   // alpha = fraction of distance from P1 to P2 that P is at
   // alpha can be < 0, or between 0 to 1, or > 1
 
-  double alpha = MathExtraKokkos::dot3(a,b)/MathExtraKokkos::lensq3(b);
+  KK_POS_FLOAT alpha = MathExtraKokkos::dot3(a,b)/MathExtraKokkos::lensq3(b);
 
   // C = vector from point on P1P2 line to X
   // if alpha < 0.0, point on line is P1
   // if alpha > 1.0, point on line is P2
   // else point on line is P1 + alpha*(P2-P1)
 
-  if (alpha >= 1.0) MathExtraKokkos::sub3(x,p2,c);
-  else if (alpha > 0.0) {
+  if (alpha >= static_cast<KK_POS_FLOAT>(1.0)) MathExtraKokkos::sub3(x,p2,c);
+  else if (alpha > static_cast<KK_POS_FLOAT>(0.0)) {
     a[0] = p1[0] + alpha*b[0];
     a[1] = p1[1] + alpha*b[1];
     a[2] = p1[2] + alpha*b[2];
@@ -1146,10 +1184,10 @@ double distsq_point_line(double *x, double *p1, double *p2)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double distsq_point_tri(double *x, double *p1, double *p2, double *p3,
-                        double *norm)
+KK_POS_FLOAT distsq_point_tri(KK_POS_FLOAT *x, KK_POS_FLOAT *p1, KK_POS_FLOAT *p2, KK_POS_FLOAT *p3,
+                        KK_POS_FLOAT *norm)
 {
-  double a[3],point[3],edge[3],pvec[3],xproduct[3];
+  KK_POS_FLOAT a[3],point[3],edge[3],pvec[3],xproduct[3];
 
   // A = vector from P1 to X
 
@@ -1158,13 +1196,13 @@ double distsq_point_tri(double *x, double *p1, double *p2, double *p3,
   // point = projected point on infinite triangle plane
   // pdistsq = projected distance to plane
 
-  double alpha = MathExtraKokkos::dot3(a,norm);
+  KK_POS_FLOAT alpha = MathExtraKokkos::dot3(a,norm);
   point[0] = x[0] - alpha*norm[0];
   point[1] = x[1] - alpha*norm[1];
   point[2] = x[2] - alpha*norm[2];
 
   MathExtraKokkos::sub3(x,point,a);
-  double pdistsq = MathExtraKokkos::lensq3(a);
+  KK_POS_FLOAT pdistsq = MathExtraKokkos::lensq3(a);
 
   // test if projected point is inside triangle
   // edge = edge vector of triangle
@@ -1179,17 +1217,17 @@ double distsq_point_tri(double *x, double *p1, double *p2, double *p3,
   MathExtraKokkos::sub3(p2,p1,edge);
   MathExtraKokkos::sub3(point,p1,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   MathExtraKokkos::sub3(p3,p2,edge);
   MathExtraKokkos::sub3(point,p2,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   MathExtraKokkos::sub3(p1,p3,edge);
   MathExtraKokkos::sub3(point,p3,pvec);
   MathExtraKokkos::cross3(edge,pvec,xproduct);
-  if (MathExtraKokkos::dot3(xproduct,norm) < 0.0) inside = 0;
+  if (MathExtraKokkos::dot3(xproduct,norm) < static_cast<KK_POS_FLOAT>(0.0)) inside = 0;
 
   if (inside) return pdistsq;
 
@@ -1197,7 +1235,7 @@ double distsq_point_tri(double *x, double *p1, double *p2, double *p3,
   // compute minimum distance to any of 3 triangle edges
   // return sum of min distance and projected distance
 
-  double rsq = distsq_point_line(point,p1,p2);
+  KK_POS_FLOAT rsq = distsq_point_line(point,p1,p2);
   rsq = MIN(rsq,distsq_point_line(point,p2,p3));
   rsq = MIN(rsq,distsq_point_line(point,p3,p1));
   return rsq + pdistsq;
@@ -1208,10 +1246,10 @@ double distsq_point_tri(double *x, double *p1, double *p2, double *p3,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double dist_line_quad(double *x, double *y, double *lo, double *hi)
+KK_POS_FLOAT dist_line_quad(KK_POS_FLOAT *x, KK_POS_FLOAT *y, KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
-  double distsq;
-  double pt[3],e1[3],e2[3];
+  KK_POS_FLOAT distsq;
+  KK_POS_FLOAT pt[3],e1[3],e2[3];
 
   pt[2] = e1[2] = e2[2] = 0.0;
 
@@ -1244,7 +1282,7 @@ double dist_line_quad(double *x, double *y, double *lo, double *hi)
   distsq = MIN(distsq,distsq_point_line(x,e1,e2));
   distsq = MIN(distsq,distsq_point_line(y,e1,e2));
 
-  return sqrt(distsq);
+  return Kokkos::sqrt(distsq);
 };
 
 /* ----------------------------------------------------------------------
@@ -1252,11 +1290,11 @@ double dist_line_quad(double *x, double *y, double *lo, double *hi)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double dist_tri_hex(double *x, double *y, double *z, double *norm,
-                    double *lo, double *hi)
+KK_POS_FLOAT dist_tri_hex(KK_POS_FLOAT *x, KK_POS_FLOAT *y, KK_POS_FLOAT *z, KK_POS_FLOAT *norm,
+                    KK_POS_FLOAT *lo, KK_POS_FLOAT *hi)
 {
-  double distsq;
-  double pt[8][3],face[3];
+  KK_POS_FLOAT distsq;
+  KK_POS_FLOAT pt[8][3],face[3];
 
   // convert lo/hi to 8 corner pts
 
@@ -1330,7 +1368,7 @@ double dist_tri_hex(double *x, double *y, double *z, double *norm,
   distsq = MIN(distsq,distsq_point_tri(y,pt[4],pt[7],pt[6],face));
   distsq = MIN(distsq,distsq_point_tri(z,pt[4],pt[7],pt[6],face));
 
-  return sqrt(distsq);
+  return Kokkos::sqrt(distsq);
 };
 
 /* ----------------------------------------------------------------------
@@ -1341,15 +1379,15 @@ double dist_tri_hex(double *x, double *y, double *z, double *norm,
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double line_fraction(double *x, double *v0, double *v1)
+KK_POS_FLOAT line_fraction(KK_POS_FLOAT *x, KK_POS_FLOAT *v0, KK_POS_FLOAT *v1)
 {
-  double segment[3];
+  KK_POS_FLOAT segment[3];
 
   MathExtraKokkos::sub3(v0,v1,segment);
-  double lensq = MathExtraKokkos::lensq3(segment);
+  KK_POS_FLOAT lensq = MathExtraKokkos::lensq3(segment);
 
   MathExtraKokkos::sub3(x,v0,segment);
-  double fracsq = MathExtraKokkos::lensq3(segment)/lensq;
+  KK_POS_FLOAT fracsq = MathExtraKokkos::lensq3(segment)/lensq;
   MathExtraKokkos::sub3(x,v1,segment);
   fracsq = MIN(fracsq,MathExtraKokkos::lensq3(segment)/lensq);
 
@@ -1364,19 +1402,19 @@ double line_fraction(double *x, double *v0, double *v1)
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double tri_fraction(double *x, double *v0, double *v1, double *v2)
+KK_POS_FLOAT tri_fraction(KK_POS_FLOAT *x, KK_POS_FLOAT *v0, KK_POS_FLOAT *v1, KK_POS_FLOAT *v2)
 {
-  double segment[3];
+  KK_POS_FLOAT segment[3];
 
   MathExtraKokkos::sub3(v0,v1,segment);
-  double lensq = MathExtraKokkos::lensq3(segment);
+  KK_POS_FLOAT lensq = MathExtraKokkos::lensq3(segment);
   MathExtraKokkos::sub3(v1,v2,segment);
   lensq = MIN(lensq,MathExtraKokkos::lensq3(segment));
   MathExtraKokkos::sub3(v0,v2,segment);
   lensq = MIN(lensq,MathExtraKokkos::lensq3(segment));
 
   MathExtraKokkos::sub3(x,v0,segment);
-  double fracsq = MathExtraKokkos::lensq3(segment)/lensq;
+  KK_POS_FLOAT fracsq = MathExtraKokkos::lensq3(segment)/lensq;
   MathExtraKokkos::sub3(x,v1,segment);
   fracsq = MIN(fracsq,MathExtraKokkos::lensq3(segment)/lensq);
   MathExtraKokkos::sub3(x,v2,segment);

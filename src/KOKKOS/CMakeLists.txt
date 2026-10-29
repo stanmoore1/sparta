@@ -134,5 +134,17 @@ if(PKG_KOKKOS)
 
   install(TARGETS ${TARGET_SPARTA_PKG_KOKKOS}
           DESTINATION lib/sparta/${SPARTA_MACHINE}/pkgs)
+
+  # unit test of the TransformView host/device sync state machine
+  if(SPARTA_ENABLE_TESTING)
+    add_executable(test_transformview
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/kokkos_prec/transformview_test/test_transformview.cpp)
+    target_compile_options(test_transformview PRIVATE ${SPARTA_DEFAULT_CXX_COMPILE_FLAGS})
+    target_include_directories(test_transformview PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+                               ${SPA_INCLUDE_DIRS})
+    target_link_libraries(test_transformview PRIVATE ${TARGET_SPARTA_BUILD_MPI}
+                          ${TARGET_SPARTA_BUILD_KOKKOS})
+    add_test(NAME KokkosTransformView COMMAND test_transformview)
+  endif()
   # ######### END   TARGET_SPARTA_PKG_KOKKOS ##########
 endif()

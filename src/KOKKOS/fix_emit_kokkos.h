@@ -29,13 +29,13 @@ namespace SPARTA_NS {
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-double mol_inflow_kokkos(double indot, double vscale, double fraction)
+KK_FLOAT mol_inflow_kokkos(KK_FLOAT indot, KK_FLOAT vscale, KK_FLOAT fraction)
 {
-  const double scosine = indot / vscale;
-  if (scosine < -3.0) return 0.0;
-  const double inward_number_flux = vscale*fraction *
-    (exp(-scosine*scosine) + MathConst::MY_PIS*scosine*(1.0 + erf(scosine))) /
-    (2*MathConst::MY_PIS);
+  const KK_FLOAT scosine = indot / vscale;
+  if (scosine < -static_cast<KK_FLOAT>(3.0)) return 0.0;
+  const KK_FLOAT inward_number_flux = vscale*fraction *
+    (Kokkos::exp(-scosine*scosine) + static_cast<KK_FLOAT>(MathConst::MY_PIS)*scosine*(static_cast<KK_FLOAT>(1.0) + Kokkos::erf(scosine))) /
+    (2*static_cast<KK_FLOAT>(MathConst::MY_PIS));
   return inward_number_flux;
 }
 

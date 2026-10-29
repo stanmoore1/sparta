@@ -95,7 +95,7 @@ class FixAveHistoWeightKokkos : public FixAveHistoKokkos {
  private:
   int stridewt;
 
-  DAT::tdual_float_1d k_vectorwt;
+  DAT::ttransform_kkacc_1d k_vectorwt;
 
   using FixAveHisto::bin_one;
   using FixAveHisto::bin_vector;
@@ -107,7 +107,7 @@ class FixAveHistoWeightKokkos : public FixAveHistoKokkos {
   void bin_vector(minmax_type&, int, double *, int);
   void bin_particles(minmax_type&, int, int);
   void bin_particles(minmax_type&, double *, int);
-  void bin_grid_cells(minmax_type&, DAT::t_float_1d_strided);
+  void bin_grid_cells(minmax_type&, DAT::t_kkacc_1d_strided);
 
   void calculate_weights();
 };

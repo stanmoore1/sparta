@@ -65,8 +65,8 @@ class GridKokkos : public Grid {
   ------------------------------------------------------------------------- */
 
   KOKKOS_INLINE_FUNCTION
-  void id_child_lohi(int plevel, double *plo, double *phi,
-                     cellint ichild, double *clo, double *chi) const
+  void id_child_lohi(int plevel, KK_POS_FLOAT *plo, KK_POS_FLOAT *phi,
+                     cellint ichild, KK_POS_FLOAT *clo, KK_POS_FLOAT *chi) const
   {
     int nx = k_plevels.view_device()[plevel].nx;
     int ny = k_plevels.view_device()[plevel].ny;
@@ -102,16 +102,16 @@ class GridKokkos : public Grid {
 
   KOKKOS_INLINE_FUNCTION
   int id_find_child(cellint parentID, int plevel,
-                    double *oplo, double *ophi, double *x) const
+                    KK_POS_FLOAT *oplo, KK_POS_FLOAT *ophi, KK_POS_FLOAT *x) const
   {
     int ix,iy,iz,nx,ny,nz;
-    double plo[3],phi[3],clo[3],chi[3];
+    KK_POS_FLOAT plo[3],phi[3],clo[3],chi[3];
     cellint childID,ichild;
 
     cellint id = parentID;
     int level = plevel;
-    double *lo = oplo;
-    double *hi = ophi;
+    KK_POS_FLOAT *lo = oplo;
+    KK_POS_FLOAT *hi = ophi;
 
     while (level < maxlevel) {
       nx = k_plevels.view_device()[level].nx;

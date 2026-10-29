@@ -40,7 +40,7 @@ class FixFieldParticleKokkos : public FixFieldParticle, public KokkosBase {
   void compute_field() override;
 
  private:
-  DAT::tdual_float_2d_lr k_array_particle;
+  DAT::ttransform_kkacc_2d_lr k_array_particle;
 };
 
 }
