@@ -120,8 +120,10 @@ class UpdateKokkos : public Update {
 
   // data for optimized particle moves
 
-  KK_POS_FLOAT dx,dy,dz,Lx,Ly,Lz;
-  KK_POS_FLOAT xlo,ylo,zlo,xhi,yhi,zhi;
+  // box geometry of the optimized move stays double: the cell index it
+  //   computes, (x-xlo)/dx, must agree with the host grid cell bounds
+  double dx,dy,dz,Lx,Ly,Lz;
+  double xlo,ylo,zlo,xhi,yhi,zhi;
   int ncx,ncy,ncz;
 
   // what the fast path may do for itself on each global boundary face, indexed
