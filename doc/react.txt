@@ -107,6 +107,29 @@ below) are used to calculate terms in equation 6.10 of
 The C2, C3, C4 values are the Arrhenius activation energy Ea,
 prefactor A, and exponent b, used in the rate formula above.
 
+The TCE model can only reproduce the Arrhenius rate of a reaction if
+its exponent b is greater than -(z+3/2), where z is the number of
+internal degrees of freedom contributing to the collision energy:
+coefficient C1 when using the default partial energy model (see the
+"react_modify"_react_modify.html partial_energy keyword), or the
+average number of rotational (and, for smooth vibration, vibrational)
+degrees of freedom of the reactants otherwise.  Below this bound the
+gamma function in the TCE reaction probability is non-positive; SPARTA
+clamps it so that the reaction still runs, but its rate is incorrect.
+SPARTA prints one warning listing any such reactions at the start of
+the first run.
+
+Above the bound, the TCE reaction probability reproduces the Arrhenius
+rate on average, but it is a per-collision probability and can exceed
+1 for some collision energies, e.g. when the Arrhenius rate approaches
+the collision rate, or near the activation energy when b < -(z+1/2).
+Probabilities above 1 are clipped: where the summed probability of the
+reactions of a species pair exceeds 1, that pair reacts at the
+collision rate and each of its reactions is selected in proportion to
+its probability, so their rates are under-predicted.  SPARTA warns
+once per run when this happens.  Reducing the timestep or fnum does
+not change the probability.
+
 :line
 
 The {qk} style is Bird's Quantum-Kinetic model (QK).  When this style
@@ -384,9 +407,10 @@ must be reproduced exactly.
 The B style requires the "react tce"_react.html style (with or without
 "react_modify"_react_modify.html {compute_chem_rates}); with the qk
 and tce/qk styles, B lines are switched off with a warning.  A reverse
-reaction is also switched off, with a warning, if its forward reaction
-is inactive, e.g. because its temperature exponent is outside the
-range the TCE model allows.  Reactions between charged and neutral
+reaction is also switched off if the exponent b of its forward
+reaction is below the -(z+3/2) bound described above, since the
+forward probability then does not reproduce its Arrhenius rate; the
+warning about the forward reaction says so.  Reactions between charged and neutral
 heavy species are fully supported: a charge-exchange reaction such as
 A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
 reverse like any other exchange, since no free electron participates

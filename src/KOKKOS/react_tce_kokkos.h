@@ -33,6 +33,7 @@ class ReactTCEKokkos : public ReactBirdKokkos {
   ReactTCEKokkos(class SPARTA *, int, char **);
   ReactTCEKokkos(class SPARTA* sparta) : ReactBirdKokkos(sparta) {copy = 1;}
   void init();
+  void end_of_run();
   int attempt(Particle::OnePart *, Particle::OnePart *,
               double, double, double, double, double &, int &) { return 0; }
 
@@ -40,6 +41,7 @@ class ReactTCEKokkos : public ReactBirdKokkos {
 
 enum{NONE,DISCRETE,SMOOTH};
 enum{DISSOCIATION,EXCHANGE,IONIZATION,RECOMBINATION};   // other files
+enum{PROBBIG_NONE = 1073741824};                  // no d_probbig entry
 
 KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
@@ -79,8 +81,11 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                                pre_evib,pre_eelec,pre_ave_rotdof,
                                recomb_species,recomb_density,recomb_part3,
                                recomb_p3_eelec,d_species,tgas_cell);
+    if (p < 0.0) Kokkos::atomic_max(&d_probneg(),1);
     if (p > 1.0) { p = 1.0; capped = 1; }
     total_prob += p;
+    if (capped || total_prob > 1.0)
+      Kokkos::atomic_min(&d_probbig(),d_list[i]);
     if (isel < 0 && total_prob > random_prob) isel = i;
   }
 
@@ -103,14 +108,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
       if (p > 0.0) isel = i;               // round-off fallback: last live channel
       if (cum > target) break;
     }
-  }
-
-  if (total_prob > 1.0 || capped) {
-    if (Kokkos::atomic_compare_exchange(&d_probwarn(),0,1) == 0)
-      Kokkos::printf("WARNING: TCE reaction probability exceeded 1 and was "
-        "capped (reaction cross-section limited to the VHS cross-section); "
-        "the simulated rate saturates at the collision rate - reduce the "
-        "timestep or fnum, or refine the grid\n");
   }
 
   if (isel < 0) return 0;
@@ -274,16 +271,17 @@ double channel_prob_kk(int rindex, Particle::OnePart *ip,
     double prefactor = r->d_coeff[2] * keq_resid;
 
     // compute probability of reaction
-    // gamma function denominator is negative or infinite (erroneous
-    //   probability) if the temperature exponent is out of bounds,
-    //   checked at init by ReactBird::check_tce_bounds()
+    // gamma function denominator is non-positive if the temperature
+    //   exponent is below the TCE bound, then it is clamped to 1.0e-6
+    //   and the reaction rate is incorrect, warned about at init by
+    //   ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:
     case IONIZATION:
     case EXCHANGE:
       {
-        return prefactor * tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
+        return prefactor * tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           efactor;
       }
 
@@ -369,7 +367,7 @@ double channel_prob_kk(int rindex, Particle::OnePart *ip,
         }
 
         return recomb_boost * recomb_density * prefactor *
-          tgamma(z+2.5-r->d_coeff[5]) / tgamma(z+r->d_coeff[3]+1.5) *
+          tgamma(z+2.5-r->d_coeff[5]) / MAX(1.0e-6,tgamma(z+r->d_coeff[3]+1.5)) *
           efactor;   // extended to general recombination case with non-zero activation energy
       }
 
@@ -410,10 +408,12 @@ double channel_prob_kk(int rindex, Particle::OnePart *ip,
   DAT::t_int_scalar d_error_flag;
   HAT::t_int_scalar h_error_flag;
 
-  // one-time device flag: set the first time a collision's cumulative
-  //   reaction probability exceeds 1 (rate may be under-counted); mirrors
-  //   the CPU ReactTCE::probwarnflag warning
-  DAT::t_int_scalar d_probwarn;
+  // invalid reaction probabilities recorded during the run, reported by
+  //   end_of_run() (match ReactTCE::prob_neg_flag and prob_big_index):
+  //   d_probneg = 1 if a negative probability occurred,
+  //   d_probbig = lowest rlist index at which a pair's summed probability
+  //     exceeded 1, PROBBIG_NONE if none
+  DAT::t_int_scalar d_probneg,d_probbig;
 };
 
 }

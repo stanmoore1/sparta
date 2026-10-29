@@ -379,9 +379,10 @@ must be reproduced exactly.
 <P>The B style requires the <A HREF = "react.html">react tce</A> style (with or without
 <A HREF = "react_modify.html">react_modify</A> <I>compute_chem_rates</I>); with the qk
 and tce/qk styles, B lines are switched off with a warning.  A reverse
-reaction is also switched off, with a warning, if its forward reaction
-is inactive, e.g. because its temperature exponent is outside the
-range the TCE model allows.  Reactions between charged and neutral
+reaction is also switched off if the exponent b of its forward
+reaction is below the -(z+3/2) bound for which the TCE model can
+reproduce its Arrhenius rate, since the forward probability then does
+not reproduce that rate; the warning about the forward reaction says so.  Reactions between charged and neutral
 heavy species are fully supported: a charge-exchange reaction such as
 A+ + B --> A + B+ is an exchange (E) reaction and pairs with a B-style
 reverse like any other exchange, since no free electron participates
