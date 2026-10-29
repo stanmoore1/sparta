@@ -240,6 +240,10 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
     }
 
     // compute probability of reaction
+    // gamma function denominator is non-positive if the temperature
+    //   exponent is below the TCE bound, then it is clamped to 1.0e-6
+    //   and the reaction rate is incorrect, warned about at init by
+    //   ReactBird::check_tce_bounds()
 
     switch (r->type) {
     case DISSOCIATION:

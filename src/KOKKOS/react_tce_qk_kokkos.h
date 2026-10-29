@@ -90,9 +90,15 @@ int attempt_kk(OnePartKK *ip, OnePartKK *jp,
         switch (r->type) {
         case DISSOCIATION:
         case EXCHANGE:
-          react_prob += r->d_coeff[2] *
-            Kokkos::pow(ecc2-r->d_coeff[1],r->d_coeff[3]) *
-            Kokkos::pow(static_cast<KK_FLOAT>(1.0)-r->d_coeff[1]/ecc2,r->d_coeff[5]);
+          {
+            const double z = r->d_coeff[0];      // KK_DOUBLE: reaction coefficients are double
+            const double eta = r->d_coeff[3];    // KK_DOUBLE: reaction coefficients are double
+            const double omega = r->d_coeff[5];  // KK_DOUBLE: reaction coefficients are double
+            react_prob += r->d_coeff[2] *
+              Kokkos::tgamma(z+static_cast<KK_FLOAT>(2.5)-omega) / MAX(static_cast<KK_FLOAT>(1.0e-6),Kokkos::tgamma(z+eta+static_cast<KK_FLOAT>(1.5))) *
+              Kokkos::pow(ecc2-r->d_coeff[1],eta-static_cast<KK_FLOAT>(1.0)+omega) *
+              Kokkos::pow(static_cast<KK_FLOAT>(1.0)-r->d_coeff[1]/ecc2,z+static_cast<KK_FLOAT>(1.5)-omega);
+          }
           break;
         default:
           Kokkos::abort("ReactTCEQKKokkos: Unknown outcome in reaction\n");
