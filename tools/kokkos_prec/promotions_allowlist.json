@@ -89,6 +89,7 @@
     "surf_collide_td_kokkos.h": 24,
     "surf_react_adsorb_kokkos.h": 69,
     "surf_react_global_kokkos.h": 2,
+    "update_kokkos.cpp": 27,
     "update_kokkos.h": 24
   }
 }
