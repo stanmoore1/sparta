@@ -14,6 +14,7 @@ The default list is ci_examples.txt next to this script.
 import argparse
 import concurrent.futures
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -62,14 +63,21 @@ def main():
     args = ap.parse_args()
 
     names = args.names or open(args.list).read().split()
-    # copy each example directory once, without old logs
+    # copy each example directory once, without old logs, and the sibling
+    #   directories its input reads files from (e.g. ../ablation/air.species)
     for name in names:
         src = find_input(args.examples, name)
         if src is None:
             continue
-        dst = os.path.join(args.out, os.path.relpath(src, args.examples))
-        if not os.path.isdir(dst):
-            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("log.*"))
+        dirs = [src]
+        text = open(os.path.join(src, "in." + name), errors="replace").read()
+        for sib in sorted(set(re.findall(r"\.\./([A-Za-z0-9_]+)/", text))):
+            if os.path.isdir(os.path.join(args.examples, sib)):
+                dirs.append(os.path.join(args.examples, sib))
+        for d in dirs:
+            dst = os.path.join(args.out, os.path.relpath(d, args.examples))
+            if not os.path.isdir(dst):
+                shutil.copytree(d, dst, ignore=shutil.ignore_patterns("log.*"))
 
     nfail = 0
     with concurrent.futures.ThreadPoolExecutor(args.j) as ex:
