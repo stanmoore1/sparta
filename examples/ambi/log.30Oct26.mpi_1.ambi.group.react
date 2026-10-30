@@ -1,0 +1,144 @@
+SPARTA (27 Aug 2026)
+Running on 1 MPI task(s)
+################################################################################
+# thermal plasma in a 2d box, reacting multigroup ambipolar collisions
+#
+# Same setup as in.ambi.group, with gas-phase chemistry enabled and the
+# temperature and density raised until reactions are frequent.  This is the
+# regression guard for the reacting multigroup ambipolar collision path,
+# where group membership, the electron list and the cell particle list all
+# change as reactions rebin, create and destroy particles.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed                12345
+dimension           2
+boundary            rr rr p
+global              gridcut 0.01 comm/sort yes
+create_box          -2.0 2.0 -2.0 2.0 -0.5 0.5
+Created orthogonal box = (-2 -2 -0.5) to (2 2 0.5)
+create_grid         20 20 1
+Created 400 child grid cells
+  CPU time = 0.0017378 secs
+  create/ghost percent = 87.7717 12.2283
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 0.000222266 secs
+  reassign/sort/migrate/ghost percent = 50.5786 0.96371 8.66529 39.7924
+
+global              fnum 2.6404E16
+global              nrho 2.6404e23
+
+species             air.species N2 O2 N O NO N2+ O2+ N+ O+ NO+ e
+
+# collide mixture: all species, two groups
+# the ambipolar electron species e must be in a group by itself
+
+mixture             gas N2 O2 N O NO N2+ O2+ N+ O+ NO+ vstream 0 0 0 temp 100000.0 group heavy
+mixture             gas e group electron
+mixture             gas N2 frac 0.6
+mixture             gas N2+ frac 0.4
+
+fix                 ambi ambipolar e N+ N2+ NO+ O+ O2+
+
+collide             vss gas air.vss
+collide_modify      ambipolar yes
+react               tce air.tce
+
+create_particles    gas n 10000 twopass
+Created 10000 particles
+  CPU time = 0.00699497 secs
+
+compute             temp temp
+stats               25
+stats_style         step np nattempt ncoll nreact c_temp
+
+timestep            1.0e-7
+run                 300
+WARNING: 2 TCE reaction(s) have a temperature exponent below the bound -(z+3/2) for which the TCE model can reproduce their Arrhenius rate. Their gamma function is non-positive and clamped, so their reaction rates are incorrect:
+  O + e --> O+ + e + e: temperature exponent -3.78 <= -1.5
+  N + e --> N+ + e + e: temperature exponent -3.82 <= -1.5 (../react_bird.cpp:1235)
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 2 2 2
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 3.51379 3.51379 3.51379
+Step Np Natt Ncoll Nreact c_temp 
+       0    10000        0        0        0    100229.43 
+      25    10002     3058      849        1    100241.89 
+      50    10005     3062      862        0    100274.95 
+      75    10012     3106      890        0    100079.01 
+     100    10017     3130      831        2    99923.114 
+     125    10023     3132      832        0    99833.252 
+     150    10026     3158      851        0     99847.58 
+     175    10033     3173      832        0    99835.946 
+     200    10043     3194      850        0    99689.694 
+     225    10050     3205      863        1    99680.273 
+     250    10053     3200      864        2    99699.246 
+     275    10059     3225      879        1    99714.939 
+     300    10070     3249      828        0    99662.076 
+Loop time of 0.173089 on 1 procs for 300 steps with 10070 particles
+Performance: 1733.215 timesteps/s, 17.453 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.019909   | 0.019909   | 0.019909   |   0.0 | 11.50
+Coll    | 0.14644    | 0.14644    | 0.14644    |   0.0 | 84.61
+Sort    | 0.0054849  | 0.0054849  | 0.0054849  |   0.0 |  3.17
+Comm    | 0.00019976 | 0.00019976 | 0.00019976 |   0.0 |  0.12
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.00079313 | 0.00079313 | 0.00079313 |   0.0 |  0.46
+MPI Sync| 0.00021154 | 0.00021154 | 0.00021154 |   0.0 |  0.12
+Other   |            | 4.746e-05  |            |       |  0.03
+
+Particle moves    = 3008925 (3.01M)
+Cells touched     = 3021413 (3.02M)
+Particle comms    = 0 (0K)
+Boundary collides = 606 (0.606K)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 946051 (0.946M)
+Collide occurs    = 257579 (0.258M)
+Reactions         = 170 (0.17K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 1.73837e+07
+Particle-moves/step: 10029.8
+Cell-touches/particle/step: 1.00415
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.000201401
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0.314415
+Collisions/particle/step: 0.085605
+Reactions/particle/step: 5.64986e-05
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction N2 + N2 --> N + N + N2: 69
+  reaction N2 + N --> N + N + N: 1
+  reaction N2 + N+ --> N + N2+: 4
+  reaction N2+ + N --> N2 + N+: 1
+  reaction N + e --> N+ + e + e: 95
+
+Particles: 10070 ave 10070 max 10070 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      400 ave 400 max 400 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+WARNING: Summed TCE reaction probability exceeded 1.0 during this run, e.g. at reaction N + e --> N+ + e + e: the Arrhenius rates exceed the collision rate at some collision energies, where the reactions of that species pair are limited to the collision rate (each selected in proportion to its probability), so their rates are under-predicted; this is independent of timestep and fnum (../react_bird.cpp:1272)

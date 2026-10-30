@@ -1,0 +1,205 @@
+SPARTA (27 Aug 2026)
+Running on 4 MPI task(s)
+################################################################################
+# thermal gas in a 3d box with collisions
+# particles reflect off global box boundaries
+#
+# Note:
+#  - The "comm/sort” option to the “global” command is used to match MPI runs.
+#  - The “twopass” option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed	    	    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    2 2 2
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:486)
+Created 8 child grid cells
+  CPU time = 0.095833 secs
+  create/ghost percent = 12.3494 87.6506
+
+balance_grid        rcb part
+Balance grid migrated 4 cells
+  CPU time = 0.472013 secs
+  reassign/sort/migrate/ghost percent = 50.8774 2.51312 7.62604 38.9835
+
+species		    air.species N2 O2 N2+ O2+ O N O+ N+ NO NO+ e elecfile air.elec
+mixture		    air N2 O2 N2+ O2+ O N O+ N+ NO NO+ e vstream 0.0 0.0 0.0 temp 20000.0 trot 20000.0 tvib 20000.0 telec 100.0
+
+mixture             air copy noelectron
+mixture             noelectron delete e
+mixture             noelectron N2 frac 0.80
+mixture             noelectron O2 frac 0.199
+mixture             noelectron N2+ frac 0.0001
+
+global              nrho 7.07043E22
+global              fnum 7.07043E5
+
+fix                 ambi ambipolar e N2+ O2+ NO+ N+ O+
+
+collide		    vss air air.vss relax constant
+collide_modify      rotate smooth vibrate discrete electronic discrete
+collide_modify      ambipolar yes
+fix                 electronic elecmode
+collide_modify      remain no
+react               tce air.tce
+
+create_particles    noelectron n 40000 twopass
+Created 40000 particles
+  CPU time = 0.0296459 secs
+
+stats		    100
+compute             temp temp
+compute             T thermal/grid all all temp
+compute             Ttrans reduce ave c_T[1]
+
+compute             rot grid all all trot erot
+compute             Trot reduce ave c_rot[1]
+compute             Erot reduce ave c_rot[2]
+
+compute             vib grid all all tvib evib
+compute             Tvib reduce ave c_vib[1]
+compute             Evib reduce ave c_vib[2]
+
+compute             elec grid all species eelec
+compute             Eelec reduce ave c_elec[1]
+
+compute             telec telec/grid all air
+compute             Telec reduce ave c_telec[*]
+
+compute             telec2 telec/grid all species
+compute             Telec2 reduce ave c_telec2[*]
+
+compute             den grid all species nrho
+compute             Den_N2 reduce ave c_den[1]
+compute             Den_O2 reduce ave c_den[2]
+compute             Den_N2p reduce ave c_den[3]
+compute             Den_O2p reduce ave c_den[4]
+compute             Den_O reduce ave c_den[5]
+compute             Den_N reduce ave c_den[6]
+compute             Den_Op reduce ave c_den[6]
+compute             Den_Np reduce ave c_den[7]
+compute             Den_NO reduce ave c_den[8]
+compute             Den_NOp reduce ave c_den[9]
+
+#stats_style	    step cpu np nattempt ncoll c_Erot c_Evib c_Eelec
+stats_style	    step cpu np nattempt ncoll c_Ttrans c_Trot c_Erot c_Tvib c_Evib c_Eelec c_Telec c_Den_N2 c_Den_O2 c_Den_N2p c_Den_O2p c_Den_O c_Den_N c_Den_Op c_Den_Np c_Den_NO c_Den_NOp
+
+timestep 	    1.00E-9
+run 		    1000
+WARNING: 2 TCE reaction(s) have a temperature exponent below the bound -(z+3/2) for which the TCE model can reproduce their Arrhenius rate. Their gamma function is non-positive and clamped, so their reaction rates are incorrect:
+  O + e --> O+ + e + e: temperature exponent -3.78 <= -1.5
+  N + e --> N+ + e + e: temperature exponent -3.82 <= -1.5 (../react_bird.cpp:1235)
+WARNING: Single-group ambipolar collisions are inefficient; grouping electrons separately (e.g. collide ... species) is recommended (../collide.cpp:390)
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 2.1875 2.1875 2.1875
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0.00146484 0.00146484 0.00146484
+  total     (ave,min,max) = 3.70276 3.70276 3.70276
+Step CPU Np Natt Ncoll c_Ttrans c_Trot c_Erot c_Tvib c_Evib c_Eelec c_Telec c_Den_N2 c_Den_O2 c_Den_N2p c_Den_O2p c_Den_O c_Den_N c_Den_Op c_Den_Np c_Den_NO c_Den_NOp 
+       0            0    40000        0        0    19899.037     20055.62 2.7679354e-19     18359.88 2.5339025e-19            0            0 2.265083e+22 5.6110932e+21 1.414086e+18 3.535215e+18 4.242258e+18  7.07043e+17  7.07043e+17 3.535215e+18 2.121129e+18 2.828172e+18 
+     100     6.574606    41652   124672      602    18449.729     19261.73 2.4474171e-19    18077.498 2.296993e-19 3.9628898e-21    9114.5531 2.2389224e+22 4.6947655e+21 1.414086e+18 3.535215e+18 1.8262921e+21 5.147273e+20 5.147273e+20 4.242258e+18 1.414086e+18 1.2726774e+19 
+     200    13.462678    43151   133857      655    17296.642    18453.377 2.1746878e-19     17736.38 2.0901417e-19 5.961755e-21    10250.054 2.2094387e+22 3.8915647e+21 1.414086e+18 4.242258e+18 3.3930994e+21 1.0669279e+21 1.0669279e+21 4.949301e+18 1.414086e+18 5.0200053e+19 
+     300    20.342639    44401   141757      616    16407.598    17780.354 1.9673452e-19    17376.336  1.92263e-19 7.4434959e-21    10925.187 2.182571e+22 3.221995e+21 2.121129e+18 4.242258e+18 4.6785035e+21 1.5491312e+21 1.5491312e+21 4.949301e+18 1.414086e+18 1.0322828e+20 
+     400    27.106596    45488   148804      690    15677.524    17228.116 1.8038324e-19    16850.771 1.7644321e-19 9.1544245e-21    11390.044 2.1542186e+22 2.6789859e+21 2.121129e+18 4.949301e+18 5.7044229e+21 2.0589092e+21 2.0589092e+21 6.363387e+18 1.414086e+18 1.612058e+20 
+     500    34.270592    46317   154278      696    15197.293    16774.721 1.683442e-19    16320.154 1.6377636e-19 9.8231281e-21    11689.241 2.1291893e+22 2.2745573e+21 2.828172e+18 4.949301e+18 6.4439899e+21 2.4909125e+21 2.4909125e+21 7.777473e+18  7.07043e+17 2.2837489e+20 
+     600    40.710611    47074   159436      676    14698.912     16449.11 1.5877943e-19    15763.808 1.5217007e-19 1.0366868e-20    11880.359 2.1027459e+22 1.924571e+21 2.828172e+18 6.363387e+18 7.0626525e+21 2.9412989e+21 2.9412989e+21 8.484516e+18 1.414086e+18 3.026144e+20 
+     700     47.72663    47680   163686      678    14296.699    16127.246 1.5087571e-19     15337.76 1.4348972e-19 1.0805001e-20    11961.031 2.0789892e+22 1.661551e+21 4.949301e+18  7.07043e+18 7.5172812e+21 3.3414852e+21 3.3414852e+21 9.191559e+18 2.828172e+18 3.6978349e+20 
+     800    55.122597    48247   167615      681    13959.284    15842.513 1.4389957e-19    14852.551 1.3490196e-19 1.1160989e-20    12101.835 2.0570709e+22 1.4112578e+21 4.949301e+18 9.191559e+18 7.9464563e+21 3.7126828e+21 3.7126828e+21 9.898602e+18 3.535215e+18 4.3553849e+20 
+     900    61.882602    48697   170785      779    13716.573    15550.179 1.3793513e-19    14375.997 1.2752369e-19 1.1560694e-20    12178.166 2.0357889e+22  1.23379e+21 4.949301e+18 9.191559e+18 8.2292735e+21 4.0654972e+21 4.0654972e+21 9.898602e+18 4.242258e+18 5.0624279e+20 
+    1000    68.486644    49103   173642      772    13511.131    15274.978 1.3263184e-19    13956.718 1.2118643e-19 1.1596152e-20    12187.777 2.0173351e+22 1.0803617e+21 4.949301e+18 8.484516e+18 8.483809e+21 4.3822525e+21 4.3822525e+21 1.2019731e+19 4.949301e+18 5.5856397e+20 
+Loop time of 68.5343 on 4 procs for 1000 steps with 49103 particles
+Performance: 14.591 timesteps/s, 716.473 kparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.4517     | 0.50288    | 0.553      |   5.9 |  0.73
+Coll    | 3.9988     | 4.1343     | 4.3258     |   5.9 |  6.03
+Sort    | 0.13938    | 0.15169    | 0.17004    |   2.9 |  0.22
+Comm    | 45.85      | 47.791     | 49.333     |  18.1 | 69.73
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 3.9738     | 3.9905     | 4.0074     |   0.8 |  5.82
+MPI Sync| 10.476     | 11.962     | 14.005     |  37.0 | 17.45
+Other   |            | 0.002511   |            |       |  0.00
+
+Particle moves    = 45734634 (45.7M)
+Cells touched     = 48262135 (48.3M)
+Particle comms    = 1668294 (1.67M)
+Boundary collides = 2528169 (2.53M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 151021474 (151M)
+Collide occurs    = 675002 (0.675M)
+Reactions         = 10291 (10.3K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 166831
+Particle-moves/step: 45734.6
+Cell-touches/particle/step: 1.05526
+Particle comm iterations/step: 1
+Particle fraction communicated: 0.0364777
+Particle fraction colliding with boundary: 0.0552791
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 3.30212
+Collisions/particle/step: 0.0147591
+Reactions/particle/step: 0.000225015
+
+Gas reaction tallies:
+  style tce #-of-reactions 45
+  reaction O2 + N --> O + O + N: 598
+  reaction O2 + NO --> O + O + NO: 18
+  reaction O2 + N2 --> O + O + N2: 3429
+  reaction O2 + O2 --> O + O + O2: 524
+  reaction O2 + O --> O + O + O: 1691
+  reaction N2 + O --> N + N + O: 988
+  reaction N2 + O2 --> N + N + O2: 137
+  reaction N2 + NO --> N + N + NO: 6
+  reaction N2 + N2 --> N + N + N2: 1061
+  reaction N2 + N --> N + N + N: 402
+  reaction NO + N2 --> N + O + N2: 167
+  reaction NO + O2 --> N + O + O2: 11
+  reaction NO + NO --> N + O + NO: 1
+  reaction NO + O --> N + O + O: 70
+  reaction NO + N --> N + O + N: 34
+  reaction NO + O --> O2 + N: 9
+  reaction N2 + O --> NO + N: 918
+  reaction O2 + N --> NO + O: 161
+  reaction NO + N --> N2 + O: 3
+  reaction O + N --> NO+ + e: 21
+  reaction N + N --> N2+ + e: 4
+  reaction O + O --> O2+ + e: 9
+  reaction N2+ + O --> N + NO+: 1
+  reaction N2 + N+ --> N + N2+: 4
+  reaction N2+ + N --> N2 + N+: 2
+  reaction NO+ + N --> N2 + O+: 7
+  reaction NO+ + O --> O2 + N+: 3
+  reaction NO+ + O2 --> NO + O2+: 2
+  reaction O2+ + NO --> O2 + NO+: 1
+  reaction O2+ + N --> O2 + N+: 3
+  reaction N+ + O2 --> NO + O+ : 1
+  reaction O + e --> O+ + e + e: 4
+  reaction N + e --> N+ + e + e: 1
+
+Particles: 12275.8 ave 12355 max 12215 min
+Histogram: 1 0 1 0 1 0 0 0 0 1
+Cells:      2 ave 2 max 2 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+GhostCell: 6 ave 6 max 6 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+WARNING: Summed TCE reaction probability exceeded 1.0 during this run, e.g. at reaction O2 + N --> O + O + N: the Arrhenius rates exceed the collision rate at some collision energies, where the reactions of that species pair are limited to the collision rate (each selected in proportion to its probability), so their rates are under-predicted; this is independent of timestep and fnum (../react_bird.cpp:1272)
