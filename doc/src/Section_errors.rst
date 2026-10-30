@@ -1331,6 +1331,11 @@ Errors:
 *Label wasn't found in input script*
    Self-explanatory.
 
+*Line in surf file exceeds maximum allowed length*
+   A line in the Points, Lines, or Triangles section of the surf file is
+   longer than 1023 characters.  This can occur if many custom values
+   are listed for each surface element.
+
 *Log of zero/negative value in variable formula*
    Self-explanatory.
 
