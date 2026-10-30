@@ -31,7 +31,7 @@ S=/tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpa
 | V3-R6 | grid computes kk + CPU count/dt/lambda | DONE | no regression; R6-1 pre-existing (dt/grid step 0) |
 | V3-T1 | all examples A vs B: kk t1/t4, CPU, MPI, cpu/stub builds | RUNNING | kk1 + cpuopt done (141 inputs, all identical or intended) |
 | V3-T2 | split-memory sweep B_sync/B_poison vs A_poison | RUNNING | Bp np1 clean on 140 decks; others in progress |
-| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | RUNNING | launched 05:2x after B_asan built |
+| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | RUNNING (agent idle, its background jobs run) | 3/282 clean so far. Jobs: $F/V3-T3/run.sh jobs_B.txt (done when "JOBFILE DONE ...jobs_B" in $F/V3-T3/run.log) and build_A.sh (A_asan). After a restart: `setsid nohup $F/V3-T3/build_A.sh &` and `setsid nohup $F/V3-T3/run.sh $F/V3-T3/jobs_B.txt &` (both skip finished work), then resume/relaunch V3-T3: remaining steps 1-5 are in v3/V3-T3.md Log |
 | V3-T4 | merged tree with ccr-014f4f5c-hhi3vb, restart compat, formats, warnings, perf | RUNNING | restart PASS, formats PASS, warnings: no new real ones; merged build + perf pending |
 
 ## Orchestrator pending
