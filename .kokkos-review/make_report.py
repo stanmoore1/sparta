@@ -210,6 +210,50 @@ details .more b{color:var(--fg);font-weight:500}
 </header>
 ''')
 
+V3_CHECKS = [
+ ('Line-by-line re-review', 'All 111 changed files (~2,900 lines), 6 independent reviewers, every suspicion run A vs B',
+  '2 problems found, both fixed and verified (below). No GPU-risk, MPI or build finding.', 'v3/V3-R1..R6.md'),
+ ('Regression sweep', '141 examples x 9 configs: kk t1, kk t4, CPU styles, kk MPI np2/np4 with bounds check, CPU-only MPI np1/2/4, MPI stubs',
+  '0 regressions. Bit-identical except 3 intended fixes (ambi runs further; relax_const t4 sonine values corrected; ablation/axi MPI no longer abort). t4 differences are within the A-vs-A run-to-run spread (8 vs 8 repeats).', 'v3/V3-T1.md'),
+ ('GPU memory (split host/device)', 'Every example on the split-memory detector: watch/stale-strict, audit, AddressSanitizer poison; np1 and np2; vs pre-review code',
+  '0 new reports. Poison: 0 ASan reports; audit: 0 undeclared writes; split == unified == OpenMP stats bitwise on 138 decks. Remaining stale labels all occur on the pre-review code too.', 'v3/V3-T2.md'),
+ ('Memory and UB', 'Every example under ASan + UBSan + Kokkos bounds check, CPU and kk t2; valgrind on 32 decks',
+  '0 new reports. 4 pre-existing signatures in unchanged code; valgrind shows only OpenMPI startup noise plus 1 pre-existing uninitialised read.', 'v3/V3-T3.md'),
+ ('Compatibility', 'Restart files A&harr;B, dump/log formats, compiler warnings, merged with branch ccr-014f4f5c-hhi3vb',
+  'Restart files byte-identical and cross-readable; outputs byte-identical; no new warnings; merge is clean, 141 examples run, the 9 statistical differences bisect to intended fixes on the other branch.', 'v3/V3-T4.md'),
+ ('Performance', 'Every kk example A vs B, t4, 3 repeats; callgrind instruction counts on outliers; hot loops at t1/t4',
+  'No slowdown above 5%: geometric mean B/A 0.995 (loop time); instruction ratios 0.989-1.005 except emit.surf.subsonic 1.024.', 'v3/V3-T4.md, V3-R3.md'),
+]
+V3_FIXED = [
+ ('V3R3-1', 'compute gas/reaction/grid refused a re-issued react command with fewer reactions (worked before the branch)', 'c99e6089',
+  'Check now rejects only a longer reaction list, which would overflow. Fewer reactions: runs, stats identical to A (CPU and kk). More reactions: still stops; A silently wrote tallies into the next cell.'),
+ ('R2-1', 'CPU 2d FFT (compute fft/grid) unusable with FFT_SINGLE: an argument-order fix exposed that remap2d never supported single precision', '877267ee',
+  'remap2d now uses FFT_SCALAR/MPI_FFT_SCALAR like remap3d. Single: 84/84 FFTs match a direct DFT (max error 1.8e-6). Double: bit-identical at np1/2/4 and stubs.'),
+]
+V3_PRE = [
+ 'Migrate list can overflow when surface reactions add many particles that leave the rank in the same step (update.cpp, update_kokkos.cpp); same in A and B, reproduced only with an extreme deck.',
+ 'compute dt/grid CPU style skips every cell at step 0 (before the first sort); kk does not, so step 0 differs.',
+ 'UBSan: qsort on a NULL list in marching_cubes.cpp:934; memset(NULL,0,0) in surf_comm.cpp:94. Leaks at exit: Python object after clear; watertight-check error exit.',
+ 'Valgrind: uninitialised read in Grid::update_halo_index during create_grid (optmove.surf).',
+ '2d Kokkos remap in collective mode sends to itself and crashes on MPI stubs; compute fft/grid never uses collective mode.',
+]
+o.append('<section style="display:flex;flex-direction:column;gap:12px"><h2>Production readiness (round 3)</h2>'
+         '<p class="lede"><b>Verdict: ready, with no regressions found.</b> A fresh, independent round re-checked every changed line and ran every example in every configuration available here. It found two problems, one a minor regression, and both are fixed and verified. Everything else that turned up exists in the pre-review code too.</p>')
+o.append('<div class="tbl"><table><thead><tr><th>Check</th><th>What was run</th><th>Result</th></tr></thead><tbody>')
+for name, what, res, src in V3_CHECKS:
+  o.append(f'<tr><td class="id">{name}</td><td>{what}</td><td class="ev">{res}<div style="font-size:.78rem;color:var(--muted);margin-top:4px">Record: <code>.kokkos-review/{src}</code></div></td></tr>')
+o.append('</tbody></table></div>')
+o.append('<h3 style="margin:8px 0 0">Fixed in this round</h3><div class="tbl"><table><thead><tr><th>Id</th><th>Problem</th><th>Commit</th><th>Verification</th></tr></thead><tbody>')
+for rid, bug, cm, ev in V3_FIXED:
+  o.append(f'<tr data-k="nc"><td class="id">{rid}</td><td>{esc(bug)}</td><td class="id">{cm}</td><td class="ev">{esc(ev)}</td></tr>')
+o.append('</tbody></table></div>')
+o.append('<div class="note"><h3 style="margin:0">Caveats before shipping</h3><ul>'
+         '<li>No GPU on the test machine and no CUDA/HIP/SYCL compiler: device-code legality was checked by reading, and host/device coherence with the split-memory detector. A build and the examples on a real GPU are the one test still worth running.</li>'
+         '<li>With an external Kokkos older than 4.5, SYCL builds no longer compile (the bundled Kokkos 5.2.2 is fine).</li>'
+         '<li>emit.surf.subsonic executes 2.4% more instructions (a kernel is no longer inlined); wall time is not measurably slower.</li></ul></div>')
+o.append('<div class="note"><h3 style="margin:0">Pre-existing issues found, not fixed (same in the pre-review code)</h3><ul>'
+         + ''.join(f'<li>{esc(x)}</li>' for x in V3_PRE) + '</ul></div></section>')
+
 o.append('<section style="display:flex;flex-direction:column;gap:12px"><h2>Outcome</h2><div class="strip">')
 o.append(f'<div class="tile"><b>{total}</b><span>fix IDs tested</span></div>')
 for k in order:
@@ -286,8 +330,8 @@ o.append('''<section style="display:flex;flex-direction:column;gap:12px"><h2>Met
 <div><h3>Controls</h3><p>Positive control: an input on the buggy path where A fails (wrong value vs CPU or analytic, crash, bounds abort, NaN, hang, leak). Negative control: same code path without the trigger; A and B must agree.</p></div>
 <div><h3>Coverage</h3><p>Kernel paths (atomic, duplicated, sorted), 1 and 4 threads, 1 to 4 MPI ranks, 2D and 3D, each surface collision model. Standalone unit drivers for unreachable or library-only paths.</p></div>
 <div><h3>Regression</h3><p>All 141 example inputs with Kokkos on: thermo output identical between A and B except ambi, which now runs further; identical between B and the final build with all follow-up fixes, and again after round 2 (141/141).</p></div>\n<div><h3>GPU memory</h3><p>Split-memory detector builds (separate host allocation, software DualView state machine; watch, stale, audit and AddressSanitizer poison modes) of the pre-fix and fixed code. All 134 examples at 1 rank and 21 at 4 ranks match stock stats on the fixed code.</p></div>
-<div><h3>Limits</h3><p>No GPU on the test machine. The split-memory tool reproduces most host/device coherence bugs, but not a kernel dereferencing a host pointer or host code touching device-only memory. No <code>SPARTA_KOKKOS_EXACT</code> build was made.</p></div>
-<div><h3>Records</h3><p>Per-fix evidence: <code>.kokkos-review/ab/AB*.md</code>. Fix list and commits: <code>.kokkos-review/FIXES.md</code>.</p></div>
+<div><h3>Limits</h3><p>No GPU on the test machine. The split-memory tool reproduces most host/device coherence bugs, but not a kernel dereferencing a host pointer or host code touching device-only memory. Round 3 built <code>SPARTA_KOKKOS_EXACT</code>: kk and CPU stats are bitwise identical on 8 collision/chemistry decks, with and without react/retry.</p></div>
+<div><h3>Records</h3><p>Per-fix evidence: <code>.kokkos-review/ab/AB*.md</code>. Round 3: <code>.kokkos-review/v3/</code>, plan <code>V3_PROTOCOL.md</code>. Fix list and commits: <code>.kokkos-review/FIXES.md</code>.</p></div>
 </div></section>
 </main>
 <script>
