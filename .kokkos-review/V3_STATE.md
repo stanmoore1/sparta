@@ -31,12 +31,12 @@ S=/tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpa
 | V3-R6 | grid computes kk + CPU count/dt/lambda | DONE | no regression; R6-1 pre-existing (dt/grid step 0) |
 | V3-T1 | all examples A vs B: kk t1/t4, CPU, MPI, cpu/stub builds | RUNNING | kk1 + cpuopt done (141 inputs, all identical or intended) |
 | V3-T2 | split-memory sweep B_sync/B_poison vs A_poison | RUNNING | Bp np1 clean on 140 decks; others in progress |
-| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | NOT STARTED | waits for B_asan ($F/basan; build4.sh/ensure_builds.sh) |
+| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | RUNNING | launched 05:2x after B_asan built |
 | V3-T4 | merged tree with ccr-014f4f5c-hhi3vb, restart compat, formats, warnings, perf | RUNNING | restart PASS, formats PASS, warnings: no new real ones; merged build + perf pending |
 
 ## Orchestrator pending
-- B_mpi rebuild with 877267ee + c99e6089 ($F/build5.log "mpi2 rc="); B_opt already rebuilt (opt2 rc=0).
-- Launch V3-T3 when $F/basan/src/spa_* exists.
+- DONE: B_opt and B_mpi rebuilt with 877267ee + c99e6089 (opt2, mpi2 rc=0).
+- DONE: V3-T3 launched (B_asan built).
 - After T1/T2/T4 finish: rerun examples/fft and examples/chem (+ tally_computes) on the newest B_opt/B_mpi,
   since 877267ee/c99e6089 landed after the sweeps' B binaries (expected identical).
 - Final: update make_report.py with a V3 section (findings, fixes, sweeps), regenerate report.html, commit, push,
