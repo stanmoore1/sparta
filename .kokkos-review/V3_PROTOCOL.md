@@ -60,3 +60,12 @@ relative difference of time-averaged stats vs the run-to-run spread of A with di
   unchanged; timing of every kk example A_opt vs B_opt (t 4, 3 repeats, report ratio); compiler warnings
   new in B (cpu_B vs cpu_A logs); and the merged tree HEAD + branch other-hhi3vb (local branch) built
   (OpenMP, stubs) and run over all examples kk + CPU vs B to check the two branches together.
+
+## Kill-safety (all agents)
+- Assume you can be killed at any moment (session limit, container restart) and relaunched as a NEW agent that
+  only has this file and your checkpoint.  So: record every result INLINE in your checkpoint (numbers, verdicts,
+  file:line), not only as a pointer to a scratch log; scratch dirs may be gone in a new container.
+- Keep run scripts idempotent: a re-run must skip runs whose output is complete and redo partial ones.
+- Put scripts and hand-written decks under $F/<agent>/ with names *.sh, *.py, in.*, *.diff: the checkpoint loop
+  snapshots those (<100 kB each) into .kokkos-review/v3/scratch-files.tgz every 5 min.
+- Background processes you start die with the container: after a restart, re-launch them.
