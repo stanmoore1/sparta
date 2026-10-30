@@ -279,14 +279,14 @@ void DumpTally::write_binary(int n, double *mybuf)
 {
   n *= size_one;
   fwrite(&n,sizeof(int),1,fp);
-  fwrite(mybuf,sizeof(double),n,fp);
+  if (n) fwrite(mybuf,sizeof(double),n,fp);
 }
 
 /* ---------------------------------------------------------------------- */
 
 void DumpTally::write_string(int n, double *mybuf)
 {
-  fwrite(mybuf,sizeof(char),n,fp);
+  if (n) fwrite(mybuf,sizeof(char),n,fp);
 }
 
 /* ---------------------------------------------------------------------- */
