@@ -31,7 +31,7 @@ S=/tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpa
 | V3-R6 | grid computes kk + CPU count/dt/lambda | DONE | no regression; R6-1 pre-existing (dt/grid step 0) |
 | V3-T1 | all examples A vs B: kk t1/t4, CPU, MPI, cpu/stub builds | DONE | 141 inputs x 9 configs: 0 regressions; diffs = F-G21V-1 (ambi), F-G00-7 (relax_const t4), F-G00-19 (ablation MPI); t4 noise-equal (8v8 repeats) |
 | V3-T2 | split-memory sweep B_sync/B_poison vs A_poison | DONE | 0 NEW reports; poison 0 ASan np1/np2; audit 0 undeclared; Bn==Bx==O bitwise on 138 decks; stale/watch labels all pre-existing; several FIXED-BY-BRANCH; tool bug T2-1 (audit, not SPARTA) |
-| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | RUNNING (agent idle, its background jobs run) | 3/282 clean so far. Jobs: $F/V3-T3/run.sh jobs_B.txt (done when "JOBFILE DONE ...jobs_B" in $F/V3-T3/run.log) and build_A.sh (A_asan). After a restart: `setsid nohup $F/V3-T3/build_A.sh &` and `setsid nohup $F/V3-T3/run.sh $F/V3-T3/jobs_B.txt &` (both skip finished work), then resume/relaunch V3-T3: remaining steps 1-5 are in v3/V3-T3.md Log |
+| V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | DONE | 0 NEW; ASAN CPU+kk 133/141 clean, 8 decks with 4 PRE-EXISTING signatures (U1 marching_cubes qsort NULL, U2 surf_comm memset NULL, L2 Python leak, L3 watertight error-exit leaks); valgrind 32 decks: only OpenMPI noise + V1 pre-existing (Grid::update_halo_index uninit) |
 | V3-T4 | merged tree with ccr-014f4f5c-hhi3vb, restart compat, formats, warnings, perf | RUNNING | restart PASS, formats PASS, warnings: no new real ones; merged build + perf pending |
 
 ## Orchestrator pending
