@@ -32,9 +32,10 @@ S=/tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpa
 | V3-T1 | all examples A vs B: kk t1/t4, CPU, MPI, cpu/stub builds | DONE | 141 inputs x 9 configs: 0 regressions; diffs = F-G21V-1 (ambi), F-G00-7 (relax_const t4), F-G00-19 (ablation MPI); t4 noise-equal (8v8 repeats) |
 | V3-T2 | split-memory sweep B_sync/B_poison vs A_poison | DONE | 0 NEW reports; poison 0 ASan np1/np2; audit 0 undeclared; Bn==Bx==O bitwise on 138 decks; stale/watch labels all pre-existing; several FIXED-BY-BRANCH; tool bug T2-1 (audit, not SPARTA) |
 | V3-T3 | ASAN/UBSAN (B_asan) + valgrind sweep | DONE | 0 NEW; ASAN CPU+kk 133/141 clean, 8 decks with 4 PRE-EXISTING signatures (U1 marching_cubes qsort NULL, U2 surf_comm memset NULL, L2 Python leak, L3 watertight error-exit leaks); valgrind 32 decks: only OpenMPI noise + V1 pre-existing (Grid::update_halo_index uninit) |
-| V3-T4 | merged tree with ccr-014f4f5c-hhi3vb, restart compat, formats, warnings, perf | RUNNING | restart PASS, formats PASS, warnings: no new real ones; merged build + perf pending |
+| V3-T4 | merged tree with ccr-014f4f5c-hhi3vb, restart compat, formats, warnings, perf | DONE | merged clean, 141 run, 9 stat diffs bisected to other-branch fixes; restart/format PASS; no new warnings; perf geo-mean 0.995, max instr +2.4% emit.surf.subsonic |
 
 ## Orchestrator pending
+- DONE (round complete): report regenerated with round-3 section (305fdfcb), artifact republished (version 3). Verdict given to user.
 - DONE: B_opt and B_mpi rebuilt with 877267ee + c99e6089 (opt2, mpi2 rc=0).
 - DONE: V3-T3 launched (B_asan built).
 - After T1/T2/T4 finish: rerun examples/fft and examples/chem (+ tally_computes) on the newest B_opt/B_mpi,
