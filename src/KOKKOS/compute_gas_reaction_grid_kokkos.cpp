@@ -66,7 +66,9 @@ void ComputeGasReactionGridKokkos::init()
   // reaction2col and ncol were sized from react->nlist at construction,
   //   a re-issued react command would index them out of bounds
 
-  if (mode != ALL && (react == NULL || react->nlist != nlist_orig))
+  // with no react (react none) nothing is tallied and the columns stay 0
+
+  if (mode != ALL && react && react->nlist != nlist_orig)
     error->all(FLERR,"Compute gas/reaction/grid reactions changed "
                "since compute was defined");
 
