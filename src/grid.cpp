@@ -1744,9 +1744,16 @@ void Grid::set_inout()
   ParentCell *pcell;
   Connect *sbuf,*rbuf;
 
-  if (!exist_ghost)
+  if (!exist_ghost) {
+    if (cutoff >= 0.0 && !clumped)
+      error->all(FLERR,"Cannot mark grid cells as inside/outside surfs "
+                 "because ghost cells do not exist: nearby ghost cells "
+                 "cannot be acquired for a grid partition which is not "
+                 "clumped, so use a clumped balance or adapt style, or "
+                 "global gridcut -1 to store all cells on every proc");
     error->all(FLERR,"Cannot mark grid cells as inside/outside surfs because "
                "ghost cells do not exist");
+  }
 
   // if all surfs are transparent, just mark all cells as OUTSIDE
 

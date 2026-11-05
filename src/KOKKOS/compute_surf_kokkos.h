@@ -252,7 +252,8 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
     case TX:
       if (!fflag) {
         fflag = 1;
-        MathExtraKokkos::scale3(-origmass,vorig,pdelta_force);
+        pdelta_force[0] = pdelta_force[1] = pdelta_force[2] = 0.0;
+        if (iorig) MathExtraKokkos::axpy3(-origmass,vorig,pdelta_force);
         if (ip) MathExtraKokkos::axpy3(imass,ip->v,pdelta_force);
         if (jp) MathExtraKokkos::axpy3(jmass,jp->v,pdelta_force);
       }
@@ -268,7 +269,8 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
     case TY:
       if (!fflag) {
         fflag = 1;
-        MathExtraKokkos::scale3(-origmass,vorig,pdelta_force);
+        pdelta_force[0] = pdelta_force[1] = pdelta_force[2] = 0.0;
+        if (iorig) MathExtraKokkos::axpy3(-origmass,vorig,pdelta_force);
         if (ip) MathExtraKokkos::axpy3(imass,ip->v,pdelta_force);
         if (jp) MathExtraKokkos::axpy3(jmass,jp->v,pdelta_force);
       }
@@ -284,7 +286,8 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int icell, int reaction,
     case TZ:
       if (!fflag) {
         fflag = 1;
-        MathExtraKokkos::scale3(-origmass,vorig,pdelta_force);
+        pdelta_force[0] = pdelta_force[1] = pdelta_force[2] = 0.0;
+        if (iorig) MathExtraKokkos::axpy3(-origmass,vorig,pdelta_force);
         if (ip) MathExtraKokkos::axpy3(imass,ip->v,pdelta_force);
         if (jp) MathExtraKokkos::axpy3(jmass,jp->v,pdelta_force);
       }

@@ -84,8 +84,10 @@ vacate        gas collisions (collide vss) with a fast body spanning whole
               until the end-of-step re-cut, and the collision step must
               skip such a cell rather than abort; Np constant, no deletions
 prenofix      negative: a fix rigid re-defined between runs, then
-              "run pre no" (setup skipped): the uninitialized fix must
-              refuse to run rather than advance a deleted body's state
+              "run pre no" (setup skipped): the run must be refused
+              rather than advance a deleted body's state, by run's own
+              check on a skipped setup after a fix is re-defined, or by
+              fix rigid refusing a body it never initialized
 modifyafter   negative: with distributed surfs, surf_modify of the body
               surfs after the fix is defined must be rejected
 wallmotion    negative: a body surf_collide model with its own wall

@@ -900,8 +900,19 @@ def test_vacate(exe_cmd):
 
 
 def test_prenofix(exe_cmd):
-    return negative_test(exe_cmd, "in.test.prenofix",
-                         "not initialized before the run")
+    # the run is refused, by one of two guards: run itself rejects a
+    # skipped setup once a fix or compute has been defined or deleted,
+    # and reaches the error first; fix rigid refuses to advance a body
+    # it never initialized, which is what catches the case if the run
+    # guard is ever lifted
+    rc, out = run_deck(exe_cmd, "in.test.prenofix")
+    fails = []
+    if rc == 0:
+        fails.append("run succeeded but an error was expected")
+    if ("Run pre no is invalid" not in out and
+            "not initialized before the run" not in out):
+        fails.append("neither the run nor the fix rigid guard fired")
+    return fails
 
 
 def test_refix(exe_cmd):
