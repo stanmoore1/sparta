@@ -1,0 +1,145 @@
+SPARTA (27 Aug 2026)
+Running on 1 MPI task(s)
+################################################################################
+# Atom-atom electronic relaxation in a 0-D thermal reservoir
+#
+# Pure atomic oxygen in a box: translation starts hot (30000 K) while the
+# electronic mode starts cold (all atoms in the ground state, T_elec = 100 K).
+# Atomic O has zero rotational and vibrational degrees of freedom, so the
+# electronic mode can only relax through atom-atom collisions. Over the run
+# the electronic states populate toward a Boltzmann distribution and the
+# translational and electronic temperatures approach a common value.
+#
+# Note:
+#  - The "comm/sort" option to the "global" command is used to match MPI runs.
+#  - The "twopass" option is used to match Kokkos runs.
+# The "comm/sort" and "twopass" options should not be used for production runs.
+################################################################################
+
+seed		    12345
+dimension   	    3
+global              gridcut 1.0e-5 comm/sort yes
+
+boundary	    rr rr rr
+
+create_box  	    0 0.0001 0 0.0001 0 0.0001
+Created orthogonal box = (0 0 0) to (0.0001 0.0001 0.0001)
+create_grid 	    2 2 2
+Created 8 child grid cells
+  CPU time = 0.000716534 secs
+  create/ghost percent = 96.8066 3.19343
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 8.0344e-05 secs
+  reassign/sort/migrate/ghost percent = 82.3235 0.116997 12.8074 4.75207
+
+species		    air.species O elecfile air.elec
+mixture		    gas O vstream 0.0 0.0 0.0 temp 30000.0 telec 100.0
+
+global              nrho 1.4141E24
+global              fnum 3.5352E7
+
+collide		    vss gas air.vss relax constant
+collide_modify      rotate no vibrate no electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+create_particles    gas n 40000 twopass
+Created 40000 particles
+  CPU time = 0.00909963 secs
+
+compute             temp temp
+compute             T thermal/grid all all temp
+compute             Ttrans reduce ave c_T[1]
+
+compute             elec grid all species eelec
+compute             Eelec reduce ave c_elec[1]
+
+compute             telec telec/grid all species
+compute             Telec reduce ave c_telec[*]
+
+stats		    200
+stats_style	    step cpu np nattempt ncoll c_Ttrans c_Eelec c_Telec
+
+timestep 	    1.00E-9
+run 		    4000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 5.25 5.25 5.25
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0.000793457 0.000793457 0.000793457
+  total     (ave,min,max) = 6.76459 6.76459 6.76459
+Step CPU Np Natt Ncoll c_Ttrans c_Eelec c_Telec 
+       0            0    40000        0        0    29854.983            0            0 
+     200    2.6121228    40000    89418    16797    25098.523 9.8496425e-20    24891.241 
+     400    5.2394593    40000    89404    16709    25033.677 9.9906399e-20    25133.974 
+     600    7.5436624    40000    89410    16749    25014.567 1.0025646e-19     25200.72 
+     800    9.6748634    40000    89422    16790    25074.327 9.8960557e-20    24967.693 
+    1000    12.065708    40000    89406    16990    24998.663 1.0062154e-19    25258.134 
+    1200    14.542705    40000    89413    16685    25009.223 1.0039887e-19    25219.708 
+    1400    17.123098    40000    89405    16833    25080.955 9.8828736e-20    24946.181 
+    1600    19.551604    40000    89416    16888    25136.358 9.7772281e-20    24760.163 
+    1800    21.886254    40000    89422    16679    24976.927 1.0107401e-19     25338.59 
+    2000    24.369381    40000    89420    16795    25067.615 9.9182895e-20    25006.774 
+    2200    26.609606    40000    89415    16904    25115.014 9.8151164e-20    24827.195 
+    2400    28.755007    40000    89408    17001     25076.85 9.8979678e-20    24974.612 
+    2600    30.976221    40000    89411    16597    25136.738 9.779555e-20    24764.024 
+    2800    33.364083    40000    89411    16768    24984.453 1.0093282e-19    25315.108 
+    3000    35.804205    40000    89413    16975    24974.094 1.0111272e-19    25347.024 
+    3200    38.196018    40000    89413    16866    25099.708 9.8461206e-20    24882.949 
+    3400    40.398901    40000    89418    16792    25030.571  9.99812e-20    25147.321 
+    3600      42.5391    40000    89401    16716     25082.75 9.8912695e-20    24959.676 
+    3800     44.43917    40000    89409    16857    25045.055 9.963035e-20    25085.262 
+    4000    46.475032    40000    89419    16894    24975.905 1.0109165e-19    25345.238 
+Loop time of 46.4751 on 1 procs for 4000 steps with 40000 particles
+Performance: 86.068 timesteps/s, 3.443 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 2.4318     | 2.4318     | 2.4318     |   0.0 |  5.23
+Coll    | 43.537     | 43.537     | 43.537     |   0.0 | 93.68
+Sort    | 0.46144    | 0.46144    | 0.46144    |   0.0 |  0.99
+Comm    | 0.0051979  | 0.0051979  | 0.0051979  |   0.0 |  0.01
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.025895   | 0.025895   | 0.025895   |   0.0 |  0.06
+MPI Sync| 0.011948   | 0.011948   | 0.011948   |   0.0 |  0.03
+Other   |            | 0.001342   |            |       |  0.00
+
+Particle moves    = 160000000 (160M)
+Cells touched     = 173838877 (174M)
+Particle comms    = 0 (0K)
+Boundary collides = 13839919 (13.8M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 357658662 (358M)
+Collide occurs    = 67144380 (67.1M)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 3.4427e+06
+Particle-moves/step: 40000
+Cell-touches/particle/step: 1.08649
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0864995
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 2.23537
+Collisions/particle/step: 0.419652
+Reactions/particle/step: 0
+
+Particles: 40000 ave 40000 max 40000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      8 ave 8 max 8 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
