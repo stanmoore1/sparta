@@ -88,6 +88,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   tally_flag = 0;
   tce_bounds_checked = 0;
   reverse_off_warned = 0;
+  reverse_modes_checked = 0;
 
   reactions = NULL;
   list_ij = NULL;
@@ -128,6 +129,7 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   tally_reactions_all = NULL;
   tce_bounds_checked = 0;
   reverse_off_warned = 0;
+  reverse_modes_checked = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1902,11 +1904,84 @@ int ReactBird::max_nelecstate()
   return maxn;
 }
 
+/* ----------------------------------------------------------------------
+   warn, on the first run only, about inputs that the detailed-balance
+     reverse tables silently mis-handle:
+   (a) a rotating species in an active reverse whose rotfile line omits
+       the symmetry number: sigma = 1 is assumed, a constant factor-sigma
+       error in Keq per such species (2 for a homonuclear molecule) that
+       the tables' self-consistency checks cannot detect
+   (b) collide_modify rotate no: the tables count rotational degrees of
+       freedom, but particles then carry no rotational energy, so reverse
+       rates involving rotating species are biased, and a reverse
+       recombination with a nonlinear third body never fires (its
+       continuum weight erot3^(1/2) is zero)
+------------------------------------------------------------------------- */
+
+void ReactBird::check_reverse_modes()
+{
+  if (reverse_modes_checked) return;
+  reverse_modes_checked = 1;
+  if (comm->me) return;
+
+  Particle::Species *species = particle->species;
+  int nspecies = particle->nspecies;
+  int *flag = new int[nspecies];
+  for (int i = 0; i < nspecies; i++) flag[i] = 0;
+
+  int nreverse = 0;
+  int nonlinear3 = 0;
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (!r->active || !r->reverse || r->reverse_partner < 0) continue;
+    nreverse++;
+    for (int i = 0; i < r->nreactant; i++)
+      if (r->reactants[i] >= 0) flag[r->reactants[i]] = 1;
+    for (int i = 0; i < r->nproduct; i++)
+      if (r->products[i] >= 0) flag[r->products[i]] = 1;
+    if (r->type == RECOMBINATION && r->products[1] >= 0 &&
+        species[r->products[1]].rotdof == 3) nonlinear3 = 1;
+  }
+
+  if (nreverse) {
+    std::string missing;
+    int rotating = 0;
+    for (int i = 0; i < nspecies; i++) {
+      if (!flag[i] || species[i].rotdof == 0) continue;
+      rotating = 1;
+      if (species[i].nrottemp > 0 && !species[i].rotsymm_read) {
+        if (!missing.empty()) missing += " ";
+        missing += species[i].id;
+      }
+    }
+
+    if (!missing.empty()) {
+      std::string mesg = "Rotation file gives no symmetry number for "
+        "species used by detailed-balance reverse reactions, so sigma = 1 "
+        "is assumed (use 2 for homonuclear molecules): " + missing;
+      error->warning(FLERR,mesg.c_str());
+    }
+
+    if (rotating && collide && collide->rotstyle == NONE) {
+      std::string mesg = "Detailed-balance reverse reactions with "
+        "collide_modify rotate no: particles carry no rotational energy, "
+        "so reverse rates involving rotating species are biased";
+      if (nonlinear3) mesg += ", and recombination with a nonlinear "
+                        "third body never occurs";
+      error->warning(FLERR,mesg.c_str());
+    }
+  }
+
+  delete [] flag;
+}
+
 /* ---------------------------------------------------------------------- */
 
 void ReactBird::build_micro_tables()
 {
   free_micro_tables();
+  check_reverse_modes();
 
   Particle::Species *species = particle->species;
   double boltz = update->boltz;

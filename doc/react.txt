@@ -361,6 +361,15 @@ occupy.  For the full equilibrium constants use {vibrate discrete}
 (or {smooth}) and {electronic discrete} with "fix
 elecmode"_fix_elecmode.html.
 
+Rotation is the exception: the tables always count the rotational
+degrees of freedom, so reverse reactions need rotation modelled.  With
+{rotate no} particles carry no rotational energy, the reverse rates of
+rotating species are biased, and a recombination with a nonlinear
+third body never occurs; SPARTA warns about this.  It also warns when
+the {rotfile} gives no symmetry number for a rotating species used by
+a reverse reaction, since the default sigma = 1 is wrong by a factor
+of 2 in K_eq for each homonuclear molecule.
+
 This is enforced without evaluating any temperature.  At
 initialization an exchange pair is given a detailed-balance table
 relating the microcanonical densities of states of the two channels
