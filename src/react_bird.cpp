@@ -87,6 +87,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   tally_reactions_all = new bigint[nlist];
   tally_flag = 0;
   tce_bounds_checked = 0;
+  reverse_off_warned = 0;
 
   reactions = NULL;
   list_ij = NULL;
@@ -126,6 +127,7 @@ ReactBird::ReactBird(SPARTA *sparta) : React(sparta)
   tally_reactions = NULL;
   tally_reactions_all = NULL;
   tce_bounds_checked = 0;
+  reverse_off_warned = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -245,13 +247,15 @@ void ReactBird::init()
         rlist[m].active = 0;
         noff++;
       }
-    if (noff && comm->me == 0) {
+    // warn on the first run, and again only if the count changes
+    if (noff && noff != reverse_off_warned && comm->me == 0) {
       char str[256];
       snprintf(str,sizeof(str),"%d reverse (B-style) reaction(s) "
                "deactivated: detailed-balance reverse rates require "
                "react tce with react_modify partial_energy no",noff);
       error->warning(FLERR,str);
     }
+    reverse_off_warned = noff;
   }
 
   // auto-generate reverse (B-style) reactions for eligible forward
@@ -1862,13 +1866,13 @@ static void ladder_convolve(double *arr, double *work, int n, double du,
 
 /* ----------------------------------------------------------------------
    build the per-reaction tables of the microcanonical TCE energy factor
-   for react_modify vib_energy micro:
+   used with react_modify partial_energy no:
      factor(E_tot) = sum_p g_p (E_tot - eps_p - Ea)_+^(zrot+eta+1/2)
                    / sum_p g_p (E_tot - eps_p)_+^(zrot+3/2-omega)
    where p runs over the joint discrete states of the two reactants: the
    SHO levels of every vibrational mode (level degeneracy of a d-fold
-   degenerate mode = C(l+d-1,d-1)) and, when elec_energy micro is active,
-   the electronic states. The continuum is translation + rotation only
+   degenerate mode = C(l+d-1,d-1)) when vibration is discrete, and the
+   electronic states when electronic energy is discrete. The continuum is translation + rotation only
    (Gamma-distributed at equilibrium), so this factor keeps the
    equilibrium TCE rate on the input Arrhenius rate with DISCRETE
    vibration, in place of the instantaneous-vibrational-DOF heuristic.
@@ -1906,6 +1910,9 @@ void ReactBird::build_micro_tables()
 
   Particle::Species *species = particle->species;
   double boltz = update->boltz;
+  // 60 eV in the energy unit of the unit style (J for si, erg for cgs)
+  double ev60 = 60.0 * (strcmp(update->unit_style,"cgs") == 0 ?
+                        1.602176634e-12 : 1.602176634e-19);
 
   mtab_nlist = nlist;
   mtab = new double*[nlist];
@@ -1986,7 +1993,7 @@ void ReactBird::build_micro_tables()
     if (nladder == 0) continue;
 
     double ea = r->coeff[1] > 0.0 ? r->coeff[1] : 0.0;
-    double umax = ea + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
+    double umax = ea + ev60;   // + 60 eV: Boltzmann tail to ~1e5 K
     double du;
     if (theta_min > 0.0) du = boltz*theta_min/16.0;
     else du = umax/20000.0;
@@ -2091,7 +2098,8 @@ double ReactBird::partition_function(int isp, double T)
 {
   Particle::Species *sp = &particle->species[isp];
   const double kb = update->boltz;
-  const double h = 6.62607015e-34;   // Planck constant (J s)
+  const int cgs = (strcmp(update->unit_style,"cgs") == 0);
+  const double h = cgs ? 6.62607015e-27 : 6.62607015e-34;  // erg s or J s
 
   // translational partition function per unit volume
 
@@ -2119,9 +2127,20 @@ double ReactBird::partition_function(int isp, double T)
   // forward TCE rate use in that mode -- so the calibration target and
   // the table DOS carry the same vibrational temperature dependence
 
+  // the partition functions must contain only the internal states the
+  //   simulation models, else the calibration target and the table
+  //   densities of states differ by a T-dependent factor (the table drift
+  //   check then fires, or the reverse rate is biased); a mode the
+  //   collision model does not carry (collide_modify vibrate no or
+  //   electronic no) keeps only its ground-state contribution: 1 for a
+  //   ground-referenced oscillator, the ground-state degeneracy for an
+  //   electronic ladder -- T-independent constants that belong in Keq and
+  //   cannot cause drift
+
   double qvib = 1.0;
   int vibsmooth = (collide && collide->vibstyle == SMOOTH);
-  for (int m = 0; m < sp->nvibmode; m++) {
+  int vibnone = (collide && collide->vibstyle == NONE);
+  for (int m = 0; m < sp->nvibmode && !vibnone; m++) {
     if (sp->vibtemp[m] <= 0.0) continue;
     int g = sp->vibdegen[m] > 0 ? sp->vibdegen[m] : 1;
     if (vibsmooth)
@@ -2135,7 +2154,9 @@ double ReactBird::partition_function(int isp, double T)
   // electronic partition function from the species elecfile ladder
 
   double qelec = 1.0;
-  if (sp->elecdat) {
+  int elecdiscrete = (collide && collide->elecstyle == DISCRETE);
+  if (sp->elecdat && !elecdiscrete) qelec = sp->elecdat->states[0].degen;
+  else if (sp->elecdat) {
     qelec = 0.0;
     for (int i = 0; i < sp->elecdat->nelecstate; i++)
       qelec += sp->elecdat->states[i].degen *
@@ -2148,12 +2169,13 @@ double ReactBird::partition_function(int isp, double T)
   // vs dissociative recombination) would be off by exactly 2x.  The
   // electron is identified by its physics (negative charge and a mass
   // far below any atom -- the electron is ~9.1e-31 kg, ~1800x lighter
-  // than the lightest nucleus in SI units, which SPARTA uses
-  // internally) rather than by fix ambipolar's especies: the reverse
-  // machinery also serves reactions with real electron particles and no
-  // fix ambipolar, so no especies is available here.
+  // than the lightest nucleus; the threshold follows the unit style)
+  // rather than by fix ambipolar's especies: the reverse machinery also
+  // serves reactions with real electron particles and no fix ambipolar,
+  // so no especies is available here.
 
-  else if (sp->charge < 0.0 && sp->mass < 1.0e-29) qelec = 2.0;
+  else if (sp->charge < 0.0 && sp->mass < (cgs ? 1.0e-26 : 1.0e-29))
+    qelec = 2.0;
 
   return qtrans*qrot*qvib*qelec;
 }
@@ -2191,6 +2213,9 @@ void ReactBird::build_db_table(int i)
 {
   Particle::Species *species = particle->species;
   double boltz = update->boltz;
+  // 60 eV in the energy unit of the unit style (J for si, erg for cgs)
+  double ev60 = 60.0 * (strcmp(update->unit_style,"cgs") == 0 ?
+                        1.602176634e-12 : 1.602176634e-19);
 
   OneReaction *r = &rlist[i];
   OneReaction *f = &rlist[r->reverse_partner];
@@ -2223,7 +2248,7 @@ void ReactBird::build_db_table(int i)
       }
   }
 
-  double umax = eaP + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
+  double umax = eaP + ev60;   // + 60 eV: Boltzmann tail to ~1e5 K
   double du;
   if (theta_min > 0.0) du = boltz*theta_min/16.0;
   else du = umax/20000.0;
@@ -2457,6 +2482,9 @@ void ReactBird::build_db3_table(int i)
 {
   Particle::Species *species = particle->species;
   double boltz = update->boltz;
+  // 60 eV in the energy unit of the unit style (J for si, erg for cgs)
+  double ev60 = 60.0 * (strcmp(update->unit_style,"cgs") == 0 ?
+                        1.602176634e-12 : 1.602176634e-19);
 
   OneReaction *r = &rlist[i];
   OneReaction *f = &rlist[r->reverse_partner];
@@ -2490,7 +2518,7 @@ void ReactBird::build_db3_table(int i)
       }
   }
 
-  double umax = eaP + 60.0*1.602176634e-19;   // Boltzmann tail to ~1e5 K
+  double umax = eaP + ev60;   // + 60 eV: Boltzmann tail to ~1e5 K
   double du;
   if (theta_min > 0.0) du = boltz*theta_min/16.0;
   else du = umax/20000.0;

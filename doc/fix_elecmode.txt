@@ -106,6 +106,6 @@ mode values.
 [Related commands:]
 
 "collide_modify electronic discrete"_collide_modify.html,
-"react_modify elec_energy"_react_modify.html
+"react_modify partial_energy"_react_modify.html
 
 [Default:] none

@@ -1,15 +1,16 @@
 # reactions in 11-species air (O2 N2 O N NO O2+ N2+ O+ N+ NO+ e)
 #
 # Forward Arrhenius rates from the Park air chemistry set.  Every reaction
-# was checked against the TCE temperature-exponent bounds of the
-# microcanonical (total-energy) model,
+# was checked against the window of temperature exponents for which the
+# TCE probability vanishes at threshold and stays bounded at high energy,
 #     -(z_c + 1/2)  <=  eta  <=  1 - omega
 # with z_c the pair's continuum internal DOF and omega the pair's VSS
-# exponent (see doc/react.txt and ReactBird::check_tce_bounds).  Reactions
-# whose published exponents violated a bound were refit within the bounds,
-# matched to the published rate at 15000 K (noted per reaction below); the
-# two electron-impact ionization reactions cannot be represented by TCE at
-# all and are commented out at the end of the file.
+# exponent.  Reactions whose published exponents fall outside it were
+# refit within it, matched to the published rate at 15000 K (noted per
+# reaction below).  SPARTA itself checks only the hard limit
+# eta > -(z + 3/2), below which TCE cannot reproduce the rate at all (see
+# doc/react.txt): the two electron-impact ionization reactions violate it
+# and are commented out at the end of the file.
 #
 # BACKWARD RATES: every dissociation and exchange (including charge
 # exchange) carries a detailed-balance reverse partner with reaction style
@@ -24,6 +25,15 @@
 # forward reactions run), and the partition-function data:
 #
 #     species air.species <...> rotfile air.rot elecfile air.elec
+#
+# For equilibrium constants with the full vibrational and electronic
+# partition functions also use
+#
+#     collide_modify vibrate discrete electronic discrete
+#     fix <ID> elecmode
+#
+# A mode the collision model does not carry (vibrate no, electronic no)
+# contributes only its ground state to the equilibrium constants.
 #
 # The three associative-ionization reactions carry E-style B reverses
 # (dissociative recombination, e.g. NO+ + e --> O + N): their Saha-type

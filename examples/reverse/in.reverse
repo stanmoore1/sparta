@@ -1,10 +1,12 @@
 # Detailed-balance reverse reactions (issue #472): thermal gas box with a
 # forward exchange reaction and a forward dissociation, each paired with a
-# B-style reverse reaction whose rate is derived internally from the
-# forward Arrhenius rate and the species partition functions at the local
-# cell temperature.  Discrete rotation, vibration, and electronic modes
-# are all active, so the reverse rates include the full rotational
-# (with symmetry numbers), vibrational, and electronic partition functions.
+# B-style reverse reaction derived from the forward Arrhenius rate and the
+# species partition functions: each collision's reverse probability comes
+# from a detailed-balance table built at initialization, resolved in the
+# collision energy, with no cell temperature evaluated.  Discrete
+# rotation, vibration, and electronic modes are all active, so the
+# equilibrium constants include the full rotational (with symmetry
+# numbers), vibrational, and electronic partition functions.
 
 seed            12345
 dimension       3
