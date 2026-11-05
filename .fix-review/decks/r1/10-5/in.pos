@@ -1,0 +1,5 @@
+include hstat
+create_particles air n 100
+variable s equal step
+fix 1 halt 5 v_s > 100000
+run 20

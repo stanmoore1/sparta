@@ -1,0 +1,5 @@
+include h2d
+custom grid create v float 0
+custom grid file/coarse 1 text file.adj 1 v
+dump 1 grid all 10 dump.pos id g_v
+run 0

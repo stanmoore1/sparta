@@ -1,0 +1,8 @@
+include hstat
+create_particles air n 1000
+variable px particle x
+variable py particle y
+dump 1 particle all 10 d.* id x y v_px
+run 10
+dump_modify 1 thresh v_py >= 5
+run 10

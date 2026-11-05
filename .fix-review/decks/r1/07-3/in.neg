@@ -1,0 +1,5 @@
+include h2d
+custom grid create rho float 0 create vstream float 3
+custom grid file/coarse 1 text file.coarse.2d 4 rho vstream[1] vstream[2] vstream[3]
+dump 1 grid all 10 dump.neg id xc yc g_rho g_vstream[*]
+run 0

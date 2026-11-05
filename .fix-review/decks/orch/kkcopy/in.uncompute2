@@ -1,0 +1,15 @@
+include base.inc
+compute 1 surf all all n
+compute 2 boundary air n
+compute 4 surf all all nwt
+compute r reduce sum c_1[1] c_4[1]
+stats 10
+stats_style step np c_r[1] c_r[2] c_2[1][1]
+run 30
+uncompute r
+uncompute 1
+stats_style step np c_2[1][1]
+run 30
+uncompute 2
+stats_style step np
+run 30

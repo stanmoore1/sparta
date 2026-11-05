@@ -1,0 +1,3 @@
+# negative control: product with rot+vib DOF
+A + B --> M + atom
+R A 1.0 0.0 1.0e-40 0.0 0.0

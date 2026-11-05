@@ -1,0 +1,13 @@
+95% tests passed, 12 tests failed out of 246
+	 88 - mpi.in.emit.face.region.mpi_1 (Failed)
+	 91 - mpi.in.emit.surf.flow.region.mpi_1 (Failed)
+	 95 - mpi.in.emit.surf.normal.region.mpi_1 (Failed)
+	 98 - mpi.in.emit.face.region.mpi_4 (Failed)
+	101 - mpi.in.emit.surf.flow.region.mpi_4 (Failed)
+	105 - mpi.in.emit.surf.normal.region.mpi_4 (Failed)
+	157 - mpi.in.shocktube.mpi_1 (Failed)
+	158 - mpi.in.shocktube.mpi_4 (Failed)
+	217 - mpi.in.ambi_3body.mpi_1 (Failed)
+	218 - mpi.in.ambi_3body.mpi_4 (Failed)
+	221 - mpi.in.qk.mpi_1 (Failed)
+	222 - mpi.in.qk.mpi_4 (Failed)

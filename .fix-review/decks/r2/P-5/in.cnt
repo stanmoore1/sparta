@@ -1,0 +1,15 @@
+# P-5: "Custom grid attributes set = N" must count owned cells only (3 at every np)
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary p p p
+create_box 0 4 0 4 -0.5 0.5
+create_grid 4 4 1
+balance_grid rcb cell
+species air.species N
+mixture air N
+custom grid create gv float 0 file gf.txt 1 gv
+compute s reduce sum g_gv
+variable s equal c_s
+run 0
+print "SUMGV ${s}"

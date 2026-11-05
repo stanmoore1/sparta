@@ -1,0 +1,9 @@
+leak:_rtld_global
+leak:libmpi
+leak:libopen-pal
+leak:libopen-rte
+leak:libpython
+leak:PyObject
+leak:_PyObject
+leak:event_base_loop
+leak:libevent

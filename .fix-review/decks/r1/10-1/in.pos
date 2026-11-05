@@ -1,0 +1,21 @@
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary o r p
+create_box 0 20 0 20 -0.5 0.5
+create_grid 20 20 1
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O vstream 100.0 0 0
+global surfs implicit
+fix ablate ablate all 1 1.0 uniform 60
+read_isurf all 20 20 1 disk.21 100.5 ablate
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+timestep 0.0001
+dump 1 surf all 1 d1.* id v1x v1y v2x v2y
+run 3
+undump 1
+dump 2 surf all 1 d2.* id v1x v1y v2x v2y
+run 0

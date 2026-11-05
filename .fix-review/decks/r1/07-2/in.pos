@@ -1,0 +1,5 @@
+include h2d
+variable g equal 1.0
+custom grid create gv float 0 set gv v_g all NULL
+region half block 0 2 INF INF INF INF
+custom grid create ga float 2 set ga[1] v_g all NULL set ga[2] v_g all half

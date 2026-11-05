@@ -1,0 +1,13 @@
+# Q-3: bad surf_react ID -> clean error, no LSan leak (surf_react.cpp)
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary o r p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+species air.species N O
+mixture air N O
+read_surf data.circle
+surf_react a-b global 0.1 0.1
+run 0

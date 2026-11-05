@@ -1,0 +1,2 @@
+# 32-3: examples/fft/in.fft.{2d,3d} with run 200 and dump every 100 (sed of the example)
+also fix ave/grid all 10 10 100

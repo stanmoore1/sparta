@@ -1,0 +1,9 @@
+include hstat
+create_particles air n 1000
+variable ax particle x
+variable ay particle 0.0
+fix 2 field/particle ax ay NULL
+global field particle 2
+dump 1 particle all 1 d.* id x
+dump_modify 1 thresh f_2[1] > 2.5
+run 1

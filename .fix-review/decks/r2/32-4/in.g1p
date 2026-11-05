@@ -1,0 +1,24 @@
+# 32-4: particle custom vectors survive grow/auto_sync on kk: create particles between runs (kk == host)
+seed 12345
+dimension 2
+global gridcut 0.0 comm/sort yes
+boundary p p p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O temp 300
+create_particles air n 3000 twopass
+variable one particle 1.0
+variable three particle 3.0
+custom particle create pv float 0 set pv v_one air NULL
+custom particle create pi int 0 set pi v_three air NULL
+compute sv reduce sum p_pv p_pi
+stats 10
+stats_style step np c_sv[*]
+run 20
+create_particles air n 30000 twopass
+run 20
+custom particle set pv v_three air NULL
+run 20

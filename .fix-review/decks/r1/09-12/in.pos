@@ -1,0 +1,8 @@
+include hstat
+variable ax particle 1.0
+variable ay particle 0.0
+fix 2 field/particle ax ay NULL
+global field particle 2
+dump 1 particle all 10 d.* id x
+dump_modify 1 thresh f_2[1] > 0
+run 10

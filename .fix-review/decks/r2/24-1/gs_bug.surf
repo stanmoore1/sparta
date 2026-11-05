@@ -1,0 +1,7 @@
+# 24-1: Arrhenius reaction with k=0 listed BEFORE the coverage-dependent AA reaction
+O(g) --> CO(g)
+ER A 0.0 0 0
+cll 300 1 1 1 1
+
+O(g) --> O(s)
+AA S 1.0 10

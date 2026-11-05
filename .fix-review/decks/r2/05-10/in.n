@@ -1,0 +1,21 @@
+# 05-10: compute surf(/kk) n nwt nflux_incident must not count particles emitted by fix emit/surf (no collisions: 0 0 0)
+seed 12345
+dimension 2
+global gridcut 0.0 comm/sort yes
+boundary o r p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O vstream 0.0 0 0 temp 10.0
+read_surf data.circle
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+fix in emit/surf air all normal yes perspecies ${PS}
+timestep 0.0001
+compute s surf all air n nwt nflux_incident mflux_incident nflux
+compute r reduce sum c_s[*]
+stats 10
+stats_style step np nscoll c_r[*]
+run 50

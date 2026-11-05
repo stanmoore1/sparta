@@ -1,0 +1,23 @@
+# 32-2: compute react/surf warning counts unassigned surfs once (c true 26, g true 24)
+seed 12345
+dimension 2
+global gridcut 0.0 surfs explicit/distributed
+boundary o r p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O vstream 10.0 0 0 temp 10.0
+read_surf data.circle
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+region left block INF 5 INF INF INF INF
+group half surf region left one
+surf_react r1 global 0.1 0.1
+surf_react r2 global 0.1 0.1
+surf_modify all react r1
+surf_modify half react r2
+compute c react/surf all r2
+compute g react/surf all r1
+run 0

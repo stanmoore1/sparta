@@ -1,0 +1,22 @@
+# 12-10/12-17: fix emit/surf(/kk) subsonic PONLY with per-cell weights (weight 4) must use cinfo.weight
+# check: weighted run (-var W volume -var FN 2.0e18) == unweighted run with fnum*4 (-var W none -var FN 8.0e18)
+seed ${S}
+dimension 2
+global gridcut 0.0 comm/sort yes
+boundary r r p
+create_box 0 20 0 20 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+global nrho 1.0e20 fnum ${FN}
+global weight cell ${W}
+species air.species N O
+mixture air N O vstream 0.0 0 0 temp 300.0
+read_surf data.circle origin 5 5 0 scale 2 2 1 trans 5 5 0
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+create_particles air n 0 twopass
+fix in emit/surf air all subsonic 0.414 NULL
+timestep 1.0e-4
+stats 50
+stats_style step np nscoll
+run 200

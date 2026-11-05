@@ -1,0 +1,6 @@
+Migrate-list overflow (KOKKOS review R4-P1, decks from .kokkos-review/v3/scratch-files.tgz V3-R4/decks/ml).
+in.ml: N2 beam at specular xlo with prob D 1.0 (N2 -> N + N); all products exit in the same step -> 40000 mlist entries vs 32768.
+Run (serial/np1): -var gc -1 -var nc 10 -var np 20000 -var fnum 5e9
+Expected on code without the fix: CPU heap corruption/segfault (valgrind write past mlist at update.cpp:~1568),
+  Kokkos "particle:mlist" out of bounds (bounds-check build) or malloc corruption.
+in.ml2: proc-crossing variant, np2, gridcut -1 and 0.0.
