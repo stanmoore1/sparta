@@ -57,6 +57,7 @@ class Particle : protected Pointers {
     double rottemp[3];      // rotational temperature(s)
     double rotsymm;         // rotational symmetry number sigma (rotfile,
                             //   default 1); used in partition functions
+    int rotsymm_read;       // 1 if the rotfile gave sigma explicitly
     double vibtemp[MAXVIBMODE];   // vibrational temperature(s)
     double vibrel[MAXVIBMODE];    // inverse vibrational relaxation number(s)
     ElectronicData* elecdat;      // NULL if no states defined for this species
@@ -73,6 +74,7 @@ class Particle : protected Pointers {
     char id[16];
     double rottemp[4];
     double rotsymm;         // optional symmetry number, default 1
+    int symm_read;          // 1 if the symmetry number was given
     int ntemp;
   };
 

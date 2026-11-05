@@ -193,6 +193,8 @@ class ReactBird : public React {
   int reverse_off_warned;          // # of B lines switched off at the last
                                    //   warning, to warn once per change
   void check_tce_bounds();
+  int reverse_modes_checked;       // 1 if check_reverse_modes() already ran
+  void check_reverse_modes();
   double tce_eta_bound(OneReaction *);
   void report_tce_prob_flags(int, int);
   virtual void grow_tallies();

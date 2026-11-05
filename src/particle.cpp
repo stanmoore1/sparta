@@ -1009,6 +1009,7 @@ void Particle::add_species(int narg, char **arg)
         species[ii].rottemp[k] = filerot[j].rottemp[k];
       }
       species[ii].rotsymm = filerot[j].rotsymm;
+      species[ii].rotsymm_read = filerot[j].symm_read;
     }
 
     memory->sfree(filerot);
@@ -1523,6 +1524,7 @@ void Particle::read_species_file()
 
     fsp->nrottemp = 0;
     fsp->rotsymm = 1.0;
+    fsp->rotsymm_read = 0;
     fsp->nvibmode = fsp->vibdof / 2;
 
     fsp->rottemp[0] = fsp->rottemp[1] = fsp->rottemp[2] = 0.0;
@@ -1598,8 +1600,10 @@ void Particle::read_rotation_file()
     // (e.g. 2 for homonuclear diatomics), default 1
 
     rsp->rotsymm = 1.0;
+    rsp->symm_read = 0;
     if (nwords == 3 + rsp->ntemp) {
       rsp->rotsymm = atof(words[j++]);
+      rsp->symm_read = 1;
       if (rsp->rotsymm <= 0.0)
         error->one(FLERR,"Invalid symmetry number in rotation file");
     }
