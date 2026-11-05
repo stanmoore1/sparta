@@ -2,8 +2,9 @@
 #
 # Forward reactions (parameters from data/air.tce) paired with B-style
 # reverse reactions whose rates are derived internally from the forward
-# Arrhenius rate and the species partition functions, evaluated at the
-# local grid-cell temperature.  The 5 coefficients on a B line are
+# Arrhenius rate and the species partition functions, through a
+# detailed-balance table in the collision energy (no cell temperature is
+# evaluated).  The 5 coefficients on a B line are
 # placeholders and are overwritten during initialization.
 #
 # exchange pair: N2 + O <-> NO + N

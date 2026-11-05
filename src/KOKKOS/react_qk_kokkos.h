@@ -47,7 +47,7 @@ class ReactQKKokkos : public ReactBirdKokkos {
 KOKKOS_INLINE_FUNCTION
 int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
          double pre_etrans, double pre_erot, double pre_evib,
-         double &post_etotal, int &kspecies,
+         double pre_eelec, double &post_etotal, int &kspecies,
          int & /*recomb_species*/, double & /*recomb_density*/,
          const t_species_1d_const &d_species) const
 {
@@ -148,7 +148,10 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
       Kokkos::atomic_inc(&d_tally_reactions[d_list[i]]);
       ip->ispecies = r->d_products[0];
       jp->ispecies = r->d_products[1];
-      post_etotal = pre_etotal + r->d_coeff[4];
+      // the reactants' electronic energy is not used to screen or select
+      // the reaction (as on the CPU) but is part of the energy pool the
+      // products share, matching ReactQK/ReactTCEQK::attempt()
+      post_etotal = pre_etotal + pre_eelec + r->d_coeff[4];
       if (r->nproduct > 2) kspecies = r->d_products[2];
       else kspecies = -1;
       rand_pool.free_state(rand_gen);

@@ -70,10 +70,11 @@ Higdon).  When the summed probability of all of a pair's reactions
 exceeds 1, the collision reacts with probability 1 and the reaction is
 chosen proportionally to the individual probabilities, so the outcome
 does not depend on the order in which reactions are listed in the
-reaction file.  A one-time warning is printed when either condition
-occurs, since the simulated rate then saturates at the collision rate
-and no longer follows the input Arrhenius rate; reducing the timestep
-or fnum, or refining the grid, restores unsaturated probabilities.
+reaction file.  A warning is printed at the end of each run in which
+either condition occurred, naming a reaction at which it did, since
+the simulated rate then saturates at the collision rate and no longer
+follows the input Arrhenius rate.  The probability is per collision,
+so the timestep, fnum and grid do not change it.
 
 The format of the reaction file is the same for all three of the
 currently defined styles, and is also described below.  The various
@@ -350,7 +351,15 @@ where K_eq(T) is the equilibrium constant computed from the species
 partition functions: translational, rotational (rigid rotor, with the
 symmetry number from the "species"_species.html {rotfile}), vibrational
 (harmonic oscillator, including degenerate modes), and electronic
-(summed over the ladder from the {elecfile}, when defined).
+(summed over the ladder from the {elecfile}, when defined).  These
+include only the internal states the collision model carries: with
+"collide_modify"_collide_modify.html {vibrate no} the vibrational
+factor is 1, and with {electronic no} the electronic factor is the
+ground-state degeneracy, since the detailed-balance tables can only
+reproduce the equilibrium of the states the particles actually
+occupy.  For the full equilibrium constants use {vibrate discrete}
+(or {smooth}) and {electronic discrete} with "fix
+elecmode"_fix_elecmode.html.
 
 This is enforced without evaluating any temperature.  At
 initialization an exchange pair is given a detailed-balance table

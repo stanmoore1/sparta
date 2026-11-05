@@ -36,8 +36,8 @@ class ReactBird : public React {
   virtual double extract_tally(int);
 
   // per-reaction tables of the microcanonical TCE energy factor over the
-  // joint vibrational (x electronic) ladder, for react_modify
-  // vib_energy micro; built by build_micro_tables() at init, shared by
+  // joint vibrational (x electronic) ladder, used with react_modify
+  // partial_energy no; built by build_micro_tables() at init, shared by
   // the CPU and Kokkos TCE variants
 
   double **mtab;            // factor vs total collision energy, per rlist
@@ -190,6 +190,8 @@ class ReactBird : public React {
   int readone(char *, char *, int &, int &);
   void check_duplicate();
   int tce_bounds_checked;          // 1 if check_tce_bounds() already ran
+  int reverse_off_warned;          // # of B lines switched off at the last
+                                   //   warning, to warn once per change
   void check_tce_bounds();
   double tce_eta_bound(OneReaction *);
   void report_tce_prob_flags(int, int);

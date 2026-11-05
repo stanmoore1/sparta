@@ -4063,12 +4063,14 @@ int CollideVSSKokkos::perform_collision_kokkos(int icell,
     if (react_style == 1)
       reaction = react_qk_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
-                                             precoln.evib,postcoln.etotal,kspecies,
+                                             precoln.evib,precoln.eelec,
+                                             postcoln.etotal,kspecies,
                                              recomb_species,recomb_density,d_species);
     else if (react_style == 2)
       reaction = react_tceqk_kk_copy.obj.attempt_kk(ip,jp,
                                              precoln.etrans,precoln.erot,
-                                             precoln.evib,postcoln.etotal,kspecies,
+                                             precoln.evib,precoln.eelec,
+                                             postcoln.etotal,kspecies,
                                              recomb_species,recomb_density,d_species);
     else
       reaction = react_kk_copy.obj.attempt_kk(ip,jp,

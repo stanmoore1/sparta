@@ -322,7 +322,15 @@ satisfy
 partition functions: translational, rotational (rigid rotor, with the
 symmetry number from the <A HREF = "species.html">species</A> <I>rotfile</I>), vibrational
 (harmonic oscillator, including degenerate modes), and electronic
-(summed over the ladder from the <I>elecfile</I>, when defined).
+(summed over the ladder from the <I>elecfile</I>, when defined).  These
+include only the internal states the collision model carries: with
+<A HREF = "collide_modify.html">collide_modify</A> <I>vibrate no</I> the vibrational
+factor is 1, and with <I>electronic no</I> the electronic factor is the
+ground-state degeneracy, since the detailed-balance tables can only
+reproduce the equilibrium of the states the particles actually
+occupy.  For the full equilibrium constants use <I>vibrate discrete</I>
+(or <I>smooth</I>) and <I>electronic discrete</I> with <A HREF = "fix_elecmode.html">fix
+elecmode</A>.
 </P>
 <P>This is enforced without evaluating any temperature.  At
 initialization an exchange pair is given a detailed-balance table
