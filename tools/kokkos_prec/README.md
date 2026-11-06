@@ -55,6 +55,7 @@ parameters (`CollideVSS::Params`) have KK precision device copies
 | `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
 | `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
+| `conservation_test/`  | conservation of mass, momentum and energy, and the seed command reaching the KOKKOS random pools (`run_conservation.py`) |
 | `transformview_test/` | unit test of the TransformView sync state machine (ctest `KokkosTransformView`) |
 | `kkprec.py`           | shared lexer: comments/strings, brace matching, device regions |
 
@@ -103,6 +104,16 @@ code:
   is unchanged.
 - *Tolerances.*  Absolute tolerances tuned for double round-off are chosen
   by precision with `kk_eps<T>()`.
+- *Rounding bias.*  Round-off that is unbiased on one operation can add up
+  when the same rounding is repeated every collision.  The original centre
+  of mass velocity `(m_i v_i + m_j v_j)*(1/M)` is off by a double ulp whose
+  sign is fixed by the species pair; for equal masses and simple ratios the
+  exact result often sits on a float midpoint, and every tie broke away from
+  zero, growing total momentum and energy by ~4e-9 per collision (1.4e-6
+  over 1000 steps of a closed box).  `kk_cm_velocity()` and
+  `kk_split_velocity()` put the remaining round-off on random-signed terms,
+  and `kk_sin_from_cos()` takes the scattering angle square root in double.
+  `conservation_test/` catches this kind of drift.
 
 ## Rerunning the conversion
 
@@ -138,6 +149,15 @@ time averages:
 The conversion of particle data between the double precision host and the
 reduced precision device is checked exactly with `conversion_test/`, see
 `check_conversion.py`.
+
+Physical conservation is checked with `conservation_test/`: closed periodic
+boxes (vibrational exchange, an N/N2 mixture, N2 dissociation) must conserve
+mass, momentum and energy to round-off in double precision and within
+1.5e-7 over 1000 steps in reduced precision, and the `seed` command must
+reach the KOKKOS random pools (same seed reproduces a run, a different one
+changes it).  The CI `kokkos-precision` job runs it:
+
+    run_conservation.py --spa "mpirun -np 2 spa_kokkos -k on -sf kk" --prec mixed
 
 The TransformView sync state machine (every host/Kokkos host/device
 transition, resize, copies, the struct conversion, the abort on concurrent

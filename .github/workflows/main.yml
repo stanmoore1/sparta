@@ -213,6 +213,15 @@ jobs:
         python3 ../tools/kokkos_prec/compare_logs.py --gold --stats \
           ../examples examples_${{ matrix.prec }} \
           --only $(cat ../tools/kokkos_prec/ci_examples.txt)
+
+    - name: Conservation and seed
+      # momentum and energy conservation in closed boxes, and the seed
+      # command reaching the KOKKOS random pools
+      run: |
+        cd build
+        python3 ../tools/kokkos_prec/conservation_test/run_conservation.py \
+          --spa "mpirun -np 2 $PWD/src/spa_kokkos_mpi_only -k on -sf kk" \
+          --prec ${{ matrix.prec }} --out conservation_${{ matrix.prec }}
   bigbig:
     runs-on: ubuntu-24.04
     steps:
