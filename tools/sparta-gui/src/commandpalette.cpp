@@ -164,6 +164,10 @@ void CommandPalette::refilter(const QString &needle)
 
 void CommandPalette::triggerCurrent()
 {
+    // Return in the list arrives twice: as the view's activation and then, the
+    // view having ignored the key, as this dialog's own Return. Once is enough
+    // -- twice opened Preferences twice and flipped a toggle back.
+    if (triggered) return;
     auto *item = list->currentItem();
     if (!item || item->isHidden() || item->isDisabled()) return;
     const int idx = item->data(0, RoleIndex).toInt();
@@ -171,6 +175,7 @@ void CommandPalette::triggerCurrent()
     const auto infos = scanMenuBar(menubar);
     if (idx < 0 || idx >= infos.size() || !infos[idx].action) return;
     QAction *action = infos[idx].action;
+    triggered       = true;
     accept();
     // after the dialog is gone, so a modal the action opens stacks cleanly
     action->trigger();

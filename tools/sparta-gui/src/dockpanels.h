@@ -146,6 +146,8 @@ public:
      * a round trip through the other modes.
      */
     void applyMode(Mode mode);
+    /// @brief Re-open the current mode's arrangement without capturing first
+    void reopenMode();
 
     /** @brief Does @p mode's default set include this panel?
      *

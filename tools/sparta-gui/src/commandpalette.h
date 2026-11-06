@@ -52,6 +52,7 @@ private:
     QMenuBar *menubar;
     QLineEdit *input   = nullptr;
     QTreeWidget *list  = nullptr;
+    bool triggered = false; ///< an entry was run; the palette is done
 };
 
 #endif // COMMANDPALETTE_H

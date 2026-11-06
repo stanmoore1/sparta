@@ -187,6 +187,10 @@ QString RunHistory::writeReportPdf(int row)
     doc.setHtml(html);
     QPdfWriter writer(path);
     writer.setPageSize(QPageSize(QPageSize::A4));
+    // The document lays text out at screen resolution. At QPdfWriter's default
+    // 1200 dpi the page was 12.5 times as many "pixels" wide, and the whole
+    // report printed at about a twelfth of its size -- 1 pt text.
+    writer.setResolution(96);
     doc.setPageSize(QSizeF(writer.width(), writer.height()));
     doc.print(&writer);
     return QFileInfo::exists(path) ? path : QString();

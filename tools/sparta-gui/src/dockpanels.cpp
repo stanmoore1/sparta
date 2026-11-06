@@ -520,6 +520,22 @@ void PanelManager::captureCurrentMode()
     dm->addPerspective(perspectiveName(mode));
 }
 
+void PanelManager::reopenMode()
+{
+    // As applyMode(mode), but without first recording the current arrangement
+    // as the mode's own: used after something has closed every panel (opening
+    // a file at startup), when that empty state is not what the user left.
+    applyingArrangement = true;
+    if (modeEstablished[mode] && dm->perspectiveNames().contains(perspectiveName(mode)))
+        dm->openPerspective(perspectiveName(mode));
+    else
+        applyModeDefault(mode);
+    modeEstablished[mode] = true;
+    applyingArrangement   = false;
+    QTimer::singleShot(0, this, [this]() { applySplitterProportions(); });
+    emit modeChanged(int(mode));
+}
+
 void PanelManager::applyMode(Mode m)
 {
     if (m < 0 || m >= NModes) return;

@@ -382,7 +382,11 @@ void SpartaGui::createEditMenu()
     auto *lintAction = addMenuAction(menu, ":/icons/warning.svg", "Autom&atic Input Checking", "",
                                      &SpartaGui::toggleAutoLint);
     lintAction->setCheckable(true);
-    lintAction->setChecked(QSettings().value(Keys::AUTOLINT, true).toBool());
+    // the same key Preferences uses: the menu used a top-level "autolint" that
+    // nothing read at startup, so the two disagreed and Preferences' OK undid
+    // a change made from the menu
+    lintAction->setChecked(
+        QSettings().value(QString("%1/%2").arg(Keys::GROUP_REFORMAT, Keys::AUTOLINT), true).toBool());
     autoLintAction = lintAction;
     menu->addSeparator();
 
@@ -1067,8 +1071,12 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
 
     updateRecents();
 
+    // opening a file closes every panel (clearPanelWidgets), which undoes the
+    // layout just restored; remembered so it can be put back below
+    bool openedAtStartup = false;
     if ((filename.size() > 0) && !filename.endsWith("sparta-gui.exe")) {
         openFile(filename);
+        openedAtStartup = true;
     } else {
         setWindowTitle("SPARTA-GUI - Editor - *unknown*");
         // restore the previous session's window geometry
@@ -1082,7 +1090,8 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
             const QString last = settings.value(Keys::LAST_FILE).toString();
             if (!last.isEmpty() && QFileInfo::exists(last)) {
                 openFile(last);
-                opened = true;
+                opened          = true;
+                openedAtStartup = true;
             }
         }
         if (!opened && settings.value(Keys::SHOWWELCOME, true).toBool()) showWelcome();
@@ -1147,7 +1156,10 @@ SpartaGui::SpartaGui(QWidget *parent, const QString &filename, int width, int he
     // restoring the layout, before the plugin was loaded, so its panels could
     // not be created then; do it now that everything is in place. Only for a
     // fresh session -- a restored layout already describes what was open.
-    if (!restoredLayout) panels->applyMode(panels->currentMode());
+    if (!restoredLayout)
+        panels->applyMode(panels->currentMode());
+    else if (openedAtStartup)
+        panels->reopenMode();
 }
 
 SpartaGui::~SpartaGui()
@@ -2449,6 +2461,15 @@ bool SpartaGui::doRun(bool use_buffer)
         return false;
     }
 
+    // every entry point -- Run from File and the Output panel's Ctrl+Return
+    // included -- gets the same answer as the greyed Run button
+    if (!sparta.hasLibrary()) {
+        warning(this, "SPARTA-GUI Warning",
+                "Running a deck needs the SPARTA shared library. Use Download or Browse "
+                "on the card above the editor to set one up.");
+        return false;
+    }
+
     // a run operates on the editor buffer, so make sure it is the visible page
     showEditor();
 
@@ -2512,7 +2533,13 @@ bool SpartaGui::doRun(bool use_buffer)
         status->setText(QString("Running SPARTA ..."));
     status->repaint();
     startSparta();
-    if (!sparta.isOpen()) return false;
+    if (!sparta.isOpen()) {
+        // nothing will call runDone(), so undo the "Running" state here
+        progress->hide();
+        dirstatus->show();
+        status->setText("Ready.");
+        return false;
+    }
     capturer->beginCapture();
 
     ++runCounter;
@@ -3931,7 +3958,7 @@ void SpartaGui::showPalette()
 void SpartaGui::toggleAutoLint()
 {
     autoLintEnabled = autoLintAction && autoLintAction->isChecked();
-    QSettings().setValue(Keys::AUTOLINT, autoLintEnabled);
+    QSettings().setValue(QString("%1/%2").arg(Keys::GROUP_REFORMAT, Keys::AUTOLINT), autoLintEnabled);
     // switching it on mid-edit should check what is already there
     if (autoLintEnabled) autoCheckInput();
 }
@@ -4068,6 +4095,11 @@ void SpartaGui::preferences()
         settings.endGroup();
         // if auto-lint was just turned off, drop any inline markers it left behind
         if (wasAutoLint && !autoLintEnabled) textEdit->clearDiagnostics();
+        // and the Edit menu's checkmark follows the dialog
+        if (autoLintAction) {
+            QSignalBlocker block(autoLintAction);
+            autoLintAction->setChecked(autoLintEnabled);
+        }
         // the editor syntax color scheme may have changed: apply it live so the
         // choice takes effect immediately without requiring a restart
         applyEditorColorScheme();
@@ -4093,6 +4125,12 @@ void SpartaGui::appendAcceleratorArgs(int accel)
 
 void SpartaGui::startSparta()
 {
+    // Without a library there is nothing to start, and the setup card above
+    // the editor already says so. Opening the Viewer, entering Visualize or
+    // Help > About each used to put up "SPARTA could not be started" modals
+    // for renders nobody asked for.
+    if (!sparta.hasLibrary()) return;
+
     // temporarily extend spartaArgs with additional arguments
     int initial_narg = spartaArgs.size();
     QSettings settings;

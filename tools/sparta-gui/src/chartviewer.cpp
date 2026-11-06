@@ -1273,6 +1273,7 @@ QRectF columnMinMax(const ChartColumn &col)
     // if plotting the smoothed data, include its range too
     if (col.doSmooth && col.smooth) {
         for (auto &p : col.smooth->points) {
+            if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
             xmin = qMin(xmin, p.x());
             xmax = qMax(xmax, p.x());
             ymin = qMin(ymin, p.y());
@@ -1283,6 +1284,7 @@ QRectF columnMinMax(const ChartColumn &col)
     // include any visible fit/overlay curve (EOS, polynomial, custom)
     if (col.fit && col.fit->isVisible() && !col.fit->points.isEmpty()) {
         for (auto &p : col.fit->points) {
+            if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue;
             xmin = qMin(xmin, p.x());
             xmax = qMax(xmax, p.x());
             ymin = qMin(ymin, p.y());
@@ -1433,6 +1435,9 @@ bool appendColumnPoint(ChartColumn &col, double x, double y)
     if (col.lastX >= x) return false;
     col.lastX = x;
     col.series->append(x, y);
+    // a nan or inf point is plotted as a gap, but must not set the range:
+    // qMin(a, nan) is nan, and the next point then resets the bound
+    if (!std::isfinite(x) || !std::isfinite(y)) return true;
     col.rawXmin = qMin(col.rawXmin, x);
     col.rawXmax = qMax(col.rawXmax, x);
     col.rawYmin = qMin(col.rawYmin, y);
@@ -1566,6 +1571,7 @@ void setColumnData(ChartColumn &col, const QList<QPointF> &points)
     col.rawXmin = col.rawYmin = 1.0e100;
     col.rawXmax = col.rawYmax = -1.0e100;
     for (const auto &p : points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) continue; // see appendColumnPoint
         col.rawXmin = qMin(col.rawXmin, p.x());
         col.rawXmax = qMax(col.rawXmax, p.x());
         col.rawYmin = qMin(col.rawYmin, p.y());

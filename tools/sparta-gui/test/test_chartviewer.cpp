@@ -24,6 +24,7 @@
 #include "plotwidget.h"
 
 #include <gtest/gtest.h>
+#include <limits>
 
 #include <QApplication>
 #include <QCheckBox>
@@ -427,6 +428,25 @@ TEST_F(Chart, TheViewReportsTheBoundsOfWhatItHolds)
     EXPECT_DOUBLE_EQ(box.left(), 0.0);
     EXPECT_DOUBLE_EQ(box.right(), 390.0);
     EXPECT_EQ(view->getCount(), 40);
+}
+
+// A nan or inf value (numpy writes "nan") set the plot range to NaN and the
+// chart came up blank; a nan mid-series reset the minimum and clipped the data
+// before it.
+TEST_F(Chart, NonFiniteValuesDoNotSetTheRange)
+{
+    win->addChart("Temp", 3);
+    win->addData(100, 5.0, 3);
+    win->addData(200, std::nan(""), 3);
+    win->addData(300, 9.0, 3);
+    win->addData(400, std::numeric_limits<double>::infinity(), 3);
+    auto *view = ctl<ChartViewer>("chartView");
+    ASSERT_NE(view, nullptr);
+    const QRectF box = view->getMinMax();
+    EXPECT_TRUE(std::isfinite(box.top()) && std::isfinite(box.bottom()))
+        << "the range went non-finite and the chart would be blank";
+    EXPECT_LE(qMin(box.top(), box.bottom()), 5.0) << "the value before the nan was clipped off";
+    EXPECT_GE(qMax(box.top(), box.bottom()), 9.0);
 }
 
 TEST_F(Chart, TheViewSurvivesBeingUnbound)

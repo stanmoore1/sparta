@@ -24,6 +24,10 @@
 // already put in the editor.
 
 #include "spartagui.h"
+#include "dockpanels.h"
+
+#include <DockManager.h>
+#include <DockWidget.h>
 
 #include "codeeditor.h"
 #include "helpers.h"
@@ -370,6 +374,49 @@ TEST_F(Prefs, TurningAutoLintOffClearsTheMarkersItAlreadyLeft)
     ASSERT_EQ(off.dialogs, 1);
 
     EXPECT_LT(markers(), marked) << "turning auto-lint off left its markers in the editor";
+}
+
+// The Edit menu's Automatic Input Checking wrote a top-level "autolint" that
+// nothing read at startup, while Preferences used reformat/autolint: the menu's
+// choice did not survive a restart and the two showed opposite states.
+TEST_F(Prefs, TheMenuAndPreferencesShareTheAutoLintSetting)
+{
+    QAction *menuEntry = nullptr;
+    for (auto *a : gui->findChildren<QAction *>())
+        if (a->text() == QLatin1String("Autom&atic Input Checking")) menuEntry = a;
+    ASSERT_NE(menuEntry, nullptr);
+    ASSERT_TRUE(menuEntry->isChecked());
+    menuEntry->trigger(); // off
+    EXPECT_FALSE(QSettings().value(QString("%1/%2").arg(Keys::GROUP_REFORMAT, Keys::AUTOLINT), true).toBool())
+        << "turning it off from the menu did not reach the setting Preferences and startup read";
+}
+
+// Opening a file closes every panel, and at startup that ran after the saved
+// layout had been restored: a session quit in Analyze reopened its deck with
+// every panel closed.
+TEST_F(Prefs, AFileOpenedAtStartupKeepsTheRestoredWorkspace)
+{
+    QAction *analyze = nullptr;
+    for (auto *a : gui->findChildren<QAction *>())
+        if (a->text() == QLatin1String("&Analyze Workspace")) analyze = a;
+    ASSERT_NE(analyze, nullptr);
+    analyze->trigger();
+    QCoreApplication::processEvents();
+    auto chartsOpen = [this]() {
+        auto *dm = gui->findChild<ads::CDockManager *>();
+        auto *d  = dm ? dm->findDockWidget("dockCharts") : nullptr;
+        return d && !d->isClosed();
+    };
+    ASSERT_TRUE(chartsOpen()) << "Analyze does not show the charts to begin with";
+    {
+        QSettings settings;
+        gui->findChild<PanelManager *>()->saveLayout(settings); // what quit() does
+        settings.sync();
+    }
+    delete gui;
+    gui = new SpartaGui(nullptr, examples.filePath("guitest_alpha/in.alpha"), 800, 600);
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(chartsOpen()) << "reopening the deck at startup closed the restored workspace's panels";
 }
 
 TEST_F(Prefs, LeavingAutoLintOnKeepsTheMarkers)

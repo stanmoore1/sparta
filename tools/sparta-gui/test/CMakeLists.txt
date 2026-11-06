@@ -1784,3 +1784,16 @@ else()
     "they need xdotool, a window manager (e.g. openbox) and a screenshooter")
 endif()
 endif()
+
+# The live suites above are registered as whole binaries, so a run in which
+# every case hit GTEST_SKIP() (no libsparta configured, or one that will not
+# load) exited 0 and was reported Passed with zero assertions. gtest prints
+# "[  PASSED  ] 0 tests." followed directly by the "[  SKIPPED ]" count only in
+# that case (a failure prints its own line in between).
+foreach(_live MainWindow.All MainWindow.Prefs ImageViewer.Input ImageViewer.Buttons Inspect.All
+              Run.All StlWizard.Live Sweep.All SurfReport.Live)
+  if (TEST ${_live})
+    set_tests_properties(${_live} PROPERTIES
+      SKIP_REGULAR_EXPRESSION "\\[  PASSED  \\] 0 tests\\.\n\\[  SKIPPED \\]")
+  endif()
+endforeach()
