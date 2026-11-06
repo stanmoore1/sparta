@@ -45,8 +45,8 @@ namespace SPARTA_NS {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagComputePropertyGrid_ComputePerGrid_array, const int&) const;
 
-  DAT::tdual_float_1d k_vector_grid;
-  DAT::tdual_float_2d_lr k_array_grid;
+  DAT::ttransform_kkacc_1d k_vector_grid;
+  DAT::ttransform_kkacc_2d_lr k_array_grid;
 
  private:
   t_cell_1d d_cells;

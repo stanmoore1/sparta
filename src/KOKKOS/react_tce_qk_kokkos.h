@@ -46,10 +46,10 @@ class ReactTCEQKKokkos : public ReactBirdKokkos {
 ------------------------------------------------------------------------- */
 
 KOKKOS_INLINE_FUNCTION
-int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
-         double pre_etrans, double pre_erot, double pre_evib,
-         double &post_etotal, int &kspecies,
-         int & /*recomb_species*/, double & /*recomb_density*/,
+int attempt_kk(OnePartKK *ip, OnePartKK *jp,
+         KK_FLOAT pre_etrans, KK_FLOAT pre_erot, KK_FLOAT pre_evib,
+         KK_FLOAT &post_etotal, int &kspecies,
+         int & /*recomb_species*/, double & /*recomb_density*/,  // KK_DOUBLE: recombination density
          const t_species_1d_const &d_species) const
 {
   const int isp = ip->ispecies;
@@ -59,45 +59,45 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
   if (n == 0) return 0;
   auto& d_list = d_reactions(isp,jsp).d_list;
 
-  const double pre_ave_rotdof = (d_species[isp].rotdof + d_species[jsp].rotdof)/2.0;
-  const double omega = d_omega(isp,jsp);
+  const KK_FLOAT pre_ave_rotdof = (d_species[isp].rotdof + d_species[jsp].rotdof)/static_cast<KK_FLOAT>(2.0);
+  const KK_FLOAT omega = d_omega(isp,jsp);
 
   rand_type rand_gen = rand_pool.get_state();
 
   for (int i = 0; i < n; i++) {
     OneReactionKokkos *r = &d_rlist[d_list[i]];
 
-    const double pre_etotal = pre_etrans + pre_erot + pre_evib;
+    const KK_FLOAT pre_etotal = pre_etrans + pre_erot + pre_evib;
 
     // top-level energetic-possibility screen (uses total energy)
 
-    double ecc = pre_etotal;
-    if (ecc - r->d_coeff[1] <= 0.0) continue;
+    KK_FLOAT ecc = pre_etotal;
+    if (ecc - r->d_coeff[1] <= static_cast<KK_FLOAT>(0.0)) continue;
 
     int fired = 0;
 
     // per-reaction probability + its own random draw (helper semantics)
 
-    const double random_prob = rand_gen.drand();
+    const KK_FLOAT random_prob = static_cast<KK_FLOAT>(rand_gen.drand());
 
-    double react_prob = 0.0;
-    double ecc2 = pre_etrans;
-    if (pre_ave_rotdof > 0.1) ecc2 += pre_erot*r->d_coeff[0]/pre_ave_rotdof;
-    const double e_excess = ecc2 - r->d_coeff[1];
+    KK_FLOAT react_prob = 0.0;
+    KK_FLOAT ecc2 = pre_etrans;
+    if (pre_ave_rotdof > static_cast<KK_FLOAT>(0.1)) ecc2 += pre_erot*r->d_coeff[0]/pre_ave_rotdof;
+    const KK_FLOAT e_excess = ecc2 - r->d_coeff[1];
 
-    if (e_excess > 0.0) {
+    if (e_excess > static_cast<KK_FLOAT>(0.0)) {
       if (r->style == ARRHENIUS) {                 // attempt_tce
         switch (r->type) {
         case DISSOCIATION:
         case EXCHANGE:
           {
-            const double z = r->d_coeff[0];
-            const double eta = r->d_coeff[3];
-            const double omega = r->d_coeff[5];
+            const double z = r->d_coeff[0];      // KK_DOUBLE: reaction coefficients are double
+            const double eta = r->d_coeff[3];    // KK_DOUBLE: reaction coefficients are double
+            const double omega = r->d_coeff[5];  // KK_DOUBLE: reaction coefficients are double
             react_prob += r->d_coeff[2] *
-              tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+eta+1.5)) *
-              pow(ecc2-r->d_coeff[1],eta-1.0+omega) *
-              pow(1.0-r->d_coeff[1]/ecc2,z+1.5-omega);
+              Kokkos::tgamma(z+static_cast<KK_FLOAT>(2.5)-omega) / MAX(static_cast<KK_FLOAT>(1.0e-6),Kokkos::tgamma(z+eta+static_cast<KK_FLOAT>(1.5))) *
+              Kokkos::pow(ecc2-r->d_coeff[1],eta-static_cast<KK_FLOAT>(1.0)+omega) *
+              Kokkos::pow(static_cast<KK_FLOAT>(1.0)-r->d_coeff[1]/ecc2,z+static_cast<KK_FLOAT>(1.5)-omega);
           }
           break;
         default:
@@ -107,15 +107,15 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         if (react_prob > random_prob) fired = 1;
 
       } else {                                     // attempt_qk
-        const double inverse_kT = 1.0 / (boltz * d_species[isp].vibtemp[0]);
+        const KK_FLOAT inverse_kT = static_cast<KK_FLOAT>(1.0) / (boltz * d_species[isp].vibtemp[0]);
         int iv = 0,ilevel,maxlev,limlev;
-        double eccq;
+        KK_FLOAT eccq;
         switch (r->type) {
         case DISSOCIATION:
           {
             eccq = pre_etrans + ip->evib;
             maxlev = static_cast<int> (eccq * inverse_kT);
-            limlev = static_cast<int> (fabs(r->d_coeff[1]) * inverse_kT);
+            limlev = static_cast<int> (Kokkos::fabs(r->d_coeff[1]) * inverse_kT);
             if (maxlev > limlev) react_prob = 1.0;
             break;
           }
@@ -128,14 +128,14 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                 // sample into a local prob, not react_prob: react_prob feeds
                 //   the "fired" test below, and a rejected draw must not leave
                 //   a fractional value in it.  Mirrors ReactTCEQK::attempt()
-                double prob = 0.0;
+                KK_FLOAT prob = 0.0;
                 do {
                   iv = static_cast<int> (rand_gen.drand()*(maxlev+0.99999999));
-                  double evib = static_cast<double> (iv / inverse_kT);
-                  if (evib < eccq) prob = pow(1.0-evib/eccq,1.5-omega);
+                  KK_FLOAT evib = static_cast<KK_FLOAT> (iv / inverse_kT);
+                  if (evib < eccq) prob = Kokkos::pow(static_cast<KK_FLOAT>(1.0)-evib/eccq,static_cast<KK_FLOAT>(1.5)-omega);
                   else prob = 0.0;
-                } while (rand_gen.drand() < prob);
-                ilevel = static_cast<int> (fabs(r->d_coeff[4]) * inverse_kT);
+                } while (static_cast<KK_FLOAT>(rand_gen.drand()) < prob);
+                ilevel = static_cast<int> (Kokkos::fabs(r->d_coeff[4]) * inverse_kT);
                 if (iv >= ilevel) react_prob = 1.0;
               }
             } else if (r->d_coeff[4] > 0.0 && d_species[isp].rotdof > 0) {
@@ -144,14 +144,14 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
               if (d_species[mspec].rotdof < 2.0) mspec = r->d_products[1];
               eccq += r->d_coeff[4];
               maxlev = static_cast<int> (eccq * inverse_kT);
-              double prob = 0.0;
+              KK_FLOAT prob = 0.0;
               do {
                 iv = rand_gen.drand()*(maxlev+0.99999999);
-                double evib = static_cast<double> (iv * boltz*d_species[mspec].vibtemp[0]);
-                if (evib < eccq) prob = pow(1.0-evib/eccq,1.5 - r->d_coeff[6]);
+                KK_FLOAT evib = static_cast<KK_FLOAT> (iv * boltz*d_species[mspec].vibtemp[0]);
+                if (evib < eccq) prob = Kokkos::pow(static_cast<KK_FLOAT>(1.0)-evib/eccq,static_cast<KK_FLOAT>(1.5) - r->d_coeff[6]);
                 else prob = 0.0;
-              } while (rand_gen.drand() < prob);
-              ilevel = static_cast<int> (fabs(r->d_coeff[4]/boltz/d_species[mspec].vibtemp[0]));
+              } while (static_cast<KK_FLOAT>(rand_gen.drand()) < prob);
+              ilevel = static_cast<int> (Kokkos::fabs(r->d_coeff[4]/boltz/d_species[mspec].vibtemp[0]));
               if (iv >= ilevel) react_prob = 1.0;
             }
             break;
@@ -181,8 +181,8 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 }
 
  protected:
-  double boltz;
-  DAT::t_float_2d d_omega;     // VSS omega for each species pair
+  KK_FLOAT boltz;
+  DAT::t_kkfloat_2d d_omega;     // VSS omega for each species pair
 };
 
 }

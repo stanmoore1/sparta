@@ -53,12 +53,12 @@ class CommKokkos : public Comm {
   HAT::t_int_scalar h_nsend;
 
   typedef Kokkos::
-    DualView<Grid::ChildCell*, Kokkos::LayoutRight, DeviceType> tdual_cell_1d;
+    DualView<ChildCellKK*, Kokkos::LayoutRight, DeviceType> tdual_cell_1d;
   typedef tdual_cell_1d::t_dev t_cell_1d;
   t_cell_1d d_cells;
 
   typedef Kokkos::
-    DualView<Particle::OnePart*, Kokkos::LayoutRight, DeviceType> tdual_particle_1d;
+    DualView<OnePartKK*, Kokkos::LayoutRight, DeviceType> tdual_particle_1d;
   typedef tdual_particle_1d::t_dev t_particle_1d;
   t_particle_1d d_particles;
 

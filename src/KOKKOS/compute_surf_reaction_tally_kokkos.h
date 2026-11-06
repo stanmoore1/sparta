@@ -74,9 +74,9 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
   DAT::t_int_scalar d_overflow;         // set by UpdateKokkos each step
 
   KOKKOS_INLINE_FUNCTION
-  void surf_tally_kk(double dtremain, int isurf, int icell, int reaction,
-                     Particle::OnePart *iorig,
-                     Particle::OnePart *ip, Particle::OnePart *jp) const
+  void surf_tally_kk(KK_POS_FLOAT dtremain, int isurf, int icell, int reaction,
+                     OnePartKK *iorig,
+                     OnePartKK *ip, OnePartKK *jp) const
   {
     // this compute tallies only collisions that induce a reaction;
     //   plain collisions belong to compute surf/collision/tally
@@ -118,12 +118,12 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
       case VXPRE:    d_array_tally(itally,m) = iorig->v[0]; break;
       case VYPRE:    d_array_tally(itally,m) = iorig->v[1]; break;
       case VZPRE:    d_array_tally(itally,m) = iorig->v[2]; break;
-      case VX1POST:  d_array_tally(itally,m) = ip ? ip->v[0] : 0.0; break;
-      case VY1POST:  d_array_tally(itally,m) = ip ? ip->v[1] : 0.0; break;
-      case VZ1POST:  d_array_tally(itally,m) = ip ? ip->v[2] : 0.0; break;
-      case VX2POST:  d_array_tally(itally,m) = jp ? jp->v[0] : 0.0; break;
-      case VY2POST:  d_array_tally(itally,m) = jp ? jp->v[1] : 0.0; break;
-      case VZ2POST:  d_array_tally(itally,m) = jp ? jp->v[2] : 0.0; break;
+      case VX1POST:  d_array_tally(itally,m) = ip ? ip->v[0] : static_cast<KK_ACC_FLOAT>(0.0); break;
+      case VY1POST:  d_array_tally(itally,m) = ip ? ip->v[1] : static_cast<KK_ACC_FLOAT>(0.0); break;
+      case VZ1POST:  d_array_tally(itally,m) = ip ? ip->v[2] : static_cast<KK_ACC_FLOAT>(0.0); break;
+      case VX2POST:  d_array_tally(itally,m) = jp ? jp->v[0] : static_cast<KK_ACC_FLOAT>(0.0); break;
+      case VY2POST:  d_array_tally(itally,m) = jp ? jp->v[1] : static_cast<KK_ACC_FLOAT>(0.0); break;
+      case VZ2POST:  d_array_tally(itally,m) = jp ? jp->v[2] : static_cast<KK_ACC_FLOAT>(0.0); break;
       }
     }
   }
@@ -135,8 +135,8 @@ class ComputeSurfReactionTallyKokkos : public ComputeSurfReactionTally, public K
        XC,YC,ZC,VXPRE,VYPRE,VZPRE,VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST};
 
   int maxtally_host;                 // rows array_tally is allocated for
-  DAT::tdual_float_2d_lr k_array_tally;
-  DAT::t_float_2d_lr d_array_tally;
+  DAT::ttransform_kkacc_2d_lr k_array_tally;
+  DAT::t_kkacc_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;
   int ntally_mark;
   HAT::t_int_scalar h_ntally;

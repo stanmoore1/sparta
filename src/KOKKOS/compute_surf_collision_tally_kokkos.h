@@ -74,9 +74,9 @@ class ComputeSurfCollisionTallyKokkos : public ComputeSurfCollisionTally, public
   DAT::t_int_scalar d_overflow;         // set by UpdateKokkos each step
 
   KOKKOS_INLINE_FUNCTION
-  void surf_tally_kk(double dtremain, int isurf, int icell, int reaction,
-                     Particle::OnePart *iorig,
-                     Particle::OnePart *ip, Particle::OnePart *jp) const
+  void surf_tally_kk(KK_POS_FLOAT dtremain, int isurf, int icell, int reaction,
+                     OnePartKK *iorig,
+                     OnePartKK *ip, OnePartKK *jp) const
   {
     // this compute tallies only collisions that induce no reaction;
     //   reactions belong to compute surf/reaction/tally
@@ -126,8 +126,8 @@ class ComputeSurfCollisionTallyKokkos : public ComputeSurfCollisionTally, public
   enum{IDSURF,ID,TYPE,TIME,XC,YC,ZC,VXPRE,VYPRE,VZPRE,VXPOST,VYPOST,VZPOST};
 
   int maxtally_host;                 // rows array_tally is allocated for
-  DAT::tdual_float_2d_lr k_array_tally;
-  DAT::t_float_2d_lr d_array_tally;
+  DAT::ttransform_kkacc_2d_lr k_array_tally;
+  DAT::t_kkacc_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;
   int ntally_mark;
   HAT::t_int_scalar h_ntally;

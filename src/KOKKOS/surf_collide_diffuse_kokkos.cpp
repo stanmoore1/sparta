@@ -63,6 +63,9 @@ SurfCollideDiffuseKokkos::SurfCollideDiffuseKokkos(SPARTA *sparta, int narg, cha
 
   random_backup = NULL;
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 
@@ -199,8 +202,7 @@ void SurfCollideDiffuseKokkos::dynamic()
       surf->spread_own2local(1,DOUBLE,t_owned,t_localghost);
       t_persurf = t_localghost;
 
-      auto h_t_persurf = HAT::t_float_1d(t_persurf,n_localghost);
-      d_t_persurf = Kokkos::create_mirror_view_and_copy(SPADeviceType(),h_t_persurf);
+      copy_host_array_to_view(d_t_persurf,t_persurf,n_localghost,"surf_collide:t_persurf");
     }
 
   // CUSTOM mode
@@ -325,6 +327,9 @@ void SurfCollideDiffuseKokkos::pre_collide()
     double seed = update->ranmaster->uniform();
     random->reset(seed,comm->me,100);
 
+#ifndef SPARTA_KOKKOS_EXACT
+    rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
     rand_pool.init(random);
 #endif

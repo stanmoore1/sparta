@@ -76,9 +76,9 @@ class ComputeGasCollisionTallyKokkos : public ComputeGasCollisionTally, public K
   template<int ATOMIC_REDUCTION>
   KOKKOS_INLINE_FUNCTION
   void gas_tally_kk(int icell, int reaction,
-                    Particle::OnePart *iorig, Particle::OnePart *jorig,
-                    Particle::OnePart *ip, Particle::OnePart *jp,
-                    Particle::OnePart * /*kp*/) const
+                    OnePartKK *iorig, OnePartKK *jorig,
+                    OnePartKK *ip, OnePartKK *jp,
+                    OnePartKK * /*kp*/) const
   {
     // this compute tallies only collisions that induce no reaction;
     //   reactions belong to compute gas/reaction/tally
@@ -125,8 +125,8 @@ class ComputeGasCollisionTallyKokkos : public ComputeGasCollisionTally, public K
        VX1POST,VY1POST,VZ1POST,VX2POST,VY2POST,VZ2POST};
 
   int maxtally_host;                 // rows array_tally is allocated for
-  DAT::tdual_float_2d_lr k_array_tally;
-  DAT::t_float_2d_lr d_array_tally;
+  DAT::ttransform_kkacc_2d_lr k_array_tally;
+  DAT::t_kkacc_2d_lr d_array_tally;
   DAT::t_int_scalar d_ntally;
   int ntally_mark;
   HAT::t_int_scalar h_ntally;

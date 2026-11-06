@@ -61,7 +61,7 @@ void FixDtResetKokkos::end_of_step()
   int nglocal = grid->nlocal;
   if (nglocal > maxgrid) {
     maxgrid = grid->nlocal;
-    d_gridstep = DAT::t_float_1d ("d_gridstep", maxgrid);
+    d_gridstep = DAT::t_kkacc_1d ("d_gridstep", maxgrid);
   }
 
   if (step_which == FIX && update->ntimestep % fstep->per_grid_freq)
@@ -79,7 +79,7 @@ void FixDtResetKokkos::end_of_step()
     }
 
     if (cstep->post_process_grid_flag)
-      computeKKBase->post_process_grid_kokkos(step_index,1,DAT::t_float_2d_lr(),NULL,DAT::t_float_1d_strided());
+      computeKKBase->post_process_grid_kokkos(step_index,1,DAT::t_kkacc_2d_lr(),NULL,DAT::t_kkacc_1d_strided());
 
     if (step_index == 0 || cstep->post_process_grid_flag)
       copy_gridstep(computeKKBase->d_vector_grid,nglocal);
@@ -167,7 +167,7 @@ void FixDtResetKokkos::end_of_step()
      the non-Kokkos style memcpy's exactly N values for the same reason
 ------------------------------------------------------------------------- */
 
-void FixDtResetKokkos::copy_gridstep(DAT::t_float_1d d_src, int n)
+void FixDtResetKokkos::copy_gridstep(DAT::t_kkacc_1d d_src, int n)
 {
   if (n <= 0) return;
   auto range = Kokkos::make_pair(0,n);
@@ -181,11 +181,11 @@ void FixDtResetKokkos::copy_gridstep(DAT::t_float_1d d_src, int n)
 KOKKOS_INLINE_FUNCTION
 void FixDtResetKokkos::operator()(TagFixDtReset_MinMaxSumReduction,
                                   const int &i,
-                                  double& dtmin,
-                                  double& dtmax,
-                                  double& dtsum,
+                                  double& dtmin,  // KK_DOUBLE: reduction value
+                                  double& dtmax,  // KK_DOUBLE: reduction value
+                                  double& dtsum,  // KK_DOUBLE: reduction value
                                   int& count) const {
-  if (d_gridstep(i) == 0.0) return;
+  if (d_gridstep(i) == static_cast<KK_ACC_FLOAT>(0.0)) return;
 
   if (d_gridstep(i) < dtmin)
     dtmin = d_gridstep(i);

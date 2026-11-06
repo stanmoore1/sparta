@@ -68,7 +68,7 @@ class ComputeReduceKokkos : public ComputeReduce, public KokkosBase {
   double compute_one_kokkos(int, int);
   int setup_values(int);
   void build_include(int);
-  void gather_float(DAT::t_float_1d_strided);
+  template<class ViewType> void gather_float(ViewType);
   void gather_int_vec(DAT::t_int_1d);
   void gather_int_array(DAT::t_int_2d_lr, int);
   double reduce_values();
@@ -83,7 +83,7 @@ class ComputeReduceKokkos : public ComputeReduce, public KokkosBase {
   //   or grid group).  both are indexed 0 <= i < nelements, where nelements
   //   is particle->nlocal for PARTICLE inputs and grid->nlocal for GRID ones
 
-  DAT::t_float_1d d_values;
+  DAT::t_kkacc_1d d_values;
   DAT::t_int_1d d_include;
   int nelements,maxelements;
 

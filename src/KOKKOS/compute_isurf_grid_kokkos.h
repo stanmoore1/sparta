@@ -57,9 +57,9 @@ class ComputeISurfGridKokkos : public ComputeISurfGrid {
 
 template <int ATOMIC_REDUCTION>
 KOKKOS_INLINE_FUNCTION
-void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction*/,
-                   Particle::OnePart *iorig,
-                   Particle::OnePart *ip, Particle::OnePart *jp) const
+void surf_tally_kk(KK_POS_FLOAT /*dtremain*/, int isurf, int /*icell*/, int /*reaction*/,
+                   OnePartKK *iorig,
+                   OnePartKK *ip, OnePartKK *jp) const
 {
   // skip if species not in mixture group
 
@@ -77,24 +77,24 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
   d_tally2surf(itally) = surfID;
   d_surf2tally(isurf) = isurf;
 
-  double fluxscale = d_normflux(isurf);
+  KK_ACC_FLOAT fluxscale = d_normflux(isurf);
 
-  double vsqpre,ivsqpost,jvsqpost;
-  double ierot,jerot,ievib,jevib,iother,jother,otherpre,etot;
-  double pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
+  KK_ACC_FLOAT vsqpre,ivsqpost,jvsqpost;
+  KK_FLOAT ierot; KK_FLOAT jerot; KK_FLOAT ievib; KK_FLOAT jevib; KK_ACC_FLOAT iother; KK_ACC_FLOAT jother; KK_ACC_FLOAT otherpre; KK_ACC_FLOAT etot;
+  KK_ACC_FLOAT pdelta[3],pnorm[3],ptang[3],pdelta_force[3];
 
-  double *norm;
+  KK_POS_FLOAT *norm;
   if (dim == 2) norm = d_lines(isurf).norm;
   else norm = d_tris(isurf).norm;
 
-  double weight = 1.0;
+  KK_ACC_FLOAT weight = 1.0;
   if (weightflag) weight = iorig->weight;
-  double origmass = d_species[origspecies].mass * weight;
-  double imass = 0.0, jmass = 0.0;
+  KK_ACC_FLOAT origmass = d_species[origspecies].mass * weight;
+  KK_ACC_FLOAT imass = 0.0, jmass = 0.0;
   if (ip) imass = d_species(ip->ispecies).mass * weight;
   if (jp) jmass = d_species(jp->ispecies).mass * weight;
 
-  double *vorig = iorig->v;
+  KK_FLOAT *vorig = iorig->v;
 
   auto v_array_surf_tally = ScatterViewHelper<typename NeedDup<ATOMIC_REDUCTION,DeviceType>::value,decltype(dup_array_surf_tally),decltype(ndup_array_surf_tally)>::get(dup_array_surf_tally,ndup_array_surf_tally);
   auto a_array_surf_tally = v_array_surf_tally.template access<typename AtomicDup<ATOMIC_REDUCTION,DeviceType>::value>();
@@ -107,7 +107,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
   for (int m = 0; m < nvalue; m++) {
     switch (d_which(m)) {
     case NUM:
-      a_array_surf_tally(itally,k++) += 1.0;
+      a_array_surf_tally(itally,k++) += static_cast<KK_ACC_FLOAT>(1.0);
       break;
     case NUMWT:
       a_array_surf_tally(itally,k++) += weight;
@@ -220,7 +220,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
       else ivsqpost = 0.0;
       if (jp) jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
       else jvsqpost = 0.0;
-      a_array_surf_tally(itally,k++) -= 0.5*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
+      a_array_surf_tally(itally,k++) -= static_cast<KK_ACC_FLOAT>(0.5)*mvv2e * (ivsqpost + jvsqpost - vsqpre) * fluxscale;
       break;
     case EROT:
       if (ip) ierot = ip->erot;
@@ -247,7 +247,7 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
         jvsqpost = jmass * MathExtraKokkos::lensq3(jp->v);
         jother = jp->erot + jp->evib;
       } else jvsqpost = jother = 0.0;
-      etot = 0.5*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
+      etot = static_cast<KK_ACC_FLOAT>(0.5)*mvv2e*(ivsqpost + jvsqpost - vsqpre) +
         weight * (iother + jother - otherpre);
       a_array_surf_tally(itally,k++) -= etot * fluxscale;
       break;
@@ -260,18 +260,18 @@ void surf_tally_kk(double /*dtremain*/, int isurf, int /*icell*/, int /*reaction
 
   DAT::t_int_1d d_which;
 
-  DAT::tdual_float_2d_lr k_array_surf_tally;
-  DAT::t_float_2d_lr d_array_surf_tally;  // tally values for local surfs
+  DAT::ttransform_kkacc_2d_lr k_array_surf_tally;
+  DAT::t_kkacc_2d_lr d_array_surf_tally;  // tally values for local surfs
 
   int need_dup;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
-  Kokkos::Experimental::ScatterView<F_FLOAT**, typename DAT::t_float_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterDuplicated> dup_array_surf_tally;
+  Kokkos::Experimental::ScatterView<KK_ACC_FLOAT**, typename DAT::t_kkacc_2d_lr::array_layout,DeviceType,typename Kokkos::Experimental::ScatterSum,typename Kokkos::Experimental::ScatterNonDuplicated> ndup_array_surf_tally;
 
   DAT::t_surfint_1d d_tally2surf;           // tally2surf[I] = surf ID of Ith tally
   DAT::tdual_surfint_1d k_tally2surf;
   DAT::t_int_1d d_surf2tally;
 
-  DAT::t_float_1d d_normflux;         // normalization factor for each surf element
+  DAT::t_kkacc_1d d_normflux;         // normalization factor for each surf element
 
   t_species_1d d_species;
   DAT::t_int_2d d_s2g;

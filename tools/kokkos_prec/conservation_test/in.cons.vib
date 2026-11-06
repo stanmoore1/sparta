@@ -1,0 +1,33 @@
+# conservation of momentum and energy in a periodic box: VSS collisions
+#   with rotational and discrete vibrational exchange far from equilibrium
+#   (T 20000 K, Tvib 10 K), no surfaces, no chemistry
+seed                54345
+dimension           3
+timestep            5e-9
+global              nrho 1.E22
+global              fnum 50 comm/sort yes
+boundary            p p p
+create_box          0 1e-5 0 1e-5 0 1e-5
+create_grid         4 4 4
+species             co2.species N2 CO2 vibfile co2.species.vib
+mixture             mix CO2 frac 0.9
+mixture             mix N2 frac 0.1
+mixture             mix group all
+mixture             mix vstream 500.0 -200.0 100.0 temp 20000 trot 20000.00 tvib 10.0
+collide             vss all co2.vss
+collide_modify      vibrate discrete rotate smooth
+fix                 1 vibmode
+create_particles    mix n 0 twopass
+
+variable            m particle mass
+variable            px particle mass*vx
+variable            py particle mass*vy
+variable            pz particle mass*vz
+compute             P reduce sum v_m v_px v_py v_pz
+compute             E reduce sum ke erot evib
+variable            etot equal c_E[1]+c_E[2]+c_E[3]
+
+stats_style         step np c_P[1] c_P[2] c_P[3] c_P[4] v_etot
+stats_modify        format float %22.16e
+stats               50
+run                 1000

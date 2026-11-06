@@ -91,7 +91,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   d_plist = d_plist_in;
 
   int ncustom = particle->ncustom;
-  nbytes_particle = sizeof(Particle::OnePart);
+  nbytes_particle = sizeof(OnePartKK);
   int nbytes_custom = particle->sizeof_custom();
   nbytes_total = nbytes_particle + nbytes_custom;
 
