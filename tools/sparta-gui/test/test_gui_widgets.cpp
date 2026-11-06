@@ -1423,6 +1423,102 @@ TEST(ImageViewerLayout, TheViewerNoLongerClaimsTheKeysThePanelOwns)
         << bound.value(close).toStdString();
 }
 
+// F8, F9 and Ctrl+D were added to the viewer's menus only. A widget-scoped
+// shortcut is scoped to the widgets its action is added to, which for a menu
+// entry is the menu bar, so the keys did nothing unless the menu bar itself had
+// focus. The earlier tests triggered the actions directly and never noticed:
+// this one presses the key, with focus where a user's would be.
+TEST(ImageViewerLayout, TheViewerKeysWorkFromInsideTheViewer)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    ImageViewer viewer("test", &sparta, nullptr);
+    viewer.show();
+    viewer.activateWindow();
+    ASSERT_TRUE(QTest::qWaitForWindowActive(&viewer));
+
+    auto *sidebar = viewer.findChild<ViewerSidebar *>("viewersidebar");
+    auto *field   = viewer.findChild<QSpinBox *>("xsize");
+    ASSERT_NE(sidebar, nullptr);
+    ASSERT_NE(field, nullptr);
+    ASSERT_FALSE(sidebar->isCollapsed());
+
+    field->setFocus();
+    QTest::keyClick(field, Qt::Key_F9);
+    QApplication::processEvents();
+    EXPECT_TRUE(sidebar->isCollapsed()) << "F9 with focus in the viewer did not hide the sidebar";
+    QTest::keyClick(field, Qt::Key_F9);
+    QApplication::processEvents();
+    EXPECT_FALSE(sidebar->isCollapsed()) << "a second F9 did not bring the sidebar back";
+
+    auto *clip = QGuiApplication::clipboard();
+    clip->clear();
+    QTest::keyClick(field, Qt::Key_D, Qt::ControlModifier);
+    QApplication::processEvents();
+    EXPECT_TRUE(clip->text().contains("dump")) << "Ctrl+D did not copy the dump image command";
+}
+
+// The panel's Save and Copy used the same keys as the main window's Save Input
+// File and Copy. With both bindings live Qt refuses both, so in the Snapshot
+// tab Ctrl+S and Ctrl+C did nothing at all. The panel claims the keys while it
+// has a picture; without one they go on to the main window.
+TEST(ViewerPanelBehaviour, CopyAndSaveKeysAreNeverAmbiguousWithTheMainWindow)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+
+    QMainWindow win;
+    auto *panel = new ViewerPanel;
+    win.setCentralWidget(panel);
+    auto *deckSave = new QAction("Save Input File", &win);
+    deckSave->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+    win.addAction(deckSave);
+    auto *deckCopy = new QAction("Copy", &win);
+    deckCopy->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
+    win.addAction(deckCopy);
+    QSignalSpy saved(deckSave, &QAction::triggered), copied(deckCopy, &QAction::triggered);
+
+    win.resize(800, 560);
+    win.show();
+    win.activateWindow();
+    ASSERT_TRUE(QTest::qWaitForWindowActive(&win));
+
+    // no picture: the keys belong to the main window
+    panel->showSource(ViewerPanel::Snapshot, true);
+    panel->setFocusPolicy(Qt::StrongFocus);
+    panel->setFocus();
+    QTest::keyClick(panel, Qt::Key_S, Qt::ControlModifier);
+    QApplication::processEvents();
+    EXPECT_EQ(saved.count(), 1) << "with no picture, Ctrl+S did not reach Save Input File";
+
+    // a picture: Ctrl+C copies it, and the main window's Copy stays out of it
+    auto *viewer = new ImageViewer("test", &sparta, nullptr);
+    panel->addSource(ViewerPanel::Snapshot, viewer);
+    panel->showSource(ViewerPanel::Snapshot, true);
+    QApplication::processEvents();
+    ASSERT_TRUE(viewer->hasContent());
+    // focus on a button rather than a text field: a text field rightly keeps
+    // Ctrl+C for copying its own text
+    QWidget *field = nullptr;
+    for (auto *b : viewer->findChildren<QAbstractButton *>())
+        if (b->isVisible() && b->isEnabled() && b->text().isEmpty()) {
+            field = b;
+            break;
+        }
+    ASSERT_NE(field, nullptr);
+    field->setFocusPolicy(Qt::StrongFocus);
+    field->setFocus();
+    auto *clip = QGuiApplication::clipboard();
+    clip->clear();
+    QTest::keyClick(field, Qt::Key_C, Qt::ControlModifier);
+    QApplication::processEvents();
+    EXPECT_FALSE(clip->image().isNull()) << "Ctrl+C in the Snapshot tab copied nothing";
+    EXPECT_EQ(copied.count(), 0) << "Ctrl+C in the Snapshot tab went to the main window's Copy";
+}
+
 // Saving the picture and copying it were the same idea spelled three ways --
 // "Save Image As...", a button tipped "Export to image file", and "Save the
 // current 3D view to an image file" -- in three places, with the 3D scene

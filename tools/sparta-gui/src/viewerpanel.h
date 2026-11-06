@@ -139,6 +139,17 @@ protected:
      */
     [[nodiscard]] QSize minimumSizeHint() const override;
 
+    /**
+     * @brief Claim Ctrl+S and Ctrl+C for the picture while focus is in here
+     *
+     * The main window binds the same keys to Save Input File and Copy. Two live
+     * QAction bindings of one key make Qt refuse both ("ambiguous shortcut"), so
+     * the panel's pair carries no QAction shortcut and is claimed here instead,
+     * and only while there is a picture: with nothing to save the keys go on to
+     * the main window as usual.
+     */
+    bool event(QEvent *event) override;
+
 private slots:
     /// @brief Save the picture the source in front is showing.
     void saveCurrentImage();

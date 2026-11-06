@@ -1399,6 +1399,14 @@ void ImageViewer::createActions()
     auto *fitWindowAct = addMenuAction(viewMenu, "Fit &Window to Render", ":/icons/fit-window.svg",
                                        this, &ImageViewer::resetWindowSize);
     fitWindowAct->setStatusTip("Resize the window so the picture is shown at its full size");
+
+    // A WidgetWithChildren shortcut is scoped to the widgets its action is added
+    // to. Added only to a menu, that is the viewer's small menu bar, so the key
+    // worked only while the menu bar itself had focus -- in practice never.
+    // Adding the actions to the viewer scopes the keys to the whole viewer.
+    addAction(cmdAct);
+    addAction(sidebarAct);
+    addAction(fitRenderAct);
 }
 
 QIcon ImageViewer::sourceIcon() const

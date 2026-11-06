@@ -109,15 +109,9 @@ SlideShow::SlideShow(const QString &fileName, SpartaGui *_spartagui, QWidget *pa
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q), this);
     shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::quit);
-    shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_C), this);
-    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(shortcut, &QShortcut::activated, this, &SlideShow::copy);
     shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_E), this);
     shortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(shortcut, &QShortcut::activated, this, &SlideShow::movie);
-    shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), this);
-    shortcut->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(shortcut, &QShortcut::activated, this, &SlideShow::saveCurrentImage);
 
     installEventFilter(this);
 
@@ -912,15 +906,25 @@ void SlideShow::showEvent(QShowEvent *event)
 // and ChartWindow for the same pattern): this window's own Ctrl+ shortcuts
 // would otherwise be ambiguous with identically bound main-window menu
 // shortcuts now that this is a docked panel sharing its shortcut context
+bool SlideShow::insidePanel() const
+{
+    for (const QWidget *w = parentWidget(); w; w = w->parentWidget())
+        if (w->inherits("ViewerPanel")) return true;
+    return false;
+}
+
 bool SlideShow::eventFilter(QObject *watched, QEvent *event)
 {
     // this panel's own Ctrl+ keys, claimed while focus is inside it
     if (dispatchCtrlShortcut(event, {{'W', [this]() { emit closeRequested(); }},
                                      {'/', [this]() { stopRun(); }},
                                      {'Q', [this]() { quit(); }},
-                                     {'C', [this]() { copy(); }},
-                                     {'E', [this]() { movie(); }},
-                                     {'S', [this]() { saveCurrentImage(); }}}))
+                                     {'E', [this]() { movie(); }}}))
+        return true;
+    // Save and Copy belong to the viewer panel when this is docked in one, so
+    // the keys mean the same thing on every tab; standalone, they are ours.
+    if (!insidePanel() && dispatchCtrlShortcut(event, {{'C', [this]() { copy(); }},
+                                                       {'S', [this]() { saveCurrentImage(); }}}))
         return true;
     return ViewerSource::eventFilter(watched, event);
 }

@@ -20,6 +20,7 @@
 #include <QAction>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QKeyEvent>
 #include <QImage>
 #include <QKeySequence>
 #include <QMenu>
@@ -102,9 +103,12 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
     // be argued for.
     auto *save = new QToolButton;
     saveAction = new QAction(QIcon(":/icons/document-save-as.svg"), "Save Image &As...", this);
-    saveAction->setToolTip("Save the picture this tab is showing to a file");
-    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
-    saveAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    // No QAction shortcut: the main window binds the same key to Save Input
+    // File, and two live bindings of one key make Qt refuse both.  event()
+    // below claims the key instead, and only while there is a picture to save.
+    saveAction->setToolTip(QString("Save the picture this tab is showing to a file (%1)")
+                               .arg(QKeySequence(Qt::CTRL | Qt::Key_S)
+                                        .toString(QKeySequence::NativeText)));
     save->setDefaultAction(saveAction);
     save->setObjectName("viewersave");
     save->setAutoRaise(true);
@@ -112,9 +116,9 @@ ViewerPanel::ViewerPanel(QWidget *parent) :
 
     auto *copy = new QToolButton;
     copyAction = new QAction(QIcon(":/icons/edit-copy.svg"), "&Copy Image", this);
-    copyAction->setToolTip("Copy the picture this tab is showing to the clipboard");
-    copyAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_C));
-    copyAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    copyAction->setToolTip(QString("Copy the picture this tab is showing to the clipboard (%1)")
+                               .arg(QKeySequence(Qt::CTRL | Qt::Key_C)
+                                        .toString(QKeySequence::NativeText)));
     copy->setDefaultAction(copyAction);
     copy->setObjectName("viewercopy");
     copy->setAutoRaise(true);
@@ -276,6 +280,26 @@ void ViewerPanel::saveCurrentImage()
     QImage shot = src->currentImage();
     if (shot.isNull()) return;
     exportImage(this, &shot, QStringLiteral("Viewer"));
+}
+
+bool ViewerPanel::event(QEvent *event)
+{
+    // ShortcutOverride travels up from the focus widget, so this sees it for
+    // any key pressed anywhere inside the panel that no child claimed first.
+    if (event->type() == QEvent::ShortcutOverride) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        if (key->modifiers() == Qt::ControlModifier) {
+            QAction *act = nullptr;
+            if (key->key() == Qt::Key_S) act = saveAction;
+            if (key->key() == Qt::Key_C) act = copyAction;
+            if (act && act->isEnabled()) {
+                event->accept();
+                act->trigger();
+                return true;
+            }
+        }
+    }
+    return QWidget::event(event);
 }
 
 void ViewerPanel::copyCurrentImage()

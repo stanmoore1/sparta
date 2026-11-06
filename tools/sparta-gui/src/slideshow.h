@@ -168,6 +168,8 @@ protected:
      * @param event Event to filter
      * @return true if event handled, false otherwise
      */
+    /// @brief True when docked in a ViewerPanel, which then owns Save/Copy and their keys
+    [[nodiscard]] bool insidePanel() const;
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
