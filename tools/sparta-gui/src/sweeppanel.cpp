@@ -507,7 +507,7 @@ bool SweepPanel::buildSpec(SweepSpec &spec, QString &err) const
 void SweepPanel::startSweep()
 {
     if (controller_->active()) { controller_->stop(); return; }
-    if (sparta_ && sparta_->isRunning()) {
+    if (sparta_ && sparta_->isBusy()) {
         QMessageBox::warning(this, "Parametric Sweep",
                              "A simulation is already running; stop it first.");
         return;

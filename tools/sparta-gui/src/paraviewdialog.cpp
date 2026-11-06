@@ -15,6 +15,7 @@
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -445,6 +446,34 @@ void ParaViewExportDialog::runConversion()
 
     // both scripts refuse to overwrite an existing .pvd (and grid an existing
     // output directory); offer to remove stale output first
+    // The output name is free text and the overwrite below deletes a folder
+    // recursively, so it must name a folder of converter output inside the
+    // deck's directory -- never ".", "..", a path, or a folder of other files.
+    const QString name = s.outputName.trimmed();
+    if (name.isEmpty() || name == "." || name == ".." || name.contains('/') ||
+        name.contains('\\')) {
+        QMessageBox::warning(this, "Export to ParaView",
+                             QString("\"%1\" is not a usable output name: give a plain name "
+                                     "such as \"flow\", without folders.")
+                                 .arg(s.outputName));
+        return;
+    }
+    if (QFileInfo(outDir).isDir()) {
+        static const QStringList ours = {"vtu", "vtp", "vti", "vtm", "vtk", "pvd", "pvtu", "pvtp"};
+        QDirIterator it(outDir, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString f = it.next();
+            if (!ours.contains(QFileInfo(f).suffix().toLower())) {
+                QMessageBox::warning(this, "Export to ParaView",
+                                     QString("The folder \"%1\" already exists and holds files "
+                                             "that are not ParaView output (for example %2). "
+                                             "Choose another output name.")
+                                         .arg(s.outputName, QFileInfo(f).fileName()));
+                return;
+            }
+        }
+    }
+
     if (QFileInfo::exists(outAbs) || QFileInfo::exists(outDir)) {
         const auto btn = QMessageBox::question(
             this, "Export to ParaView",

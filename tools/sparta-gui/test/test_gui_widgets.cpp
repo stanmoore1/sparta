@@ -826,6 +826,7 @@ TEST(WorkspaceModes, ClearingRunPanelsUnregistersTheArchivedRuns)
     const int registered = dm->dockWidgetsMap().size();
 
     panels.clearRunPanels();
+    QApplication::processEvents(); // the deferred delete, and anything queued for its tab
     EXPECT_EQ(dm->dockWidgetsMap().size(), registered - 1)
         << "the archived run is still registered with the dock manager after being deleted";
     for (auto *d : dm->dockWidgetsMap())
@@ -1086,6 +1087,29 @@ TEST(RealWindowsLive, SurfaceReport)
     f.open(QIODevice::ReadOnly | QIODevice::Text);
     SurfReportDialog dlg(nullptr, &sparta, QString::fromUtf8(f.readAll()));
     walkWindow(&dlg, "SurfaceReport", 4);
+}
+
+// Opening the wizard ran SPARTA's watertight check, which starts with "clear",
+// on the window's one instance: a loaded simulation was gone the moment the
+// dialog appeared, even if it was then cancelled.
+TEST(RealWindowsLive, OpeningTheStlWizardKeepsTheLoadedSimulation)
+{
+    SpartaWrapper sparta;
+    if (!openSparta(sparta, surfDeck()))
+        GTEST_SKIP() << "needs SPARTA_PLUGIN_LIB and the in.surfq fixture";
+    QTemporaryDir tmp;
+    const QString stl = stagedFixture("tetra.stl", tmp);
+    if (stl.isEmpty()) GTEST_SKIP() << "fixture tetra.stl not found";
+
+    const int nsurfBefore = sparta.extractSetting("nsurf");
+    ASSERT_EQ(sparta.extractSetting("box_exist"), 1);
+    {
+        StlImportWizard dlg(nullptr, &sparta, stl);
+        QApplication::processEvents();
+    }
+    EXPECT_EQ(sparta.extractSetting("box_exist"), 1);
+    EXPECT_EQ(sparta.extractSetting("nsurf"), nsurfBefore)
+        << "opening the wizard replaced the deck's surfaces with its own";
 }
 
 TEST(RealWindowsLive, RunHistoryPanel)

@@ -91,7 +91,9 @@ private:
     /// @brief Run SPARTA's real read_surf workflow on the current mesh+transforms
     /// so the watertightness verdict matches what SPARTA actually does (box
     /// clipping, tiny-surface deletion, boundary exceptions).  Sets spartaWt_.
-    void runSpartaWatertight();
+    /// @param automatic true when nobody asked for it (opening the wizard): then
+    ///        it does not run if that would clear a simulation the user has
+    void runSpartaWatertight(bool automatic = false);
     /// @brief Authoritative verdict: SPARTA's if available, else the fast preflight.
     bool watertightVerdict() const;
     /// @brief (Re)build the Source-page watertightness label from the verdict.

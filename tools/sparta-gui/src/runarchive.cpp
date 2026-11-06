@@ -6,7 +6,10 @@
 
 #include "runarchive.h"
 
+#include <QBuffer>
 #include <QFileInfo>
+#include <QImage>
+#include <QPair>
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -15,23 +18,39 @@ namespace {
 QString esc(const QString &s)
 {
     QString o = s;
-    o.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    o.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
     return o;
 }
 
-QString mimeFor(const QString &path)
+/// The image as a browser can show it: formats every browser decodes go in as
+/// they are; anything else (SPARTA's dump image writes PPM) is converted to PNG,
+/// since labelling raw PPM bytes "image/png" only produced broken-image icons.
+/// Returns an empty pair when the bytes cannot be decoded at all.
+QPair<QString, QByteArray> browserImage(const QString &path, const QByteArray &bytes)
 {
     const QString ext = QFileInfo(path).suffix().toLower();
-    if (ext == "jpg" || ext == "jpeg") return "image/jpeg";
-    if (ext == "gif") return "image/gif";
-    if (ext == "bmp") return "image/bmp";
-    if (ext == "webp") return "image/webp";
-    return "image/png";
+    if (ext == "png") return {"image/png", bytes};
+    if (ext == "jpg" || ext == "jpeg") return {"image/jpeg", bytes};
+    if (ext == "gif") return {"image/gif", bytes};
+    if (ext == "bmp") return {"image/bmp", bytes};
+    if (ext == "webp") return {"image/webp", bytes};
+    const QImage img = QImage::fromData(bytes);
+    if (img.isNull()) return {};
+    QByteArray png;
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    return {"image/png", png};
 }
 
 } // namespace
 
 namespace RunArchive {
+
+QPair<QString, QByteArray> imageForBrowser(const QString &path, const QByteArray &bytes)
+{
+    return browserImage(path, bytes);
+}
 
 QString runArchiveDir(const QString &base, const QString &id)
 {
@@ -105,9 +124,10 @@ QString buildRunReportHtml(const RunRecord &rec, const QMap<QString, QByteArray>
     QStringList shown;
     for (const QString &p : rec.imageFiles) {
         if (!imageData.contains(p)) continue;
-        const QByteArray b64 = imageData.value(p).toBase64();
-        shown << "<img alt=\"" + esc(QFileInfo(p).fileName()) + "\" src=\"data:" + mimeFor(p) +
-                     ";base64," + QString::fromLatin1(b64) + "\">";
+        const auto img = browserImage(p, imageData.value(p));
+        if (img.second.isEmpty()) continue;
+        shown << "<img alt=\"" + esc(QFileInfo(p).fileName()) + "\" src=\"data:" + img.first +
+                     ";base64," + QString::fromLatin1(img.second.toBase64()) + "\">";
     }
     if (!shown.isEmpty()) {
         h += "<h2>Images</h2>\n";

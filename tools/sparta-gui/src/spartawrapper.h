@@ -14,6 +14,8 @@
 
 #include <QString>
 
+#include <atomic>
+
 /**
  * @brief C++ wrapper for the SPARTA C library interface
  *
@@ -305,6 +307,20 @@ public:
     [[nodiscard]] bool isRunning();
 
     /**
+     * @brief True while anything is using the instance from the worker thread
+     *
+     * isRunning() reflects SPARTA's own run flag, which is clear while a deck
+     * is still in its setup commands (read_surf, create_grid, ...) and between
+     * the runs of a multi-run deck. That is exactly when a GUI-thread command
+     * such as "clear" tears the instance down under the worker. Every guard
+     * that asks "may I touch the instance now" should ask this.
+     */
+    [[nodiscard]] bool isBusy() { return workerBusy.load() || isRunning(); }
+
+    /// @brief Set by the worker thread around its use of the instance
+    void setWorkerBusy(bool busy) { workerBusy.store(busy); }
+
+    /**
      * @brief Check if SPARTA has encountered an error
      * @return true if error occurred, false otherwise
      */
@@ -419,6 +435,7 @@ public:
     [[nodiscard]] bool hasPlugin() const;
 
 private:
+    std::atomic<bool> workerBusy{false}; ///< see isBusy()
     /// @name Low-level char-buffer variants behind the QString-returning overloads
     /// @{
     int idName(const char *idtype, int idx, char *buf, int buflen);

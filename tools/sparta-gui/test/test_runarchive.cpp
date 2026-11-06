@@ -3,7 +3,10 @@
 
 #include "runarchive.h"
 
+#include <QBuffer>
 #include <QByteArray>
+#include <QImage>
+#include <cstring>
 #include <QJsonObject>
 
 #include "gtest/gtest.h"
@@ -63,6 +66,32 @@ TEST(RunArchive, HtmlContainsDeckLogAndMetadata)
     size_t count = 0, pos = 0;
     while ((pos = html.find("<img", pos)) != std::string::npos) { ++count; pos += 4; }
     EXPECT_EQ(count, 2u);
+}
+
+// SPARTA's dump image writes PPM, which no browser decodes; the report used to
+// label the raw PPM bytes image/png and every picture came out broken.
+TEST(RunArchive, PpmFramesAreEmbeddedAsRealPng)
+{
+    RunRecord r = sample();
+    r.imageFiles = {"/tmp/run/frame \"1\".0010.ppm"};
+    QImage frame(8, 6, QImage::Format_RGB32);
+    frame.fill(Qt::red);
+    QByteArray ppm;
+    QBuffer buf(&ppm);
+    buf.open(QIODevice::WriteOnly);
+    ASSERT_TRUE(frame.save(&buf, "PPM"));
+    QMap<QString, QByteArray> imgs;
+    imgs.insert(r.imageFiles.first(), ppm);
+
+    const QString html = buildRunReportHtml(r, imgs);
+    const int at = html.indexOf("data:image/png;base64,");
+    ASSERT_GE(at, 0) << "the PPM frame was not embedded as PNG";
+    const int start = at + int(strlen("data:image/png;base64,"));
+    const QByteArray b64 = html.mid(start, html.indexOf('"', start) - start).toLatin1();
+    const QImage back = QImage::fromData(QByteArray::fromBase64(b64), "PNG");
+    EXPECT_FALSE(back.isNull()) << "the embedded bytes are not a PNG a browser could show";
+    EXPECT_EQ(back.size(), frame.size());
+    EXPECT_FALSE(html.contains("alt=\"frame \"1\"")) << "a quote in the file name broke the alt attribute";
 }
 
 TEST(RunArchive, HtmlSkipsImagesWithoutData)

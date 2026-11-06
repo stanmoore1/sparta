@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 #include "spartagui.h"
+#include "spartaquote.h"
 
 #include "aboutdialog.h"
 #include "actionmetadata.h"
@@ -554,7 +555,7 @@ void SpartaGui::createViewMenu()
         // with a modal dialog, in the middle of the run, without anyone having
         // asked for a snapshot.
         if (panel == PanelManager::Viewer && viewer && !viewer->snapshot() && startupComplete &&
-            !sparta.isRunning())
+            !sparta.isBusy())
             renderImage(/*quiet=*/true);
         if (panel == PanelManager::Log) ensureLogPanel();
         if (panel == PanelManager::Chart) ensureChartPanel();
@@ -1178,6 +1179,10 @@ void SpartaGui::newDocument()
     if (!confirmDiscard("Do you want to save the file before starting a new one?")) return;
 
     currentFile.clear();
+    // the old deck's Set Variables list would otherwise be injected into the
+    // new deck's first run
+    variables.clear();
+    scriptVariables.clear();
     textEdit->document()->setPlainText(citeme);
     textEdit->document()->setModified(false);
     applyEditorColorScheme();
@@ -1719,7 +1724,7 @@ void SpartaGui::inspectFile(const QString &fileName)
     }
 
     // SPARTA is not re-entrant, so we can only query SPARTA when it is not running a simulation
-    if (!sparta.isRunning()) {
+    if (!sparta.isBusy()) {
         startSparta();
         // SPARTA has no "info" command, so we capture the screen output of the
         // read_restart command itself. It summarizes the restored simulation:
@@ -1727,7 +1732,7 @@ void SpartaGui::inspectFile(const QString &fileName)
         capturer->beginCapture();
         sparta.command("clear");
         clearVariables();
-        sparta.command(QString("read_restart %1").arg(fileName));
+        sparta.command(QString("read_restart %1").arg(quoteSpartaArg(fileName)));
         capturer->endCapture();
         auto info = capturer->getCapture();
 
@@ -2280,18 +2285,21 @@ void SpartaGui::runDone()
 
     finalizeChartData();
 
+    // The run's own error first: SPARTA keeps one error and reading it clears
+    // it, and the 3D refresh below issues commands that read (and so consume)
+    // it -- a failed run was then reported as a success.
+    bool success         = true;
+    bool valid           = true;
+    const QString errmsg = sparta.lastErrorMessage();
+
 #if defined(SPARTA_GUI_HAVE_VTK)
     // A finished run is the state worth looking at, and it is the only point at
     // which particles exist. Refresh only where the pictures are what the window
     // is showing: rendering three dump files costs a "run 0" apiece, which is
     // not something to spend on a workspace the user is not looking at.
-    if (PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer))
+    if (errmsg.isEmpty() && PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer))
         refreshDocked3DScene();
 #endif
-
-    bool success         = true;
-    bool valid           = true;
-    const QString errmsg = sparta.lastErrorMessage();
 
     if (!errmsg.isEmpty()) {
         // ignore "Invalid SPARTA handle", but report other errors
@@ -2683,7 +2691,7 @@ void SpartaGui::writeRestart()
         StdoutSilencer guard;
         // quoted: a path chosen from a file dialog may contain spaces, and
         // SPARTA splits its command line on them
-        sparta.command(QString("write_restart '%1'").arg(fileName));
+        sparta.command(QString("write_restart %1").arg(quoteSpartaArg(fileName)));
     }
 
     const QString errmsg = sparta.lastErrorMessage();
@@ -2940,7 +2948,7 @@ void SpartaGui::autoCheckInput()
     // only lint the editor, never the welcome screen; and skip while a run is
     // active (SPARTA is not re-entrant and the buffer is being executed anyway)
     if (centralStack->currentWidget() != textEdit) return;
-    if (sparta.isRunning()) return;
+    if (sparta.isBusy()) return;
     runInputCheck(false);
 }
 
@@ -3199,6 +3207,14 @@ void SpartaGui::exportParaview()
 
 void SpartaGui::surfaceReport()
 {
+    // the report computes per-surface tallies on this thread, against the
+    // same computes the worker is accumulating into
+    if (sparta.isBusy()) {
+        warning(this, "Surface Quantities Report",
+                "The surface report reads the running simulation's computes and cannot "
+                "do that while SPARTA is running. Open it again when the run has finished.");
+        return;
+    }
     if (sparta.extractSetting("surf_exist") != 1) {
         warning(this, "Surface Quantities Report",
                 "No surfaces exist yet.  Run a deck that reads a surface and defines "
@@ -3275,7 +3291,7 @@ void SpartaGui::continueRestart()
     const QString path = cur->data(Qt::UserRole).toString();
     const QString rel = QDir(currentDir).relativeFilePath(path);
     // compose the minimal continue deck and insert it for review before running
-    const QString cmds = QString("read_restart %1\nrun %2\n").arg(rel).arg(steps->value());
+    const QString cmds = QString("read_restart %1\nrun %2\n").arg(quoteSpartaArg(rel)).arg(steps->value());
     showEditor();
     QTextCursor c = textEdit->textCursor();
     c.insertText(cmds);
@@ -3351,7 +3367,7 @@ void SpartaGui::importSurface()
     // works (it needs the library to build the surf/grid and issue a dump image);
     // the STL parsing/transform/watertightness steps do not need it, but the
     // render tab otherwise reports "The SPARTA library is not loaded"
-    if (!sparta.isRunning() && !sparta.isOpen()) startSparta();
+    if (!sparta.isBusy() && !sparta.isOpen()) startSparta();
 
     StlImportWizard wiz(this, &sparta, fileName);
     if (!wiz.loaded()) {
@@ -3418,7 +3434,7 @@ void SpartaGui::renderImage(bool quiet)
     };
 
     // SPARTA is not re-entrant, so we can only query SPARTA when it is not running
-    if (!sparta.isRunning()) {
+    if (!sparta.isBusy()) {
         startSparta();
         if (!sparta.extractSetting("box_exist")) {
             // there is no current system defined yet.
@@ -3511,7 +3527,7 @@ void SpartaGui::open3DViewer()
 
 void SpartaGui::renderVtkSnapshot()
 {
-    if (sparta.isRunning()) {
+    if (sparta.isBusy()) {
         warning(this, "3D Snapshot", "Cannot create a 3D snapshot while SPARTA is running.");
         return;
     }
@@ -3531,7 +3547,7 @@ void SpartaGui::renderVtkSnapshot()
 // rather than one written and then hidden.
 int SpartaGui::fillVtkScene(VtkScene *scene, bool quiet)
 {
-    if (!scene || sparta.isRunning()) return 0;
+    if (!scene || sparta.isBusy()) return 0;
     startSparta();
 
     // does the loaded library actually provide the VTK dump styles?  (VTK is an
@@ -3581,14 +3597,32 @@ int SpartaGui::fillVtkScene(VtkScene *scene, bool quiet)
         }
     }
 
-    // purge the deck's own dumps so our "run 0" does not re-trigger them
+    // Purge the deck's own dumps so our "run 0" does not re-trigger them, and
+    // remember the deck's commands that defined them: they are put back when
+    // the scene is filled, or an Extend Run after a refresh writes no dumps.
+    QStringList purgedDumps;
     {
         StdoutSilencer guard;
         const int ndumps = sparta.idCount("dump");
-        QStringList dumpids;
-        for (int i = 0; i < ndumps; ++i) dumpids << sparta.idName("dump", i);
-        for (const auto &id : dumpids) sparta.command("undump " + id);
+        for (int i = 0; i < ndumps; ++i) purgedDumps << sparta.idName("dump", i);
+        for (const auto &id : purgedDumps) sparta.command("undump " + id);
     }
+    auto restoreDeckDumps = [this, &purgedDumps]() {
+        if (purgedDumps.isEmpty()) return;
+        // the deck's dump and dump_modify commands for those ids, continuation
+        // lines joined, in deck order
+        QString joined = textEdit->toPlainText();
+        joined.replace(QRegularExpression("&[ \\t]*\\n"), " ");
+        StdoutSilencer guard;
+        for (const QString &line : joined.split('\n')) {
+            const QStringList w = line.simplified().split(' ');
+            if (w.size() < 2 || (w[0] != "dump" && w[0] != "dump_modify")) continue;
+            if (!purgedDumps.contains(w[1])) continue;
+            if (w[0] == "dump" && sparta.hasId("dump", w[1].toLocal8Bit())) continue;
+            sparta.command(line.simplified());
+        }
+        (void)sparta.lastErrorMessage(); // a dump that cannot be restored is not this call's error
+    };
 
     // Render one category (grid / particles / surfaces) to a temp VTK file, each
     // in its own isolated "run 0", so an empty or invalid category (e.g. surf/vtk
@@ -3597,12 +3631,14 @@ int SpartaGui::fillVtkScene(VtkScene *scene, bool quiet)
     const QString dir = QDir::tempPath();
     auto renderCategory = [&](const QString &id, const QString &style, const QString &ext,
                               const QString &attrs) -> QString {
-        const QString file = QString("%1/%2.0.%3").arg(dir, id, ext);
+        // SPARTA writes "*" as the current step, not 0, after any run
+        const auto step   = static_cast<long long>(sparta.getThermo("step"));
+        const QString file = QString("%1/%2.%3.%4").arg(dir, id).arg(step).arg(ext);
         QFile::remove(file);
         StdoutSilencer guard;
         if (sparta.hasId("dump", id.toLocal8Bit())) sparta.command("undump " + id);
         sparta.command(
-            QString("dump %1 %2 1 %3.*.%4 %5").arg(id, style, QString("%1/%2").arg(dir, id), ext, attrs));
+            QString("dump %1 %2 1 %3 %4").arg(id, style, quoteSpartaArg(QString("%1/%2.*.%3").arg(dir, id, ext)), attrs));
         const QString derr = sparta.lastErrorMessage();
         if (!derr.isEmpty() && !derr.contains("Invalid SPARTA handle")) {
             if (sparta.hasId("dump", id.toLocal8Bit())) sparta.command("undump " + id);
@@ -3638,6 +3674,7 @@ int SpartaGui::fillVtkScene(VtkScene *scene, bool quiet)
     if (loaded == 0 && !quiet)
         warning(this, "3D Snapshot",
                 "No particle, grid or surface data was produced for the current state.");
+    restoreDeckDumps();
     return loaded;
 }
 
@@ -3752,7 +3789,7 @@ void SpartaGui::about()
     // SPARTA is not re-entrant, so we can only query SPARTA when it is not running.
     // SPARTA has no "info" command, so the version and the available styles are
     // queried through the SPARTA library interface instead.
-    if (!sparta.isRunning()) {
+    if (!sparta.isBusy()) {
         startSparta();
         info.clear();
         const auto *verstr = static_cast<const char *>(sparta.extractGlobal("sparta_version"));

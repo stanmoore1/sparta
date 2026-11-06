@@ -195,6 +195,17 @@ void SurfReportDialog::computeReport()
                               "(could not auto-derive them from the deck).");
         return;
     }
+    // The labels field is editable, and nothing in the library says how wide
+    // the per-surf array really is. Reading one column per typed label went
+    // past the end of the array as soon as a label was added, so the width the
+    // deck itself implies is the most that is read; extra labels are ignored.
+    const int derived = deriveLabels(source_->currentText()).size();
+    if (derived == 0) {
+        report_->setPlainText("This is not a readable per-surface source: the deck does not "
+                              "say how many columns it has, so it cannot be read safely.");
+        return;
+    }
+    if (labels.size() > derived) labels = labels.mid(0, derived);
     const int ncol = labels.size();
 
     int nrow = sparta_->extractSetting("nlocal_surf");

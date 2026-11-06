@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 #include "imageviewer.h"
+#include "spartaquote.h"
 
 #include "dumpimage.h"
 #include "imageviewer_internal.h"
@@ -593,10 +594,15 @@ void ImageViewer::readImageSettings()
     QSettings settings;
     settings.beginGroup(Keys::GROUP_SNAPSHOT);
     params        = DumpImageSettings(); // start from the SPARTA defaults
-    params.xsize  = settings.value(Keys::XSIZE, "600").toInt();
-    params.ysize  = settings.value(Keys::YSIZE, "600").toInt();
-    params.zoom   = settings.value(Keys::ZOOM, 1.0).toDouble();
-    params.theta  = settings.value(Keys::HROT, 60).toInt();
+    // Preferences accepts wider ranges than SPARTA and the viewer's own
+    // controls do (a 200 degree angle, a 50000 px width), and an out-of-range
+    // value made every render fail with nothing on screen to correct it from.
+    params.xsize  = std::clamp(settings.value(Keys::XSIZE, "600").toInt(), MIN_RENDER_SIZE,
+                               MAX_RENDER_SIZE);
+    params.ysize  = std::clamp(settings.value(Keys::YSIZE, "600").toInt(), MIN_RENDER_SIZE,
+                               MAX_RENDER_SIZE);
+    params.zoom   = clampZoom(settings.value(Keys::ZOOM, 1.0).toDouble());
+    params.theta  = clampPolar(settings.value(Keys::HROT, 60).toInt());
     params.phi    = settings.value(Keys::VROT, 30).toInt();
     params.shiny  = settings.value(Keys::SHINYSTYLE, true).toBool() ? SHINY_ON : SHINY_OFF;
     params.ssao   = settings.value(Keys::SSAO, false).toBool();
@@ -658,7 +664,36 @@ void ImageViewer::readImageSettings()
 
 void ImageViewer::resetView()
 {
+    // Everything the toolbar and the preferences decide goes back to the
+    // preferences, but what was chosen in the settings dialog stays:
+    // readImageSettings() starts from a fresh DumpImageSettings, which also
+    // threw away colour maps, cut planes, region and group choices, surface
+    // colouring, the per-species tables and the lights.
+    const DumpImageSettings keep = params;
     readImageSettings();
+    for (int m = 0; m < DumpImageSettings::NUM_CMAP_MODES; ++m) params.cmap[m] = keep.cmap[m];
+    params.region       = keep.region;
+    params.gridgroup    = keep.gridgroup;
+    params.surfgroup    = keep.surfgroup;
+    params.gridx        = keep.gridx;
+    params.gridxcoord   = keep.gridxcoord;
+    params.gridxcolor   = keep.gridxcolor;
+    params.gridy        = keep.gridy;
+    params.gridycoord   = keep.gridycoord;
+    params.gridycolor   = keep.gridycolor;
+    params.gridz        = keep.gridz;
+    params.gridzcoord   = keep.gridzcoord;
+    params.gridzcolor   = keep.gridzcolor;
+    params.surfcolorone = keep.surfcolorone;
+    params.customcolors = keep.customcolors;
+    params.gcolors      = keep.gcolors;
+    params.pcolors      = keep.pcolors;
+    params.pdiams       = keep.pdiams;
+    params.scolors      = keep.scolors;
+    params.amblight     = keep.amblight;
+    params.keylight     = keep.keylight;
+    params.filllight    = keep.filllight;
+    params.backlight    = keep.backlight;
 
     auto *field = findChild<QSpinBox *>("xsize");
     if (field) field->setValue(params.xsize);
@@ -960,7 +995,7 @@ void ImageViewer::fitRenderToPanel()
     // grey around it.  Rendering at the panel's size is what actually spends
     // the space, and it is a deliberate act rather than something that fires
     // on every resize, because each one costs a full SPARTA render.
-    if (sparta && sparta->isRunning()) return;
+    if (sparta && sparta->isBusy()) return;
     auto *area = display->scrollArea();
     if (!area || !area->viewport()) return;
 
@@ -1022,7 +1057,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
             auto *me = static_cast<QMouseEvent *>(event);
             const QPoint d = me->pos() - dragLast;
             dragLast = me->pos();
-            if (sparta && sparta->isRunning()) return true;
+            if (sparta && sparta->isBusy()) return true;
             if (me->modifiers().testFlag(Qt::ShiftModifier)) {
                 // pan by moving the view center (box fractions)
                 params.cx = std::clamp(params.cx - d.x() * 0.0025, 0.0, 1.0);
@@ -1047,7 +1082,7 @@ bool ImageViewer::eventFilter(QObject *watched, QEvent *event)
         }
         case QEvent::Wheel: {
             auto *we = static_cast<QWheelEvent *>(event);
-            if (sparta && sparta->isRunning()) return true;
+            if (sparta && sparta->isBusy()) return true;
             const double steps = we->angleDelta().y() / 120.0;
             if (steps != 0.0) {
                 params.zoom = clampZoom(params.zoom * std::pow(1.1, steps));
@@ -1173,7 +1208,7 @@ void ImageViewer::createImage()
     // window is still in progress on the runner thread. Issuing dump/run/undump
     // commands on the same instance from this (GUI) thread would race with the
     // runner. Skip the re-render until the run has finished.
-    if (sparta->isRunning()) return;
+    if (sparta->isBusy()) return;
 
     // rendering requires a defined simulation box and grid
     if (!sparta->extractSetting("box_exist") || !sparta->extractSetting("grid_exist")) {
@@ -1214,17 +1249,30 @@ void ImageViewer::createImage()
     // to be written by the "run 0".
     QDir dumpdir(QDir::tempPath());
     const QString starfile = dumpdir.absoluteFilePath(filename + ".*.ppm");
+    // SPARTA keeps only its most recent error, so it is read after each step:
+    // a failed "dump" used to be overwritten by the dump_modify and undump that
+    // followed, and the user saw "Could not find undump ID" instead of the cause.
+    QString errmsg;
     {
         StdoutSilencer guard;
-        sparta->command("dump " + renderdumpid + " image " + params.mixture + " 1 '" + starfile +
-                        "' " + dumpargs);
-        sparta->command("dump_modify " + renderdumpid + " first yes pad 0");
-        for (const auto &cmd : modcmds)
-            sparta->command(cmd);
-        sparta->command("run 0 pre yes post no");
-        sparta->command("undump " + renderdumpid);
+        (void)sparta->lastErrorMessage(); // an older error is not this render's
+        sparta->command("dump " + renderdumpid + " image " + params.mixture + " 1 " +
+                        quoteSpartaArg(starfile) + " " + dumpargs);
+        errmsg = sparta->lastErrorMessage();
+        if (errmsg.isEmpty()) {
+            sparta->command("dump_modify " + renderdumpid + " first yes pad 0");
+            for (const auto &cmd : modcmds) {
+                sparta->command(cmd);
+                if (errmsg.isEmpty()) errmsg = sparta->lastErrorMessage();
+            }
+            if (errmsg.isEmpty()) {
+                sparta->command("run 0 pre yes post no");
+                errmsg = sparta->lastErrorMessage();
+            }
+            sparta->command("undump " + renderdumpid);
+            (void)sparta->lastErrorMessage();
+        }
     }
-    const QString errmsg = sparta->lastErrorMessage();
 
     const auto step = static_cast<long long>(sparta->getThermo("step"));
     const QString imagepath =
@@ -1317,7 +1365,9 @@ ImageViewer::~ImageViewer()
 
 void ImageViewer::quit()
 {
-    shutdown = true;
+    // No shutdown flag here: the quit can still be cancelled at the save
+    // prompt, and the flag would leave this viewer refusing every re-render
+    // for the rest of the session. The destructor raises it when it matters.
     if (spartagui) spartagui->quit();
 }
 

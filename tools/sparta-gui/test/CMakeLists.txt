@@ -1351,7 +1351,7 @@ add_executable(test_runcompare
 )
 
 target_include_directories(test_runcompare PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_runcompare PRIVATE GTest::gtest_main Qt6::Core)
+target_link_libraries(test_runcompare PRIVATE GTest::gtest_main Qt6::Gui)
 
 gtest_discover_tests(test_runcompare)
 

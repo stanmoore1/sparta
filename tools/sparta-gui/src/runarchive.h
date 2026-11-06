@@ -12,12 +12,19 @@
 #define RUNARCHIVE_H
 
 #include <QMap>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 
 class QJsonObject;
 
 namespace RunArchive {
+
+/// @brief An archived image as a browser can show it: (MIME type, bytes).
+///        PNG/JPEG/GIF/BMP/WebP pass through; anything else (PPM from dump
+///        image) is converted to PNG. Empty when it cannot be decoded.
+QPair<QString, QByteArray> imageForBrowser(const QString &path, const QByteArray &bytes);
+
 
 /** @brief One archived run's metadata + artifact paths. */
 struct RunRecord {

@@ -29,11 +29,13 @@ void SpartaRunner::setupRun(SpartaWrapper *_sparta, std::string _input, std::str
 
 void SpartaRunner::run()
 {
+    sparta->setWorkerBusy(true);
     if (!input.empty()) {
         sparta->commandsString(input.c_str());
     } else if (!file.empty()) {
         sparta->file(file.c_str());
     }
+    sparta->setWorkerBusy(false);
     emit resultReady();
 }
 

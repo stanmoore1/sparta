@@ -126,7 +126,7 @@ StlImportWizard::StlImportWizard(QWidget *parent, SpartaWrapper *sparta, const Q
     loaded_ = ok;
     if (ok) {
         wt_ = checkWatertightPreflight(mesh_); // fast heuristic (drives leak highlighting)
-        runSpartaWatertight();                 // authoritative verdict from SPARTA's read_surf
+        runSpartaWatertight(/*automatic=*/true); // authoritative verdict, unless it would cost the user their system
     }
 
     auto *outer = new QVBoxLayout(this);
@@ -224,11 +224,20 @@ void StlImportWizard::updateWatertightLabel()
     }
 }
 
-void StlImportWizard::runSpartaWatertight()
+void StlImportWizard::runSpartaWatertight(bool automatic)
 {
     spartaWt_ = -1;
     spartaWtMsg_.clear();
-    if (!sparta_ || !sparta_->isOpen() || sparta_->isRunning()) return;
+    if (!sparta_ || !sparta_->isOpen() || sparta_->isBusy()) return;
+    // The check issues "clear" on the window's one SPARTA instance. Merely
+    // opening the wizard must not throw away a simulation the user has loaded
+    // (Write Restart and Extend Run would then act on the wizard's scratch
+    // box); the preflight verdict stands until they ask for a SPARTA render.
+    if (automatic && sparta_->extractSetting("box_exist") == 1) {
+        spartaWtMsg_ = "SPARTA's own check was skipped so the loaded simulation is kept; "
+                       "it runs when you render in SPARTA.";
+        return;
+    }
 
     const QString surf = QDir::tempPath() + "/sguiwiz_wtcheck.surf";
     QFile f(surf);
@@ -805,7 +814,7 @@ QImage StlImportWizard::renderViaSparta(const QStringList &setup, const QString 
         err = "The SPARTA library is not loaded (set the plugin path in Preferences).";
         return {};
     }
-    if (sparta_->isRunning()) {
+    if (sparta_->isBusy()) {
         err = "A simulation is currently running; stop it before rendering here.";
         return {};
     }

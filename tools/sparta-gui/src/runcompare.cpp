@@ -83,7 +83,7 @@ namespace {
 QString esc(const QString &s)
 {
     QString o = s;
-    o.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    o.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
     return o;
 }
 
@@ -92,10 +92,12 @@ QString firstImageTag(const RunArchive::RunRecord &rec, const QMap<QString, QByt
 {
     for (const QString &p : rec.imageFiles) {
         if (!data.contains(p)) continue;
-        const QByteArray b64 = data.value(p).toBase64();
-        return QString("<img alt=\"%1\" style=\"max-width:100%%;border:1px solid #ccc\" "
-                       "src=\"data:image/png;base64,%2\">")
-            .arg(esc(QFileInfo(p).fileName()), QString::fromLatin1(b64));
+        const auto img = RunArchive::imageForBrowser(p, data.value(p));
+        if (img.second.isEmpty()) continue;
+        // QString::arg leaves "%%" as two characters, which is not CSS
+        return QString("<img alt=\"%1\" style=\"max-width:100%;border:1px solid #ccc\" "
+                       "src=\"data:%2;base64,%3\">")
+            .arg(esc(QFileInfo(p).fileName()), img.first, QString::fromLatin1(img.second.toBase64()));
     }
     return QString("<em>(no image)</em>");
 }

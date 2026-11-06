@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////
 
 #include "stlimport.h"
+#include "spartaquote.h"
 
 #include <QDataStream>
 #include <QFile>
@@ -414,7 +415,7 @@ bool validThreshold(double thresh)
 QString buildReadSurfCommand(const StlImportSettings &s, const QString &surfPath)
 {
     QStringList w;
-    w << "read_surf" << surfPath;
+    w << "read_surf" << quoteSpartaArg(surfPath);
     auto three = [](const double v[3]) {
         return QStringLiteral("%1 %2 %3")
             .arg(QString::number(v[0], 'g', 12))

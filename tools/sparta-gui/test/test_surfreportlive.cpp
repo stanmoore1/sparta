@@ -440,6 +440,22 @@ TEST_F(SurfReportLive, ASourceThatIsNotPerSurfaceIsRefusedRatherThanMisread)
     delete d;
 }
 
+// The labels field is editable and the report read one array column per typed
+// label, so adding a label read past the end of SPARTA's per-surf array.
+TEST_F(SurfReportLive, LabelsBeyondTheDecksColumnsAreNotRead)
+{
+    auto *d = dialog();
+    selectSource(d, "c_1");
+    auto *labels = ctl<QLineEdit>(d, "labels");
+    labels->setText(labels->text() + ", extra1, extra2");
+    compute(d);
+    const QString r = reportOf(d);
+    EXPECT_FALSE(r.contains("extra1")) << "a typed label past the array's width was read:\n"
+                                       << r.toStdString();
+    EXPECT_TRUE(ctl<QPushButton>(d, "csv")->isEnabled()) << "the report itself went missing";
+    delete d;
+}
+
 TEST_F(SurfReportLive, WithoutLabelsItAsksForThemRatherThanGuessing)
 {
     auto *d = dialog();

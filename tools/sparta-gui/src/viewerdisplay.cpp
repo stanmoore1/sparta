@@ -71,7 +71,13 @@ bool ViewerDisplay::eventFilter(QObject *watched, QEvent *event)
 
 void ViewerDisplay::repaintPixmap()
 {
-    if (raw.isNull()) return;
+    if (raw.isNull()) {
+        // nothing to show: forget the last picture too, or it is still what
+        // Save and Copy hand out after the sequence was cleared
+        shown = QImage();
+        imageLabel->clear();
+        return;
+    }
 
     // Resizing the label below can itself provoke a viewport resize, which
     // calls back in here; without this the two would chase each other.

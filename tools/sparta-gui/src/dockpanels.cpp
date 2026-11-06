@@ -231,15 +231,14 @@ void PanelManager::clearRunPanels()
         docks[i]->setWidget(makePlaceholder(Panel(i)), insertModeFor(Panel(i)));
         docks[i]->toggleView(false);
     }
-    // Through the dock manager, not a plain delete: ~CDockWidget does not
-    // unregister itself, so the manager would keep a dangling pointer and the
-    // area an orphaned tab, and the next layout save or tab update reads freed
-    // memory. removeDockWidget() detaches it first.
-    for (const auto &a : std::as_const(archived)) {
-        if (!a) continue;
-        dm->removeDockWidget(a);
-        delete a;
-    }
+    // Through Qt-ADS, not a plain delete: ~CDockWidget does not unregister
+    // itself, so the manager kept a dangling pointer and the area an orphaned
+    // tab, and the next layout save or tab update read freed memory.
+    // deleteDockWidget() unregisters it and deletes it once the events already
+    // queued for its tab (the tab bar scrolls the current tab into view
+    // asynchronously) have run.
+    for (const auto &a : std::as_const(archived))
+        if (a) a->deleteDockWidget();
     archived.clear();
 }
 

@@ -46,6 +46,7 @@
 #include <QInputDialog>
 #include <QFont>
 #include <QIcon>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
@@ -238,6 +239,11 @@ private:
                 ++dialogs;
                 fd->setDirectory(QFileInfo(answer).absolutePath());
                 fd->selectFile(answer);
+                // and into the name field itself: selectFile() goes through the
+                // dialog's file-system model, which fills in asynchronously, and
+                // under load accept() still saw the suggested name
+                if (auto *edit = fd->findChild<QLineEdit *>("fileNameEdit"))
+                    edit->setText(QFileInfo(answer).fileName());
                 primed = true;
                 return;
             }

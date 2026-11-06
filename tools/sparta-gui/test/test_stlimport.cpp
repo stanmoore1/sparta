@@ -7,6 +7,7 @@
 // examples/explicit2implicit/in.exp2imp.sphere.3d).
 
 #include "stlimport.h"
+#include "spartaquote.h"
 
 #include <QByteArray>
 #include <QDataStream>
@@ -177,6 +178,18 @@ TEST(StlImport, ReadSurfCommandOmitsDefaultsAndOrders)
     // order must be: trans, scale, invert (transKind before scale before invert)
     EXPECT_EQ(buildReadSurfCommand(s, "a.surf").toStdString(),
               "read_surf a.surf trans 1 2 3 scale 0.001 0.001 0.001 invert");
+}
+
+// SPARTA splits a command on whitespace: an unquoted path with a space in it
+// became several arguments and read_surf failed.
+TEST(StlCommands, APathWithSpacesIsOneArgument)
+{
+    StlImportSettings s;
+    EXPECT_EQ(buildReadSurfCommand(s, "/Users/me/My Runs/a.surf").toStdString(),
+              "read_surf \"/Users/me/My Runs/a.surf\"");
+    EXPECT_EQ(quoteSpartaArg("plain.surf").toStdString(), "plain.surf");
+    EXPECT_EQ(quoteSpartaArg("bob's run.surf").toStdString(), "\"bob's run.surf\"");
+    EXPECT_EQ(quoteSpartaArg("say \"hi\" now").toStdString(), "'say \"hi\" now'");
 }
 
 TEST(StlImport, AblationCommandOrderAndSyntax)
