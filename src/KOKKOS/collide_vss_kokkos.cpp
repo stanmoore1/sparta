@@ -95,15 +95,19 @@ enum{CONSTANT,VARIABLE};
    per-cell list size for a collision pass that can create particles
    react/extra over-allocates by a factor, but per-cell counts are a few
      tens, so 10% leaves room for only one or two reaction products in the
-     fullest cell, and without react/retry an overflow stops the run; keep
-     at least CELLCOUNT_REACT_MIN spare slots.  extra_factor = 1 (no
-     reactions, or react/retry) leaves the size unchanged
+     fullest cell, and without react/retry an overflow stops the run.  A hot
+     dissociating cell can gain more than 8 products in one step (products
+     collide again, and NTC can attempt more than np/2 pairs), so keep at
+     least half the count, and CELLCOUNT_REACT_MIN, as spare slots: the
+     list holds one int per slot, ~2 bytes per particle.  extra_factor = 1
+     (no reactions, or react/retry) leaves the size unchanged
 ------------------------------------------------------------------------- */
 
 static int cellcount_react(int count, double extra_factor)
 {
   if (extra_factor <= 1.0) return count;
-  return MAX(static_cast<int>(count*extra_factor),count + CELLCOUNT_REACT_MIN);
+  return MAX(static_cast<int>(count*extra_factor),
+             count + MAX(CELLCOUNT_REACT_MIN,count/2));
 }
 
 /* ---------------------------------------------------------------------- */
