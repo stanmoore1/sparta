@@ -2089,7 +2089,7 @@ int SpartaGui::updateRunStatus()
     void *ptr = sparta.lastThermo("line", 0);
     if (ptr) {
         const int ln = *static_cast<int *>(ptr);
-        if (ln >= 1) textEdit->setHighlight(ln - 1, false);
+        if (ln >= 1) textEdit->setRunLine(ln - 1);
     }
 
     if (varwindow) {

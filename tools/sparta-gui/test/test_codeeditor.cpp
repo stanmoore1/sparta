@@ -125,6 +125,26 @@ protected:
 
 } // namespace
 
+// ---------------------------------------------------------------- run marker
+
+// The marker that follows a run moved the cursor back to the run line on every
+// 10 ms log tick, so nothing could be selected, copied or scrolled to while a
+// run went.
+TEST_F(Editor, MarkingTheRunLineLeavesTheUsersSelectionAlone)
+{
+    ed->setPlainText("seed 1\ndimension 2\nrun 10\nrun 20\nwrite_restart r.dat\n");
+    selectLines(0, 1);
+    const QTextCursor before = ed->textCursor();
+    ASSERT_TRUE(before.hasSelection());
+
+    for (int tick = 0; tick < 5; ++tick) ed->setRunLine(2);
+    ed->setRunLine(3);
+
+    const QTextCursor after = ed->textCursor();
+    EXPECT_EQ(after.anchor(), before.anchor()) << "marking the run line moved the selection";
+    EXPECT_EQ(after.position(), before.position()) << "marking the run line moved the cursor";
+}
+
 // ---------------------------------------------------------------- reformatting
 
 TEST_F(Editor, PadsACommandOutToTheCommandColumn)

@@ -258,6 +258,16 @@ void CodeEditor::setHighlight(int block, bool error)
     repaint();
 }
 
+void CodeEditor::setRunLine(int block)
+{
+    if (block == highlight && !highlighterror) return;
+    const bool wasError = highlighterror;
+    highlight           = block;
+    highlighterror      = false;
+    if (wasError) refreshDiagSelections(); // drop the red full-width band
+    lineNumberArea->update();
+}
+
 void CodeEditor::clearErrorHighlight()
 {
     if (highlight == NO_HIGHLIGHT || !highlighterror) return;

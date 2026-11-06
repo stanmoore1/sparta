@@ -127,6 +127,16 @@ public:
     void setHighlight(int block, bool error);
 
     /**
+     * @brief Mark the line a run is executing, in the gutter only
+     *
+     * Called on every log tick while a run goes. Unlike setHighlight() it
+     * leaves the cursor, the selection and the scroll position alone, and does
+     * nothing when the line has not changed, so the deck can be read, scrolled
+     * and copied from while it runs.
+     */
+    void setRunLine(int block);
+
+    /**
      * @brief Clear an active run-error line highlight (gutter marker + body band).
      *
      * Unlike setHighlight(NO_HIGHLIGHT, ...) this does not move the cursor, so it
