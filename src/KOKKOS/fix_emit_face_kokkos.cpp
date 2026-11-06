@@ -108,6 +108,9 @@ void FixEmitFaceKokkos::init()
   if (perspecies) k_ntargetsp.modify_host();
   if (subsonic_style == PONLY) k_vscale.modify_host();
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif

@@ -416,6 +416,9 @@ void CollideVSSKokkos::init()
     vre_first = 0;
   }
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif

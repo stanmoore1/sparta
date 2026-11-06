@@ -122,6 +122,9 @@ void SurfReactAdsorbKokkos::init()
   init_reactions_gs_kokkos();
   init_cmodels_kokkos();
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif

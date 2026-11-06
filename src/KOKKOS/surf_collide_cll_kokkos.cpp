@@ -64,6 +64,9 @@ SurfCollideCLLKokkos::SurfCollideCLLKokkos(SPARTA *sparta, int narg, char **arg)
 
   random_backup = NULL;
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 
@@ -326,6 +329,9 @@ void SurfCollideCLLKokkos::pre_collide()
     double seed = update->ranmaster->uniform();
     random->reset(seed,comm->me,100);
 
+#ifndef SPARTA_KOKKOS_EXACT
+    rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
     rand_pool.init(random);
 #endif

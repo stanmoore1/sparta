@@ -172,6 +172,9 @@ void FixEmitSurfKokkos::init()
   if (dimension != 2)
     k_fracarea.modify_host();
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif

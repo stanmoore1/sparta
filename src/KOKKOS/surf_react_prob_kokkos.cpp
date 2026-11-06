@@ -93,6 +93,9 @@ void SurfReactProbKokkos::init()
   Kokkos::deep_copy(d_nsingle,0);
   Kokkos::deep_copy(d_tally_single,0);
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif

@@ -22,6 +22,19 @@
 
 namespace SPARTA_NS {
 
+/* ----------------------------------------------------------------------
+   seed for a Kokkos random pool (non-EXACT builds), drawn from a style's
+     host RNG, which follows the input script seed command and differs on
+     each proc.  The pool needs a nonzero seed.
+------------------------------------------------------------------------- */
+
+inline uint64_t kk_pool_seed(RanKnuth *random)
+{
+  const uint64_t hi = static_cast<uint64_t>(random->uniform() * 4294967296.0);
+  const uint64_t lo = static_cast<uint64_t>(random->uniform() * 4294967296.0);
+  return (hi << 32) | lo | 1;
+}
+
 struct RandWrap {
   class RanKnuth* rng;
 
