@@ -164,7 +164,9 @@ protected:
      * @brief Execute a SPARTA simulation
      * @param use_buffer If true, runs from editor buffer; if false, saves and runs from file
      */
-    void doRun(bool use_buffer);
+    /// @return true when a run was started; false when it was refused or
+    ///         cancelled, in which case no runFinished() will follow
+    bool doRun(bool use_buffer);
 
     /** @brief Initialize and start a new SPARTA instance */
     void startSparta();
@@ -237,18 +239,21 @@ public slots:
     void writeRestart();
 
     /** @brief Run SPARTA with content from editor buffer */
-    void runBuffer() { doRun(true); }
+    bool runBuffer() { return doRun(true); }
 
     /** @brief Set the index-variable overrides injected before the next run
      *  (used by the parametric sweep driver to vary parameters per run) */
     void setRunVariables(const QList<QPair<QString, QString>> &v) { variables = v; }
 
     /** @brief Re-scan the editor buffer for variables and return the set */
+    /// The deck's index variables, with the user's Set Variables values kept
     QList<QPair<QString, QString>> discoverVariables()
     {
-        updateVariables();
+        updateVariables(true);
         return variables;
     }
+    /// The variables the next run will inject (the Set Variables list)
+    [[nodiscard]] QList<QPair<QString, QString>> runVariables() const { return variables; }
 
 private slots:
     /** @brief Create a new document */

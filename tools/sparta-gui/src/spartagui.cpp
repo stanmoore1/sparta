@@ -1477,7 +1477,9 @@ void SpartaGui::updateVariables(bool keepOverrides)
                 auto name = use.captured(use.lastCapturedIndex());
                 if (!known.contains(name)) {
                     known.append(name);
-                    variables.append(qMakePair(name, QString()));
+                    // used but not defined: only the user can supply it, so
+                    // a value they already gave is kept
+                    variables.append(qMakePair(name, previous.value(name)));
                 }
             }
             if (ref.hasMatch()) {
@@ -2429,14 +2431,14 @@ void SpartaGui::createChartWindow(QSettings &settings)
         panels->closePanel(PanelManager::Chart);
 }
 
-void SpartaGui::doRun(bool use_buffer)
+bool SpartaGui::doRun(bool use_buffer)
 {
     // workerActive() too: runflag is clear while the thread is still in a
     // deck's setup, and a second run started there overwrote the runner and
     // issued "clear" -- tearing SPARTA down under the first one.
     if (sparta.isRunning() || workerActive()) {
         warning(this, "SPARTA-GUI Warning", "Must stop current run before starting a new run");
-        return;
+        return false;
     }
 
     // a run operates on the editor buffer, so make sure it is the visible page
@@ -2467,7 +2469,7 @@ void SpartaGui::doRun(bool use_buffer)
                         "Do you want to run the input anyway?",
                         QMessageBox::Yes | QMessageBox::No, this);
         msg.setDefaultButton(QMessageBox::No);
-        if (msg.exec() != QMessageBox::Yes) return;
+        if (msg.exec() != QMessageBox::Yes) return false;
     }
 
     if (!use_buffer && textEdit->document()->isModified()) {
@@ -2476,13 +2478,13 @@ void SpartaGui::doRun(bool use_buffer)
         switch (rv) {
             case QMessageBox::Yes:
                 // running the file is the point; an unsaved one would run stale
-                if (!save()) return;
+                if (!save()) return false;
                 break;
             case QMessageBox::No:
                 break;
             case QMessageBox::Cancel: // fallthrough
             default:
-                return;
+                return false;
         }
     }
 
@@ -2502,7 +2504,7 @@ void SpartaGui::doRun(bool use_buffer)
         status->setText(QString("Running SPARTA ..."));
     status->repaint();
     startSparta();
-    if (!sparta.isOpen()) return;
+    if (!sparta.isOpen()) return false;
     capturer->beginCapture();
 
     ++runCounter;
@@ -2537,6 +2539,7 @@ void SpartaGui::doRun(bool use_buffer)
         panels->closePanel(PanelManager::Viewer);
     }
     syncRunControls();
+    return true;
 }
 
 /* ---------------------------------------------------------------------- */

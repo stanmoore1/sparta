@@ -332,6 +332,29 @@ TEST_F(Sweeping, TabulatesOneRowPerCombinationInOrderWithTheRightNumbers)
     }
 }
 
+// The sweep handed each point to the window with setRunVariables() and never
+// put the user's list back, so after a sweep (or merely opening the panel,
+// which re-read the deck and dropped every override) the next ordinary run used
+// the deck's values instead of the ones set in Run > Set Variables.
+TEST_F(Sweeping, TheUsersSetVariablesSurviveOpeningThePanelAndASweep)
+{
+    gui->setRunVariables({{"n", "33"}, {"extra", "7"}});
+    auto value = [this](const QString &name) {
+        for (const auto &v : gui->runVariables())
+            if (v.first == name) return v.second;
+        return QString();
+    };
+
+    ASSERT_NE(panel(), nullptr);
+    EXPECT_EQ(value("n").toStdString(), "33") << "opening the sweep panel dropped the override";
+
+    addVariable("n", "List", "40, 80");
+    setQuantities("Np");
+    ASSERT_TRUE(runSweep());
+    EXPECT_EQ(value("n").toStdString(), "33") << "the sweep left its last value behind";
+    EXPECT_EQ(value("extra").toStdString(), "7") << "the sweep dropped a variable the user added";
+}
+
 TEST_F(Sweeping, TheHeadersNameTheVariableAndTheQuantityWithItsReducer)
 {
     addVariable("n", "List", "40");

@@ -83,6 +83,8 @@ private slots:
 
 private:
     void launchNext();
+    /// @brief Finish the sweep: disconnect, put the user's variables back, report
+    void end(bool success);
     double readThermo(const QString &keyword) const; // current cached value, NaN if absent
 
     SpartaGui *gui_;
@@ -94,6 +96,7 @@ private:
     int repIndex_ = 0;                       // replicate within the current sweep point
     bool active_ = false;
     bool stopRequested_ = false;
+    QList<QPair<QString, QString>> userVars_; ///< Set Variables list before the sweep
     QVector<std::vector<double>> samples_;    // per quantity, this run
     QVector<std::vector<double>> repVals_;    // per quantity, reduced value of each replicate
 };

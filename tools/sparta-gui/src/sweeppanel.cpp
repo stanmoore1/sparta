@@ -132,6 +132,9 @@ void SweepController::start(const SweepSpec &spec)
     index_ = -1;
     repIndex_ = 0;
     active_ = true;
+    // the user's Set Variables list: each run lays its sweep values over it,
+    // and it is put back when the sweep ends however it ends
+    userVars_ = gui_->runVariables();
     stopRequested_ = false;
     connect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
     connect(gui_, &SpartaGui::thermoSampled, this, &SweepController::onSample);
@@ -162,10 +165,7 @@ void SweepController::launchNext()
     emit progress(index_ * spec_.replicates + repIndex_, total);
 
     if (index_ >= combos_.size()) {
-        active_ = false;
-        disconnect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
-        disconnect(gui_, &SpartaGui::thermoSampled, this, &SweepController::onSample);
-        emit finished(!stopRequested_);
+        end(!stopRequested_);
         return;
     }
 
@@ -178,8 +178,29 @@ void SweepController::launchNext()
     auto assign = combos_.at(index_);
     if (spec_.replicates > 1 && !spec_.seedVariable.isEmpty())
         assign.append({spec_.seedVariable, QString::number(spec_.seedFor(repIndex_))});
-    gui_->setRunVariables(assign);
-    gui_->runBuffer();
+    auto vars = userVars_;
+    for (const auto &a : assign) {
+        bool replaced = false;
+        for (auto &v : vars)
+            if (v.first == a.first) {
+                v.second = a.second;
+                replaced = true;
+            }
+        if (!replaced) vars.append(a);
+    }
+    gui_->setRunVariables(vars);
+    // A refused run (busy, no library, empty deck, a declined prompt) sends no
+    // runFinished, so waiting for one would leave the sweep running forever.
+    if (!gui_->runBuffer()) end(false);
+}
+
+void SweepController::end(bool success)
+{
+    active_ = false;
+    disconnect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
+    disconnect(gui_, &SpartaGui::thermoSampled, this, &SweepController::onSample);
+    gui_->setRunVariables(userVars_);
+    emit finished(success);
 }
 
 double SweepController::readThermo(const QString &keyword) const
@@ -240,10 +261,7 @@ void SweepController::onRunFinished(bool success)
     }
 
     if (stopRequested_) {
-        active_ = false;
-        disconnect(gui_, &SpartaGui::runFinished, this, &SweepController::onRunFinished);
-        disconnect(gui_, &SpartaGui::thermoSampled, this, &SweepController::onSample);
-        emit finished(false);
+        end(false);
         return;
     }
     launchNext();
