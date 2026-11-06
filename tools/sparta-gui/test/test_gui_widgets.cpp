@@ -91,6 +91,7 @@
 #include "viewerpanel.h"
 #include "spartagui.h"
 #include "viewersidebar.h"
+#include "logwindow.h"
 #include "stlimportwizard.h"
 #include "surfreportdialog.h"
 
@@ -1421,6 +1422,54 @@ TEST(ImageViewerLayout, TheViewerNoLongerClaimsTheKeysThePanelOwns)
     EXPECT_TRUE(bound.value(close).contains("Panel"))
         << "Ctrl+W here closes the panel, not the editor tab: "
         << bound.value(close).toStdString();
+}
+
+// The panels claim their own Ctrl keys while focus is inside them. They used to
+// check only that Ctrl was held, so every Shift and Alt variant went with it:
+// in the Output panel Ctrl+Shift+W (Variables Window) closed the panel and
+// Ctrl+Shift+S (Save Input File As) saved the log.
+TEST(PanelKeys, OnlyPlainCtrlCountsAsThePanelsKey)
+{
+    auto ev = [](int key, Qt::KeyboardModifiers mods) {
+        return QKeyEvent(QEvent::ShortcutOverride, key, mods);
+    };
+    const auto ctrl = Qt::ControlModifier, shift = Qt::ShiftModifier, alt = Qt::AltModifier;
+    QKeyEvent plainS = ev(Qt::Key_S, ctrl), shiftS = ev(Qt::Key_S, ctrl | shift),
+              altS = ev(Qt::Key_S, ctrl | alt), ret = ev(Qt::Key_Return, ctrl),
+              shiftRet = ev(Qt::Key_Return, ctrl | shift),
+              padEnter = ev(Qt::Key_Enter, ctrl | Qt::KeypadModifier),
+              slash = ev(Qt::Key_Slash, ctrl), shiftSlash = ev(Qt::Key_Slash, ctrl | shift),
+              noCtrl = ev(Qt::Key_S, Qt::NoModifier);
+    EXPECT_TRUE(isPlainCtrl(&plainS));
+    EXPECT_FALSE(isPlainCtrl(&shiftS)) << "Ctrl+Shift+S is Save Input File As, not the panel's Ctrl+S";
+    EXPECT_FALSE(isPlainCtrl(&altS));
+    EXPECT_TRUE(isPlainCtrl(&ret));
+    EXPECT_FALSE(isPlainCtrl(&shiftRet)) << "Ctrl+Shift+Return is Run from File";
+    EXPECT_TRUE(isPlainCtrl(&padEnter));
+    EXPECT_TRUE(isPlainCtrl(&slash));
+    EXPECT_TRUE(isPlainCtrl(&shiftSlash)) << "on many layouts '/' itself needs Shift";
+    EXPECT_FALSE(isPlainCtrl(&noCtrl));
+}
+
+TEST(PanelKeys, TheOutputPanelLeavesShiftedKeysToTheMainWindow)
+{
+    QMainWindow win;
+    auto *log = new LogWindow("run.log", nullptr);
+    log->setPlainText("Step 0\n");
+    win.setCentralWidget(log);
+    auto *vars = new QAction("Variables Window", &win);
+    vars->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W));
+    win.addAction(vars);
+    QSignalSpy toggled(vars, &QAction::triggered);
+    win.show();
+    win.activateWindow();
+    ASSERT_TRUE(QTest::qWaitForWindowActive(&win));
+
+    log->setFocus();
+    QTest::keyClick(log, Qt::Key_W, Qt::ControlModifier | Qt::ShiftModifier);
+    QApplication::processEvents();
+    EXPECT_EQ(toggled.count(), 1) << "Ctrl+Shift+W in the Output panel did not reach the main window";
+    EXPECT_TRUE(log->isVisible()) << "Ctrl+Shift+W closed the Output panel as if it were Ctrl+W";
 }
 
 // F8, F9 and Ctrl+D were added to the viewer's menus only. A widget-scoped

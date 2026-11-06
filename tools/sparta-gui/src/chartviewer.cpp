@@ -1202,22 +1202,22 @@ bool ChartWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::ShortcutOverride) {
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
         if (!keyEvent) return QWidget::eventFilter(watched, event);
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == '/') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == '/') {
             stopRun();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'W') {
             close();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'Q') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'Q') {
             quit();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'C') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'C') {
             copy();
             event->accept();
             return true;

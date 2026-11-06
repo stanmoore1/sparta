@@ -124,12 +124,12 @@ bool FileViewer::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::ShortcutOverride) {
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
         if (!keyEvent) return QAbstractScrollArea::eventFilter(watched, event);
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == '/') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == '/') {
             stopRun();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'W') {
             close();
             event->accept();
             return true;

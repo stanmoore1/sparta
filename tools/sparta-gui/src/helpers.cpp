@@ -411,13 +411,24 @@ void copyImageToClipboard(const QImage &image)
 #endif
 }
 
+bool isPlainCtrl(const QKeyEvent *key)
+{
+    if (!key) return false;
+    const Qt::KeyboardModifiers mods = key->modifiers() & ~Qt::KeypadModifier;
+    const int k                      = key->key();
+    const bool letterOrReturn =
+        (k >= Qt::Key_A && k <= Qt::Key_Z) || k == Qt::Key_Return || k == Qt::Key_Enter;
+    if (letterOrReturn) return mods == Qt::ControlModifier;
+    return (mods & ~Qt::ShiftModifier) == Qt::ControlModifier;
+}
+
 bool dispatchCtrlShortcut(QEvent *event,
                           std::initializer_list<std::pair<int, std::function<void()>>> table)
 {
     if (!event || event->type() != QEvent::ShortcutOverride) return false;
 
     auto *key = dynamic_cast<QKeyEvent *>(event);
-    if (!key || !key->modifiers().testFlag(Qt::ControlModifier)) return false;
+    if (!key || !isPlainCtrl(key)) return false;
 
     for (const auto &entry : table) {
         if (entry.first != key->key()) continue;

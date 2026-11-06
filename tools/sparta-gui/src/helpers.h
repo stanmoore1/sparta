@@ -26,6 +26,7 @@
 #include <initializer_list>
 #include <memory>
 
+class QKeyEvent;
 class QWidget;
 class QImage;
 class QPixmap;
@@ -120,6 +121,17 @@ extern void exportImage(QWidget *parent, QImage *image, const QString &title);
  * included.
  */
 extern void copyImageToClipboard(const QImage &image);
+
+/**
+ * @brief True when @p key is Ctrl plus that key and nothing else
+ *
+ * A panel claiming "its" Ctrl+S must not also claim Ctrl+Shift+S, which the
+ * main window binds to something else (Save Input File As); checking only that
+ * Ctrl is held took every Shift and Alt variant along with it. Letters and
+ * Return must be plain Ctrl. Punctuation keeps Shift allowed, because on many
+ * layouts "/" is itself typed with Shift.
+ */
+extern bool isPlainCtrl(const QKeyEvent *key);
 
 /**
  * @brief Resolve this widget's own Ctrl+ shortcuts out of a ShortcutOverride

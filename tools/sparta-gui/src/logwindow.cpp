@@ -327,12 +327,12 @@ bool LogWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::ShortcutOverride) {
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
         if (!keyEvent) return QAbstractScrollArea::eventFilter(watched, event);
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == '/') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == '/') {
             stopRun();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'W') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'W') {
             close();
             event->accept();
             return true;
@@ -340,22 +340,22 @@ bool LogWindow::eventFilter(QObject *watched, QEvent *event)
         // now that this window is a docked panel sharing the main window's
         // shortcut context, its own Ctrl+N/S/Q/Return would otherwise be
         // ambiguous with the identical main-window menu shortcuts
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'N') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'N') {
             nextWarning();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'S') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'S') {
             saveAs();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) && keyEvent->key() == 'Q') {
+        if (isPlainCtrl(keyEvent) && keyEvent->key() == 'Q') {
             quit();
             event->accept();
             return true;
         }
-        if (keyEvent->modifiers().testFlag(Qt::ControlModifier) &&
+        if (isPlainCtrl(keyEvent) &&
             keyEvent->key() == Qt::Key_Return) {
             runBuffer();
             event->accept();
