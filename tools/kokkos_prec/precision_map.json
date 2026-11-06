@@ -316,7 +316,9 @@
       "mass_j",
       "mass_k",
       "mass_ij",
-      "mr"
+      "mr",
+      "imass",
+      "jmass"
     ],
     "file_default_class": {
       "geometry_kokkos.h": "pos",

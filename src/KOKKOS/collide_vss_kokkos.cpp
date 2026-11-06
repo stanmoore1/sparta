@@ -3875,12 +3875,13 @@ void CollideVSSKokkos::setup_collision_kokkos(OnePartKK *ip, OnePartKK *jp,
 
   // COM velocity calculated using reactant masses
 
-  KK_FLOAT divisor = static_cast<KK_FLOAT>(1.0) / (d_species[isp].mass + d_species[jsp].mass);
   KK_FLOAT *vi = ip->v;
   KK_FLOAT *vj = jp->v;
-  precoln.ucmf = ((d_species[isp].mass*vi[0])+(d_species[jsp].mass*vj[0]))*divisor;
-  precoln.vcmf = ((d_species[isp].mass*vi[1])+(d_species[jsp].mass*vj[1]))*divisor;
-  precoln.wcmf = ((d_species[isp].mass*vi[2])+(d_species[jsp].mass*vj[2]))*divisor;
+  const double mass_i = d_species[isp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  const double mass_j = d_species[jsp].mass;  // KK_DOUBLE: precision_map.json keep_double_identifiers
+  precoln.ucmf = kk_cm_velocity(mass_i,vi[0],mass_j,vj[0]);
+  precoln.vcmf = kk_cm_velocity(mass_i,vi[1],mass_j,vj[1]);
+  precoln.wcmf = kk_cm_velocity(mass_i,vi[2],mass_j,vj[2]);
 
   postcoln.etrans = precoln.etrans;
   postcoln.erot = 0.0;
@@ -3972,10 +3973,9 @@ int CollideVSSKokkos::perform_collision_kokkos(OnePartKK *&ip,
     KK_FLOAT *vi = ip->v;
     KK_FLOAT *vj = jp->v;
 
-    const KK_FLOAT divisor = static_cast<KK_FLOAT>(1.0) / (precoln.imass + precoln.jmass);
-    const KK_FLOAT ucmf = ((precoln.imass*vi[0]) + (precoln.jmass*vj[0])) * divisor;
-    const KK_FLOAT vcmf = ((precoln.imass*vi[1]) + (precoln.jmass*vj[1])) * divisor;
-    const KK_FLOAT wcmf = ((precoln.imass*vi[2]) + (precoln.jmass*vj[2])) * divisor;
+    const KK_FLOAT ucmf = kk_cm_velocity(precoln.imass,vi[0],precoln.jmass,vj[0]);
+    const KK_FLOAT vcmf = kk_cm_velocity(precoln.imass,vi[1],precoln.jmass,vj[1]);
+    const KK_FLOAT wcmf = kk_cm_velocity(precoln.imass,vi[2],precoln.jmass,vj[2]);
 
     vi[0] = ucmf;
     vi[1] = vcmf;
@@ -4044,14 +4044,14 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(OnePartKK *ip,
   if (Kokkos::fabs(alpha_r - static_cast<KK_FLOAT>(1.0)) < static_cast<KK_FLOAT>(0.001)) {
     KK_FLOAT vr = Kokkos::sqrt(static_cast<KK_FLOAT>(2.0) * postcoln.etrans / d_params(isp,jsp).mr);
     KK_FLOAT cosX = static_cast<KK_FLOAT>(2.0)*static_cast<KK_FLOAT>(rand_gen.drand()) - static_cast<KK_FLOAT>(1.0);
-    KK_FLOAT sinX = Kokkos::sqrt(static_cast<KK_FLOAT>(1.0) - cosX*cosX);
+    KK_FLOAT sinX = kk_sin_from_cos(cosX);
     ua = vr*cosX;
     vb = vr*sinX*Kokkos::cos(eps);
     wc = vr*sinX*Kokkos::sin(eps);
   } else {
     KK_FLOAT scale = Kokkos::sqrt((static_cast<KK_FLOAT>(2.0) * postcoln.etrans) / (d_params(isp,jsp).mr * precoln.vr2));
     KK_FLOAT cosX = static_cast<KK_FLOAT>(2.0)*Kokkos::pow(static_cast<KK_FLOAT>(rand_gen.drand()),alpha_r) - static_cast<KK_FLOAT>(1.0);
-    KK_FLOAT sinX = Kokkos::sqrt(static_cast<KK_FLOAT>(1.0) - cosX*cosX);
+    KK_FLOAT sinX = kk_sin_from_cos(cosX);
     vrc[0] = vi[0]-vj[0];
     vrc[1] = vi[1]-vj[1];
     vrc[2] = vi[2]-vj[2];
@@ -4071,13 +4071,9 @@ void CollideVSSKokkos::SCATTER_TwoBodyScattering(OnePartKK *ip,
 
   // new velocities for the products
 
-  KK_FLOAT divisor = static_cast<KK_FLOAT>(1.0) / (mass_i + mass_j);
-  vi[0] = precoln.ucmf + (mass_j*divisor)*ua;
-  vi[1] = precoln.vcmf + (mass_j*divisor)*vb;
-  vi[2] = precoln.wcmf + (mass_j*divisor)*wc;
-  vj[0] = precoln.ucmf - (mass_i*divisor)*ua;
-  vj[1] = precoln.vcmf - (mass_i*divisor)*vb;
-  vj[2] = precoln.wcmf - (mass_i*divisor)*wc;
+  kk_split_velocity(mass_i,mass_j,precoln.ucmf,ua,vi[0],vj[0]);
+  kk_split_velocity(mass_i,mass_j,precoln.vcmf,vb,vi[1],vj[1]);
+  kk_split_velocity(mass_i,mass_j,precoln.wcmf,wc,vi[2],vj[2]);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -4257,7 +4253,7 @@ void CollideVSSKokkos::SCATTER_ThreeBodyScattering(OnePartKK *ip,
                 + kp->erot + kp->evib;
 
   KK_FLOAT cosX = static_cast<KK_FLOAT>(2.0)*Kokkos::pow(static_cast<KK_FLOAT>(rand_gen.drand()), alpha_r) - static_cast<KK_FLOAT>(1.0);
-  KK_FLOAT sinX = Kokkos::sqrt(static_cast<KK_FLOAT>(1.0) - cosX*cosX);
+  KK_FLOAT sinX = kk_sin_from_cos(cosX);
   KK_FLOAT eps = static_cast<KK_FLOAT>(rand_gen.drand()) * 2*static_cast<KK_FLOAT>(MY_PI);
 
   if (Kokkos::fabs(alpha_r - static_cast<KK_FLOAT>(1.0)) < static_cast<KK_FLOAT>(0.001)) {
@@ -4286,13 +4282,9 @@ void CollideVSSKokkos::SCATTER_ThreeBodyScattering(OnePartKK *ip,
 
   // new velocities for the products
 
-  KK_FLOAT divisor = static_cast<KK_FLOAT>(1.0) / (mass_ij + mass_k);
-  vi[0] = precoln.ucmf + (mass_k*divisor)*ua;
-  vi[1] = precoln.vcmf + (mass_k*divisor)*vb;
-  vi[2] = precoln.wcmf + (mass_k*divisor)*wc;
-  vk[0] = precoln.ucmf - (mass_ij*divisor)*ua;
-  vk[1] = precoln.vcmf - (mass_ij*divisor)*vb;
-  vk[2] = precoln.wcmf - (mass_ij*divisor)*wc;
+  kk_split_velocity(mass_ij,mass_k,precoln.ucmf,ua,vi[0],vk[0]);
+  kk_split_velocity(mass_ij,mass_k,precoln.vcmf,vb,vi[1],vk[1]);
+  kk_split_velocity(mass_ij,mass_k,precoln.wcmf,wc,vi[2],vk[2]);
   vj[0] = vi[0];
   vj[1] = vi[1];
   vj[2] = vi[2];

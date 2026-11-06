@@ -40,6 +40,57 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 
 namespace SPARTA_NS {
 
+/* ----------------------------------------------------------------------
+   centre of mass velocity and post-collision velocities of a collision pair
+   a double build keeps the original expressions bit for bit.  In reduced
+     precision they are rearranged so that float rounding stays unbiased:
+     the original mass fractions m*(1/M) are off from m/M by a double ulp
+     whose sign is fixed by the species pair, and exact results then often
+     sit on a float midpoint (equal masses, simple ratios like N/N2), so
+     every tie broke away from zero and total momentum and energy grew by
+     ~4e-9 per collision.  Here the remaining double round-off multiplies
+     v_i - v_j or the relative velocity u, whose sign is random, and the
+     relative velocity v_i' - v_j' = u is kept exactly
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+double kk_cm_velocity(const double mi, const double vi, const double mj, const double vj)  // KK_DOUBLE: masses stay double
+{
+  constexpr bool original = std::is_same_v<KK_FLOAT,double>;  // KK_DOUBLE: precision test
+  const double one = 1.0;  // KK_DOUBLE: the original (mi*vi+mj*vj)*(1/M) in a double build
+  if constexpr (original) return ((mi*vi)+(mj*vj))*(one/(mi+mj));
+  else return vj + (mi/(mi+mj))*(vi - vj);
+}
+
+// v_i' = vcm + m_j/M u, v_j' = vcm - m_i/M u
+
+KOKKOS_INLINE_FUNCTION
+void kk_split_velocity(const double mi, const double mj, const double vcm, const double u,  // KK_DOUBLE: masses stay double
+                       KK_FLOAT &vi, KK_FLOAT &vj)
+{
+  constexpr bool original = std::is_same_v<KK_FLOAT,double>;  // KK_DOUBLE: precision test
+  const double one = 1.0;  // KK_DOUBLE: the original m*(1/M) in a double build
+  if constexpr (original) {
+    vi = vcm + (mj*(one/(mi+mj)))*u;
+    vj = vcm - (mi*(one/(mi+mj)))*u;
+  } else {
+    const double t = (mi/(mi+mj))*u;  // KK_DOUBLE: masses stay double
+    vi = (vcm + u) - t;
+    vj = vcm - t;
+  }
+}
+
+// sin of the scattering angle from its cosine; the square root is taken
+//   in double since float sqrt(1-c*c) biases sin^2 low by ~2e-10 per
+//   collision in reduced precision, an energy loss.  Identical in double
+
+KOKKOS_INLINE_FUNCTION
+KK_FLOAT kk_sin_from_cos(const KK_FLOAT c)
+{
+  const double one = 1.0;  // KK_DOUBLE: see above
+  return static_cast<KK_FLOAT>(Kokkos::sqrt(one - static_cast<double>(c)*c));  // KK_DOUBLE: see above
+}
+
 struct s_COLLIDE_REDUCE {
   // bigint since can exceed 2^31 in one step
   //   at large per-proc particle counts
@@ -87,7 +138,7 @@ class CollideVSSKokkos : public CollideVSS {
   struct State {
     KK_FLOAT vr2;
     KK_FLOAT vr;
-    KK_FLOAT imass,jmass;
+    double imass,jmass;  // KK_DOUBLE: masses stay double
     KK_FLOAT ave_rotdof;
     KK_FLOAT ave_vibdof;
     KK_FLOAT ave_dof;
