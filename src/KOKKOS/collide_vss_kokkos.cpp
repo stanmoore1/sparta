@@ -86,9 +86,25 @@ enum{CONSTANT,VARIABLE};
 #define DELTADELETE 1024
 #define DELTAELECTRON 128
 #define DELTACELLCOUNT 2
+#define CELLCOUNT_REACT_MIN 8     // spare per-cell slots with react/extra
 
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
+
+/* ----------------------------------------------------------------------
+   per-cell list size for a collision pass that can create particles
+   react/extra over-allocates by a factor, but per-cell counts are a few
+     tens, so 10% leaves room for only one or two reaction products in the
+     fullest cell, and without react/retry an overflow stops the run; keep
+     at least CELLCOUNT_REACT_MIN spare slots.  extra_factor = 1 (no
+     reactions, or react/retry) leaves the size unchanged
+------------------------------------------------------------------------- */
+
+static int cellcount_react(int count, double extra_factor)
+{
+  if (extra_factor <= 1.0) return count;
+  return MAX(static_cast<int>(count*extra_factor),count + CELLCOUNT_REACT_MIN);
+}
 
 /* ---------------------------------------------------------------------- */
 
@@ -814,7 +830,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
     }
 
     maxcellcount = particle_kk->get_maxcellcount();
-    int maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = cellcount_react(maxcellcount,extra_factor);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
@@ -1246,7 +1262,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
     }
 
     maxcellcount = particle_kk->get_maxcellcount();
-    int maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = cellcount_react(maxcellcount,extra_factor);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
@@ -1987,7 +2003,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
     }
 
     maxcellcount = particle_kk->get_maxcellcount();
-    int maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = cellcount_react(maxcellcount,extra_factor);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
@@ -2484,7 +2500,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
 
   maxcellcount = particle_kk->get_maxcellcount();
 
-  int maxelectron_extra = maxcellcount*extra_factor;
+  int maxelectron_extra = cellcount_react(maxcellcount,extra_factor);
   if (int(d_elist.extent(0)) < nglocal || int(d_elist.extent(1)) < maxelectron_extra) {
     d_elist = t_particle_2d(); // reduce memory use by deallocating first
     d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
@@ -2503,7 +2519,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
       d_dellist = k_dellist.view_device();
     }
 
-    int maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = cellcount_react(maxcellcount,extra_factor);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
@@ -3159,7 +3175,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
   maxcellcount = particle_kk->get_maxcellcount();
 
-  int maxelectron_extra = maxcellcount*extra_factor;
+  int maxelectron_extra = cellcount_react(maxcellcount,extra_factor);
   if (d_elist.extent(0) < nglocal || d_elist.extent(1) < maxelectron_extra) {
     d_elist = t_particle_2d(); // reduce memory use by deallocating first
     d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
@@ -3178,7 +3194,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
       d_dellist = k_dellist.view_device();
     }
 
-    int maxcellcount_extra = maxcellcount*extra_factor;
+    int maxcellcount_extra = cellcount_react(maxcellcount,extra_factor);
     if (d_plist.extent(1) < maxcellcount_extra) {
       d_plist = {};
       Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);

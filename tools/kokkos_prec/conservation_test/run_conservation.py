@@ -100,7 +100,7 @@ def main():
         nfail += not ok
         print(f"{'ok    ' if ok else 'FAILED'} {inp:14s} mass {dm:.1e}  "
               f"momentum {dp:.1e}  energy {de:.1e}  "
-              f"(tolerance {tol_m:.0e}, {tol_pe:.0e})")
+              f"(tolerance {tol_m:.1e}, {tol_pe:.1e})")
 
     seed = {}
     for tag, s in (("a", "777"), ("b", "777"), ("c", "4242")):
