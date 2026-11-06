@@ -214,10 +214,24 @@ QStringList splitLine(const QString &text)
 
             // handle triple double quotation marks
         } else if ((c == '"') && (buf[1] == '"') && (buf[2] == '"') && (buf[3] != '"')) {
-            len = 3;
-            add = 1;
+            // The whole """...""" is one word, spaces and all, as SPARTA reads
+            // it. This used to take only the three quotes (len = 3, dropping
+            // whatever the word held before them) and then skip one character
+            // too many for every later word: Tab turned
+            // `print """hello world"""` into `print """hello orl`.
+            add = 0;
+            len += 3;
             buf += 3;
             c = *buf;
+            while ((c != '\0') && !((c == '"') && (buf[1] == '"') && (buf[2] == '"'))) {
+                c = *++buf;
+                ++len;
+            }
+            if (c == '"') {
+                len += 3;
+                buf += 3;
+                c = *buf;
+            }
 
         } else if (c == '"') { // handle double quote
             add = 0;

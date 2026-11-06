@@ -966,9 +966,11 @@ void CodeEditor::reformatCurrentLine()
 
     // perform edit but only if text has changed
     if (QString::compare(text, newtext)) {
+        // the whole block: StartOfLine/EndOfLine are the *visual* line, so on a
+        // wrapped command only one segment was replaced by the whole command
         cursor.beginEditBlock();
-        cursor.movePosition(QTextCursor::StartOfLine);
-        cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor, 1);
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
         cursor.insertText(newtext);
         cursor.endEditBlock();
     }
@@ -977,47 +979,65 @@ void CodeEditor::reformatCurrentLine()
 void CodeEditor::commentLine()
 {
     auto cursor = textCursor();
-    cursor.movePosition(QTextCursor::StartOfLine);
+    cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.insertText("#");
 }
 
+namespace {
+/// Extend @p c to whole lines: from the start of the first selected line to
+/// the end of the last, without its newline. A selection ending at the very
+/// start of a line does not take that line in.
+void selectWholeLines(QTextCursor &c)
+{
+    QTextDocument *doc = c.document();
+    const int from = c.selectionStart(), to = c.selectionEnd();
+    QTextBlock first = doc->findBlock(from);
+    QTextBlock last  = doc->findBlock(to);
+    if (to > from && last.position() == to && last != first) last = last.previous();
+    c.setPosition(first.position());
+    c.setPosition(last.position() + last.length() - 1, QTextCursor::KeepAnchor);
+}
+
+QString uncommented(const QString &line)
+{
+    QString out;
+    bool start = true;
+    for (auto letter : line) {
+        if (start && (letter == '#')) {
+            start = false;
+            continue;
+        }
+        if (start && !letter.isSpace()) start = false;
+        out.append(letter);
+    }
+    return out;
+}
+} // namespace
+
 void CodeEditor::commentSelection()
 {
+    // Whole lines, and no newline added: a selection that ended mid-line used
+    // to split that line in two, leaving the second half as a new, uncommented
+    // command, and every comment/uncomment round trip added a line.
     auto cursor = textCursor();
-    auto text   = cursor.selection().toPlainText();
-    auto lines  = text.split('\n');
-    QString newtext;
-    for (const auto &line : lines) {
-        newtext.append('#');
-        newtext.append(line);
-        newtext.append('\n');
-    }
-    if (newtext.isEmpty()) newtext = "#\n";
-    cursor.insertText(newtext);
+    selectWholeLines(cursor);
+    QStringList lines = cursor.selection().toPlainText().split('\n');
+    for (auto &line : lines) line.prepend('#');
+    cursor.beginEditBlock();
+    cursor.insertText(lines.join('\n'));
+    cursor.endEditBlock();
     setTextCursor(cursor);
 }
 
 void CodeEditor::uncommentSelection()
 {
     auto cursor = textCursor();
-    auto text   = cursor.selection().toPlainText();
-    auto lines  = text.split('\n');
-    QString newtext;
-    for (const auto &line : lines) {
-        QString newline;
-        bool start = true;
-        for (auto letter : line) {
-            if (start && (letter == '#')) {
-                start = false;
-                continue;
-            }
-            if (start && !letter.isSpace()) start = false;
-            newline.append(letter);
-        }
-        newtext.append(newline);
-        newtext.append('\n');
-    }
-    cursor.insertText(newtext);
+    selectWholeLines(cursor);
+    QStringList lines = cursor.selection().toPlainText().split('\n');
+    for (auto &line : lines) line = uncommented(line);
+    cursor.beginEditBlock();
+    cursor.insertText(lines.join('\n'));
+    cursor.endEditBlock();
     setTextCursor(cursor);
 }
 
@@ -1025,22 +1045,15 @@ void CodeEditor::uncommentLine()
 {
     auto cursor = textCursor();
     auto text   = cursor.block().text();
-    QString newtext;
-    bool start = true;
-    for (auto letter : text) {
-        if (start && (letter == '#')) {
-            start = false;
-            continue;
-        }
-        if (start && !letter.isSpace()) start = false;
-        newtext.append(letter);
-    }
+    const QString newtext = uncommented(text);
 
     // perform edit but only if text has changed
     if (QString::compare(text, newtext)) {
+        // the whole block: StartOfLine/EndOfLine are the *visual* line, so on a
+        // wrapped command only one segment was replaced by the whole command
         cursor.beginEditBlock();
-        cursor.movePosition(QTextCursor::StartOfLine);
-        cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor, 1);
+        cursor.movePosition(QTextCursor::StartOfBlock);
+        cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
         cursor.insertText(newtext);
         cursor.endEditBlock();
     }

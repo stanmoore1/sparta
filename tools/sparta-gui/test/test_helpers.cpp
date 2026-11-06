@@ -167,17 +167,18 @@ TEST_F(HelpersTest, SplitLineMixedQuotes)
 
 TEST_F(HelpersTest, SplitLineTripleQuotes)
 {
-    // Triple quotes handling: """ is a special marker in SPARTA
-    // The implementation shows that """ at start triggers special parsing
-    // but the exact behavior can be complex. We'll test that it at least
-    // parses without crashing and returns some tokens.
-    QString input = "word1 \"\"\"triple quoted text\"\"\" word2";
-    auto result   = splitLine(input);
-    // Just verify basic parsing works - we got some results
-    EXPECT_GT(result.size(), 0);
-    EXPECT_EQ(result[0], "word1");
-    // The triple quote handling may parse this in various ways,
-    // so we just ensure it doesn't crash and produces output
+    // A """...""" block is one word, spaces and all. This test used to accept
+    // any output at all, which is how Tab turning `print """hello world"""`
+    // into `print """hello orl` went unnoticed.
+    EXPECT_EQ(splitLine("word1 \"\"\"triple quoted text\"\"\" word2"),
+              (QStringList{"word1", "\"\"\"triple quoted text\"\"\"", "word2"}));
+    EXPECT_EQ(splitLine("print \"\"\"hello\"\"\""),
+              (QStringList{"print", "\"\"\"hello\"\"\""}));
+    EXPECT_EQ(splitLine("variable s string \"\"\"hello world\"\"\" next"),
+              (QStringList{"variable", "s", "string", "\"\"\"hello world\"\"\"", "next"}));
+    // an unterminated block runs to the end of the line rather than past it
+    EXPECT_EQ(splitLine("print \"\"\"open ended"),
+              (QStringList{"print", "\"\"\"open ended"}));
 }
 
 TEST_F(HelpersTest, SplitLineMultipleSpaces)

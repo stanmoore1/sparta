@@ -22,6 +22,7 @@
 #include "constants.h"
 
 #include <gtest/gtest.h>
+#include <QTextLayout>
 
 #include <QAbstractItemModel>
 #include <QApplication>
@@ -277,6 +278,46 @@ TEST_F(Editor, CommentsAndUncommentsASelection)
     EXPECT_EQ(lines.at(0), "units cgs");
     EXPECT_EQ(lines.at(1), "dimension 2");
     EXPECT_EQ(lines.at(2), "run 100");
+}
+
+// A selection that ended in the middle of a line split that line: the tail
+// became a new, uncommented command. And each round trip added a line.
+TEST_F(Editor, CommentingAPartialSelectionCommentsWholeLinesAndAddsNone)
+{
+    const QString deck = "run 1000\nwrite_restart restart.dat\nrun 10\n";
+    setText(deck);
+    QTextCursor c(ed->document()->findBlockByNumber(0));
+    c.setPosition(ed->document()->findBlockByNumber(1).position() + 6, QTextCursor::KeepAnchor);
+    ed->setTextCursor(c); // "run 1000\nwrite_" selected
+
+    QMetaObject::invokeMethod(ed, "commentSelection");
+    EXPECT_EQ(ed->toPlainText().toStdString(),
+              "#run 1000\n#write_restart restart.dat\nrun 10\n");
+
+    selectLines(0, 1);
+    QMetaObject::invokeMethod(ed, "uncommentSelection");
+    EXPECT_EQ(ed->toPlainText().toStdString(), deck.toStdString())
+        << "a comment/uncomment round trip changed the deck";
+}
+
+// On a long command wrapped onto two visual lines, Tab replaced only the second
+// visual line with the whole reformatted command, duplicating its arguments.
+TEST_F(Editor, ReformattingAWrappedLineReplacesTheWholeLine)
+{
+    ed->resize(220, 300);
+    ed->show();
+    QApplication::processEvents();
+    setText("dump 2 image all 100 img.*.ppm type type pdiam 0.02 size 1024 1024 zoom 1.75 gline yes 0.005\n");
+    QTextCursor c(ed->document()->findBlockByNumber(0));
+    c.movePosition(QTextCursor::EndOfBlock);
+    ed->setTextCursor(c);
+    ASSERT_GT(ed->document()->findBlockByNumber(0).layout()->lineCount(), 1)
+        << "the editor is too wide for this line to wrap";
+
+    QMetaObject::invokeMethod(ed, "reformatCurrentLine");
+    const QString line = ed->document()->findBlockByNumber(0).text();
+    EXPECT_EQ(line.count("gline"), 1) << "the command was duplicated: " << line.toStdString();
+    EXPECT_TRUE(line.startsWith("dump")) << line.toStdString();
 }
 
 TEST_F(Editor, UncommentingAMixedSelectionOnlyTouchesTheCommentedLines)
