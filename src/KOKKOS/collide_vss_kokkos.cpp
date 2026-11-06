@@ -798,7 +798,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     // form the product in double and check it before it becomes an int,
@@ -1230,7 +1230,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     // form the product in double and check it before it becomes an int,
@@ -1974,7 +1974,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
 
   if (react) {
     double extra_factor = 1.0;
-    if (sparta->kokkos->react_retry_flag)
+    if (!sparta->kokkos->react_retry_flag)
       extra_factor = sparta->kokkos->react_extra;
 
     if (maxdelete*extra_factor > MAXSMALLINT)
@@ -2479,7 +2479,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   //   sizing for reaction-created particles and deletions is react-specific
 
   double extra_factor = 1.0;
-  if (react && sparta->kokkos->react_retry_flag)
+  if (react && !sparta->kokkos->react_retry_flag)
     extra_factor = sparta->kokkos->react_extra;
 
   maxcellcount = particle_kk->get_maxcellcount();
@@ -3154,7 +3154,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   // sizing for reaction-created particles/deletions is react-specific.
 
   double extra_factor = 1.0;
-  if (react && sparta->kokkos->react_retry_flag)
+  if (react && !sparta->kokkos->react_retry_flag)
     extra_factor = sparta->kokkos->react_extra;
 
   maxcellcount = particle_kk->get_maxcellcount();
