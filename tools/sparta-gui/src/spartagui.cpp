@@ -2176,7 +2176,10 @@ void SpartaGui::updateSlideShow()
     sparta.lastThermo("lock", 0);
     const QString imagefile = sparta.lastThermoString("imagename", 0);
     sparta.lastThermo("unlock", 0);
-    if (imagefile.isEmpty()) return;
+    // The cache keeps the last frame's name for the rest of the run, and this
+    // runs every log tick; only a new frame is news.
+    if (imagefile.isEmpty() || imagefile == lastSlideImage) return;
+    lastSlideImage = imagefile;
 
     ensureViewerPanel();
     if (!viewer->sequence())
@@ -2186,12 +2189,14 @@ void SpartaGui::updateSlideShow()
 
     // Same again: frames pile up in the sequence either way, but the panel only
     // comes forward in a workspace that shows pictures.
-    if (QSettings().value(Keys::VIEWSLIDE, true).toBool() &&
-        PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer)) {
-        panels->openPanel(PanelManager::Viewer);
-        // frames arriving on their own must not take the view away from
-        // whatever the user chose to look at during the run
+    if (QSettings().value(Keys::VIEWSLIDE, true).toBool()) {
+        // The tab comes forward even while the panel is hidden, so entering
+        // Visualize after a run in the Run workspace shows the frames rather
+        // than an empty Snapshot card. Frames arriving on their own still must
+        // not take the view away from a tab the user chose during the run.
         viewer->showSource(ViewerPanel::Sequence);
+        if (PanelManager::modeShows(panels->currentMode(), PanelManager::Viewer))
+            panels->openPanel(PanelManager::Viewer);
     }
 }
 
@@ -2541,8 +2546,10 @@ void SpartaGui::doRun(bool use_buffer)
         launchRunner({}, currentFile.toStdString(), true);
     }
 
+    // a new run starts with no tab chosen, so its first frames can come forward
+    if (viewer) viewer->unlockSource();
+    lastSlideImage.clear();
     if (viewer && viewer->sequence()) {
-        viewer->unlockSource();
         viewer->sequence()->clear();
         panels->closePanel(PanelManager::Viewer);
     }
@@ -3496,8 +3503,10 @@ void SpartaGui::renderImage(bool quiet)
         return;
     }
     panels->openPanel(PanelManager::Viewer);
-    // an explicit Create Image is a request to look at the render
-    viewer->showSource(ViewerPanel::Snapshot, true);
+    // an explicit Create Image is a request to look at the render; the quiet
+    // one the panel does for itself on opening is not a choice, and must not
+    // stop a run's frames from coming forward later
+    viewer->showSource(ViewerPanel::Snapshot, !quiet);
 }
 
 #if defined(SPARTA_GUI_HAVE_VTK)

@@ -31,6 +31,7 @@
 #include "constants.h"
 #include "logwindow.h"
 #include "runhistory.h"
+#include "viewerpanel.h"
 
 #include <gtest/gtest.h>
 
@@ -375,6 +376,32 @@ TEST_F(Run, RunningTheBufferFinishesAndSaysItSucceeded)
     setBuffer(QString::fromLatin1(kDeck));
     EXPECT_TRUE(runBuffer()) << "the run reported failure: " << modals.seen.join(" | ").toStdString();
     EXPECT_EQ(modals.count, 0) << "the run put up a dialog: " << modals.seen.join(" | ").toStdString();
+}
+
+// With all three viewer tabs present from the start, frames from a run in the
+// Run workspace (where the viewer is not shown) never brought their tab
+// forward, so Visualize opened on the empty Snapshot card with the frames one
+// click away.
+TEST_F(Run, VisualizeAfterARunShowsTheFramesItWrote)
+{
+    Modals modals;
+    QString deck = QString::fromLatin1(kDeck);
+    deck.replace("run             5", "dump            1 image all 1 frame.*.ppm type type\n"
+                                      "run             5");
+    setBuffer(deck);
+    if (QAction *a = action("&Run Workspace")) a->trigger();
+    ASSERT_TRUE(runBuffer()) << modals.seen.join(" | ").toStdString();
+
+    QAction *visualize = action("&Visualize Workspace");
+    ASSERT_NE(visualize, nullptr);
+    visualize->trigger();
+    QCoreApplication::processEvents();
+
+    auto *viewer = gui->findChild<ViewerPanel *>();
+    ASSERT_NE(viewer, nullptr) << "the run wrote frames but no viewer exists";
+    ASSERT_NE(viewer->sequence(), nullptr) << "the frames never reached a slide show";
+    EXPECT_EQ(viewer->currentSource(), ViewerPanel::Sequence)
+        << "Visualize opened on another tab while the run's frames sat in Sequence";
 }
 
 TEST_F(Run, TheRunPutsItsOutputInTheLogWindow)

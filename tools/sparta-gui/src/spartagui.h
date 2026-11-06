@@ -639,6 +639,7 @@ private:
     PanelManager *panels;     ///< Docked-panel layout manager (Output/Charts/Image/Slide/Variables)
     LogWindow *logwindow;     ///< Window displaying SPARTA output log
     ViewerPanel *viewer;      ///< The one panel showing snapshots, frames and 3D
+    QString lastSlideImage; ///< last dump-image frame handed to the slide show this run
     int keptRenderSeq = 0;    ///< numbers the renders kept when replace-on-render is off
 #if defined(SPARTA_GUI_HAVE_VTK)
     SceneWindow *sceneWindow = nullptr; ///< Interactive 3D scene window (lazy)
