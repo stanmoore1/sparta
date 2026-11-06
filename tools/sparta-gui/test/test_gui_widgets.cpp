@@ -71,6 +71,7 @@
 
 #include "DockWidget.h"
 #include "DockAreaWidget.h"
+#include "DockManager.h"
 
 #include "aboutdialog.h"
 #include "dockpanels.h"
@@ -804,6 +805,36 @@ TEST(WorkspaceModes, ThePlaceholderIsNeverArchivedAsAKeptRun)
     panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "run 2", /*keepOld=*/true);
     EXPECT_EQ(area->dockWidgetsCount(), pristine + 1)
         << "displacing a real run's panel with keepOld did not archive it";
+}
+
+// clearRunPanels() deleted archived docks with a plain delete. Qt-ADS does not
+// unregister a dock in its destructor, so the manager kept a dangling pointer
+// and the next tab update or layout save read freed memory.
+TEST(WorkspaceModes, ClearingRunPanelsUnregistersTheArchivedRuns)
+{
+    QMainWindow window;
+    CodeEditor editor(nullptr);
+    PanelManager panels(&window, &editor);
+    auto *dm   = window.findChild<ads::CDockManager *>();
+    ASSERT_NE(dm, nullptr);
+    auto *area = panels.dock(PanelManager::Log)->dockAreaWidget();
+    const int pristine = area->dockWidgetsCount();
+
+    panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "run 1", /*keepOld=*/true);
+    panels.setPanelWidget(PanelManager::Log, new QPlainTextEdit, "run 2", /*keepOld=*/true);
+    ASSERT_EQ(area->dockWidgetsCount(), pristine + 1);
+    const int registered = dm->dockWidgetsMap().size();
+
+    panels.clearRunPanels();
+    EXPECT_EQ(dm->dockWidgetsMap().size(), registered - 1)
+        << "the archived run is still registered with the dock manager after being deleted";
+    for (auto *d : dm->dockWidgetsMap())
+        EXPECT_FALSE(d->objectName().contains("Archived")) << "a deleted archive is still listed";
+
+    // what used to touch the freed dock
+    panels.openPanel(PanelManager::Log);
+    QApplication::processEvents();
+    EXPECT_FALSE(dm->saveState().isEmpty());
 }
 
 // With more than two panels open the old splits starved every view of space;

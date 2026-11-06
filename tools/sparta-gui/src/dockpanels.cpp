@@ -231,8 +231,15 @@ void PanelManager::clearRunPanels()
         docks[i]->setWidget(makePlaceholder(Panel(i)), insertModeFor(Panel(i)));
         docks[i]->toggleView(false);
     }
-    for (const auto &a : std::as_const(archived))
+    // Through the dock manager, not a plain delete: ~CDockWidget does not
+    // unregister itself, so the manager would keep a dangling pointer and the
+    // area an orphaned tab, and the next layout save or tab update reads freed
+    // memory. removeDockWidget() detaches it first.
+    for (const auto &a : std::as_const(archived)) {
+        if (!a) continue;
+        dm->removeDockWidget(a);
         delete a;
+    }
     archived.clear();
 }
 
