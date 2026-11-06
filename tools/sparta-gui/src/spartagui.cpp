@@ -1174,22 +1174,8 @@ SpartaGui::~SpartaGui()
 
 void SpartaGui::newDocument()
 {
-    // prompt to save unsaved changes before discarding the buffer, matching
-    // the behavior of Open and Run (which already guard this)
-    if (textEdit->document()->isModified()) {
-        int rv = showUnsavedChangesDialog(
-            this, currentFile, "Do you want to save the file before starting a new one?");
-        switch (rv) {
-            case QMessageBox::Yes:
-                save();
-                break;
-            case QMessageBox::Cancel:
-                return;
-            case QMessageBox::No: // fallthrough
-            default:
-                break;
-        }
-    }
+    // prompt to save unsaved changes before discarding the buffer
+    if (!confirmDiscard("Do you want to save the file before starting a new one?")) return;
 
     currentFile.clear();
     textEdit->document()->setPlainText(citeme);
@@ -1516,6 +1502,10 @@ void SpartaGui::openFile(const QString &fileName)
     // do nothing, if no file name provided
     if (fileName.isEmpty()) return;
 
+    // Ask first. Everything below stops the run, deletes its panels and closes
+    // the instance, which a Cancel here must leave untouched.
+    if (!confirmDiscard("Do you want to save the file before opening a new file?")) return;
+
     stopAndReapRunner();
     // close windows.  clearRunPanels() deletes *every* docked panel widget, so
     // every raw pointer we keep to one must be cleared here or it dangles (and
@@ -1530,21 +1520,6 @@ void SpartaGui::openFile(const QString &fileName)
 
     purgeInspectList();
     textEdit->setStyleSheet("");
-    if (textEdit->document()->isModified()) {
-        int rv = showUnsavedChangesDialog(
-            this, currentFile, "Do you want to save the file before opening a new file?");
-        switch (rv) {
-            case QMessageBox::Yes:
-                save();
-                break;
-            case QMessageBox::Cancel:
-                return;
-            case QMessageBox::No: // fallthrough
-            default:
-                // do nothing
-                break;
-        }
-    }
     textEdit->setHighlight(CodeEditor::NO_HIGHLIGHT, false);
 
     QFileInfo path(fileName);
@@ -1788,10 +1763,10 @@ void SpartaGui::inspectFile(const QString &fileName)
 
 // write file and update CWD to its folder
 
-void SpartaGui::writeFile(const QString &fileName)
+bool SpartaGui::writeFile(const QString &fileName)
 {
     // empty name means the save dialog was cancelled: nothing to save to
-    if (fileName.isEmpty()) return;
+    if (fileName.isEmpty()) return false;
 
     QFileInfo path(fileName);
     QFile file(path.absoluteFilePath());
@@ -1799,7 +1774,7 @@ void SpartaGui::writeFile(const QString &fileName)
     if (!file.open(QIODevice::WriteOnly | QFile::Text)) {
         warning(this, "SPARTA-GUI Warning", "Cannot save to file " + fileName + ":",
                 file.errorString());
-        return;
+        return false;
     }
     // update the session state only after the file was opened successfully
     currentFile = path.fileName();
@@ -1820,16 +1795,36 @@ void SpartaGui::writeFile(const QString &fileName)
     textEdit->document()->setModified(false);
     // the buffer now matches the file on disk; no recovery copy needed
     clearRecoveryFile();
+    return true;
 }
 
-void SpartaGui::save()
+bool SpartaGui::save()
 {
     purgeInspectList();
     QString fileName = currentFile;
     // If we don't have a filename from before, get one.
     if (fileName.isEmpty()) fileName = QFileDialog::getSaveFileName(this, "Save");
+    // a bare name is relative to the deck's directory, not to wherever the
+    // process happens to be
+    else if (!currentDir.isEmpty())
+        fileName = QDir(currentDir).absoluteFilePath(fileName);
 
-    writeFile(fileName);
+    return writeFile(fileName);
+}
+
+bool SpartaGui::confirmDiscard(const QString &question)
+{
+    if (!textEdit->document()->isModified()) return true;
+    switch (showUnsavedChangesDialog(this, currentFile, question)) {
+        case QMessageBox::Yes:
+            // a cancelled Save dialog or a failed write is not a save
+            return save();
+        case QMessageBox::Cancel:
+            return false;
+        case QMessageBox::No: // fallthrough
+        default:
+            return true;
+    }
 }
 
 void SpartaGui::saveAs()
@@ -1840,24 +1835,11 @@ void SpartaGui::saveAs()
 
 void SpartaGui::quit()
 {
-    stopAndReapRunner();
-
     autoSave();
-    if (textEdit->document()->isModified()) {
-        int rv = showUnsavedChangesDialog(this, currentFile,
-                                          "Do you want to save the file before exiting?");
-        switch (rv) {
-            case QMessageBox::Yes:
-                save();
-                break;
-            case QMessageBox::Cancel:
-                return;
-            case QMessageBox::No: // fallthrough
-            default:
-                // do nothing
-                break;
-        }
-    }
+    // ask before stopping anything: Cancel must leave a running simulation be
+    if (!confirmDiscard("Do you want to save the file before exiting?")) return;
+
+    stopAndReapRunner();
 
     // store some global settings
     QSettings settings;
@@ -2493,7 +2475,8 @@ void SpartaGui::doRun(bool use_buffer)
                                           "Do you want to save the buffer before running SPARTA?");
         switch (rv) {
             case QMessageBox::Yes:
-                save();
+                // running the file is the point; an unsaved one would run stale
+                if (!save()) return;
                 break;
             case QMessageBox::No:
                 break;
@@ -2800,6 +2783,9 @@ bool SpartaGui::maybeRecoverSession()
     if (!realPath.isEmpty()) {
         currentFile = QFileInfo(realPath).fileName();
         currentDir = QFileInfo(realPath).absolutePath();
+        // as openFile() does: relative paths in the deck, Run from File and a
+        // bare-name save all resolve against the process directory
+        QDir::setCurrent(currentDir);
         // and say so: with currentFile set, Save writes straight to that file,
         // so a title still reading *unknown* would have the user believe the
         // buffer is nameless right up to the point it overwrites their deck
@@ -3031,8 +3017,12 @@ void SpartaGui::ensureProjectFilesPanel()
     projectFilesList->setToolTip("Files in the working directory; bold entries are referenced "
                                  "by the current deck. Double-click to open.");
     connect(projectFilesList, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
-        if (item && !item->data(Qt::UserRole).toString().isEmpty())
-            openFile(item->data(Qt::UserRole).toString());
+        // Queued: opening a file deletes every panel page, this list included,
+        // and it is still inside its own activation signal right now.
+        const QString path = item ? item->data(Qt::UserRole).toString() : QString();
+        if (!path.isEmpty())
+            QMetaObject::invokeMethod(
+                this, [this, path]() { openFile(path); }, Qt::QueuedConnection);
     });
     // Qt-ADS hides the tab of a dock that is alone in its area, and this is the
     // only panel with an area to itself: it came up as a title bar of buttons

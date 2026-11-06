@@ -138,7 +138,14 @@ protected:
     void inspectFile(const QString &filename);
 
     /** @brief Write current editor content to a file */
-    void writeFile(const QString &filename);
+    bool writeFile(const QString &filename);
+
+    /**
+     * @brief Ask whether unsaved edits may go, saving them if asked to
+     * @return true to go ahead; false for Cancel, a cancelled Save dialog or a
+     *         failed write, all of which must leave everything as it was
+     */
+    bool confirmDiscard(const QString &question);
 
     /** @brief Update the recent files list */
     void updateRecents(const QString &filename = "");
@@ -271,7 +278,7 @@ private slots:
     void openExamplePath(const QString &srcfile);
 
     /** @brief Save the current file */
-    void save();
+    bool save();
 
     /** @brief Save the current file with a new name */
     void saveAs();

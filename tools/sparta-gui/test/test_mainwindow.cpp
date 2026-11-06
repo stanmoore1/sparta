@@ -61,6 +61,7 @@
 #include "preferences.h"
 #include "slideshow.h"
 #include "spartagui.h"
+#include "viewerpanel.h"
 
 using ads::CDockWidget;
 
@@ -533,9 +534,12 @@ TEST_F(MainWindow, TheViewerMenuEntriesEachBringUpTheirPage)
         EXPECT_FALSE(d->isClosed()) << entry << " left the viewer panel closed";
     }
 
-    // and the frame view is really there, not merely asked for
-    EXPECT_NE(gui->findChild<SlideShow *>(), nullptr)
-        << "Slide Show in Viewer did not build a frame view";
+    // and its page is the one in front: with no frames yet that is the card
+    // saying how to get some, rather than an empty frame view
+    auto *viewer = gui->findChild<ViewerPanel *>();
+    ASSERT_NE(viewer, nullptr);
+    EXPECT_EQ(viewer->currentSource(), ViewerPanel::Sequence)
+        << "Slide Show in Viewer did not bring its page forward";
 }
 
 // ---------------------------------------------------------------- behaviour

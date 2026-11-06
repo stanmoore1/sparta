@@ -404,6 +404,43 @@ TEST_F(Run, VisualizeAfterARunShowsTheFramesItWrote)
         << "Visualize opened on another tab while the run's frames sat in Sequence";
 }
 
+// Open stopped the run, deleted its panels and closed the instance before it
+// asked about unsaved edits, so Cancel there came too late to keep anything.
+TEST_F(Run, CancellingOpenAtTheSavePromptKeepsTheRunsState)
+{
+    Modals modals;
+    setBuffer(QString::fromLatin1(kDeck));
+    ASSERT_TRUE(runBuffer());
+    ASSERT_TRUE(gui->hasSystemState());
+    editor()->appendPlainText("# an edit");
+    ASSERT_TRUE(editor()->document()->isModified());
+    const QString text = editor()->toPlainText();
+
+    modals.answer = QMessageBox::Cancel;
+    gui->openFile(writeFile("in.other", "seed 1\n"));
+
+    EXPECT_TRUE(modals.said("save")) << "no unsaved-changes prompt was shown";
+    EXPECT_TRUE(gui->hasSystemState()) << "Cancel at the prompt still closed the instance";
+    EXPECT_NE(gui->findChild<LogWindow *>(), nullptr) << "Cancel still deleted the run's Output";
+    EXPECT_EQ(editor()->toPlainText(), text) << "Cancel still replaced the buffer";
+}
+
+// Answering Yes and then cancelling the Save dialog saved nothing, but the
+// open went ahead and the edits were gone.
+TEST_F(Run, YesThenACancelledSaveDialogDoesNotDiscardTheEdits)
+{
+    Modals modals;
+    setBuffer("seed 1\n");
+    editor()->appendPlainText("# unsaved, never named");
+    ASSERT_TRUE(editor()->document()->isModified());
+    const QString text = editor()->toPlainText();
+
+    modals.answer = QMessageBox::Yes; // the file dialog that follows is rejected
+    gui->openFile(writeFile("in.other", "seed 2\n"));
+
+    EXPECT_EQ(editor()->toPlainText(), text) << "the edits were replaced although nothing was saved";
+}
+
 TEST_F(Run, TheRunPutsItsOutputInTheLogWindow)
 {
     Modals modals;
