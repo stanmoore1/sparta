@@ -438,15 +438,17 @@ NOTE: When using a single OpenMP thread, the Kokkos Serial backend will give bet
 backend because some of the overhead to make 
 the code thread-safe is removed.
 
-NOTE: The default for the "package kokkos"_package.html command is to
-use "threaded" communication. However, when running on CPUs, it will
-typically be faster to use "classic" non-threaded communication.  Use
-the "-pk kokkos" "command-line switch"_Section_start.html#start_7 to
-change the default "package kokkos"_package.html options. See its doc
-page for details and default settings. Experimenting with its options
-can provide a speed-up for specific calculations. For example:
+NOTE: The "package kokkos"_package.html command uses "threaded"
+communication (pack/unpack with Kokkos) on GPUs, and "serial"
+communication (pack/unpack on the host) on CPUs, which is typically
+faster there. On CPUs, a mixed or single precision build uses
+"threaded" communication instead (see the Precision section below).
+Use the "-pk kokkos" "command-line switch"_Section_start.html#start_7
+to change the default "package kokkos"_package.html options. See its
+doc page for details and default settings. Experimenting with its
+options can provide a speed-up for specific calculations. For example:
 
-mpirun -np 16 spa_kokkos_mpi_only -k on -sf kk -pk kokkos comm classic -in in.collide       # non-threaded comm :pre
+mpirun -np 16 spa_kokkos_mpi_only -k on -sf kk -pk kokkos comm threaded -in in.collide       # threaded comm :pre
 
 For OpenMP, the KOKKOS package uses data duplication (i.e. 
 thread-private arrays) by default to avoid thread-level write conflicts 
@@ -720,7 +722,82 @@ when developing a Kokkos-enabled style within SPARTA. This option enables printi
 information that can be useful and also enables runtime bounds
 checking on Kokkos data structures, but may slow down performance.
 
+[Precision:]
+
+By default the KOKKOS package is built in double precision. The CMake
+option KOKKOS_PREC selects its precision:
+
+-D KOKKOS_PREC=double  # double precision for all calculations (default)
+-D KOKKOS_PREC=mixed   # single precision for most calculations
+-D KOKKOS_PREC=single  # single precision also for positions :pre
+
+The two reduced precision modes differ in which quantities are stored
+and computed in single precision:
+
+KOKKOS_PREC=mixed: particle velocities, rotational and vibrational
+energies, and the arithmetic of collisions, reactions and surface
+collisions are single precision. Particle positions, the remaining
+timestep of a particle, and grid cell and surface element coordinates
+stay double precision, so the particle move and the detection of
+surface collisions are done in double precision. :ulb,l
+KOKKOS_PREC=single: positions and geometry are single precision
+too. :l
+In both modes, per-grid-cell and per-surface tallies, global sums
+(e.g. temperature), and particle masses stay double precision: SPARTA
+uses SI units, in which statistics computed from mass weighted sums
+(e.g. a thermal temperature) underflow single precision. Random
+numbers are generated in double precision. All data seen by non-KOKKOS
+styles, output files, and restart files are double precision, so a
+restart file written with one precision can be read with any
+other. :ule
+
+The precision a SPARTA executable was built with is printed at startup
+and in the log file (e.g. "using mixed precision"), and by the "-h
+command-line switch"_Section_start.html#start_7 (e.g. "KOKKOS package
+precision: mixed").
+
+Reduced precision can give large speedups on GPUs whose double
+precision throughput is much lower than their single precision
+throughput, and it reduces the memory used per particle. Mixed
+precision is recommended over single precision, which limits how far
+the simulation box can be from the origin (see the restrictions
+below).
+
+As with any change in round-off, a reduced precision run diverges from
+a double precision run after a few timesteps. Results should therefore
+be compared statistically (e.g. time averaged temperature, collision
+rates, surface fluxes), and a reduced precision model should be
+validated against a double precision run before it is used for
+production. Collisions conserve total mass exactly, and total momentum
+and energy to single precision round-off: in a closed box the relative
+change over 1000 timesteps is about 1e-8, compared to about 1e-14 in
+double precision.
+
+In a reduced precision build, data shared with non-KOKKOS styles is
+converted between double and single precision each time it moves
+between the host and the device, so styles that run on the host every
+timestep (non-KOKKOS fixes or computes, frequent dumps) cost more than
+in a double precision build, which has no such overhead. For the same
+reason the "package kokkos"_package.html comm setting defaults to
+threaded on CPUs in a reduced precision build.
+
+The precision of the KOKKOS FFTs used by "compute fft/grid"_compute_fft_grid.html
+is selected separately, with -D FFT_SINGLE=ON.
+
+The tools/kokkos_prec directory contains the scripts used to convert
+the KOKKOS package to precision-generic code, a checker for new KOKKOS
+code, and precision tests; see tools/kokkos_prec/README.md.
+
 [Restrictions:]
 
-Currently, there are no precision options with the KOKKOS package. All
-compilation and computation is performed in double precision.
+KOKKOS_PREC=mixed or single cannot be combined with
+SPARTA_KOKKOS_EXACT=ON.
+
+With KOKKOS_PREC=single, particle positions resolve about 1e-7 of
+their magnitude, so coordinates must stay small compared to the cell
+and surface element sizes divided by 1e-7. For example, with 0.5 m
+cells around a circle (examples/circle), a box offset 1000 m from the
+origin still gives the double precision results, while at 10000 m
+particles leak through the surface and the run stops with an
+error. Place the box near the origin, or use KOKKOS_PREC=mixed, which
+keeps positions in double precision.

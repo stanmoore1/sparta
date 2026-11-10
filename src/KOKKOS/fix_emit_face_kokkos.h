@@ -90,36 +90,36 @@ class FixEmitFaceKokkos : public FixEmitFace {
   tdual_task_1d k_tasks;
   t_task_1d d_tasks;
 
-  DAT::tdual_float_2d_lr k_ntargetsp;          // # of mols to insert for each species
-  DAT::tdual_float_2d_lr k_vscale;             // vscale for each species
-  DAT::t_float_2d_lr d_ntargetsp;
-  DAT::t_float_2d_lr d_vscale;
+  DAT::ttransform_kkacc_2d_lr k_ntargetsp;          // # of mols to insert for each species
+  DAT::ttransform_kkacc_2d_lr k_vscale;             // vscale for each species
+  DAT::t_kkacc_2d_lr d_ntargetsp;
+  DAT::t_kkacc_2d_lr d_vscale;
 
   DAT::tdual_int_1d k_ninsert;
   Kokkos::View<int*, DeviceType> d_ninsert;
   DAT::t_int_1d d_task2cand;
 
-  DAT::t_float_2d d_x;
-  DAT::t_float_1d d_beta_un;
-  DAT::t_float_1d d_theta;
-  DAT::t_float_1d d_vr;
-  DAT::t_float_1d d_erot;
-  DAT::t_float_1d d_evib;
-  DAT::t_float_1d d_dtremain;
+  DAT::t_kkpos_2d d_x;
+  DAT::t_kkfloat_1d d_beta_un;
+  DAT::t_kkfloat_1d d_theta;
+  DAT::t_kkfloat_1d d_vr;
+  DAT::t_kkfloat_1d d_erot;
+  DAT::t_kkfloat_1d d_evib;
+  DAT::t_kkpos_1d d_dtremain;
   DAT::t_int_1d   d_id;
   DAT::t_int_1d   d_isp;
   DAT::t_int_1d   d_task;
   Kokkos::View<int*, DeviceType> d_keep; // won't compile with DAT::t_int_1d type
 
-  DAT::tdual_float_1d k_mix_vscale;
-  DAT::tdual_float_1d k_cummulative;
+  DAT::ttransform_kkfloat_1d k_mix_vscale;
+  DAT::ttransform_kkfloat_1d k_cummulative;
   DAT::tdual_int_1d k_mspecies;          // species indices of mixture
-  DAT::tdual_float_1d k_fraction;        // mixture fraction for each species
+  DAT::ttransform_kkfloat_1d k_fraction;        // mixture fraction for each species
 
-  DAT::t_float_1d d_mix_vscale;
-  DAT::t_float_1d d_cummulative;
+  DAT::t_kkfloat_1d d_mix_vscale;
+  DAT::t_kkfloat_1d d_cummulative;
   DAT::t_int_1d d_mspecies;
-  DAT::t_float_1d d_fraction;
+  DAT::t_kkfloat_1d d_fraction;
 
   // data structs for subsonic emission
 
@@ -128,7 +128,7 @@ class FixEmitFaceKokkos : public FixEmitFace {
   t_cinfo_1d d_cinfo;
   DAT::t_int_2d d_plist;
   DAT::t_int_1d d_cellcount;
-  DAT::t_float_scalar d_tempmax;
+  DAT::t_kkfloat_scalar d_tempmax;
   int plist_descending;   // 1 if the host walks d_plist high index -> low
 
   void create_tasks() override;

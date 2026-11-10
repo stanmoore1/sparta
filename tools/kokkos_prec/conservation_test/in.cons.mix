@@ -1,0 +1,29 @@
+# conservation of momentum and energy in a periodic box: N/N2 mixture,
+#   mass ratio 1:2, no chemistry
+seed                12345
+dimension           3
+boundary            p p p
+create_box          0 0.0001 0 0.0001 0 0.0001
+create_grid         10 10 10
+species             air.species N2 N
+mixture             air N2 N vstream 800.0 300.0 -500.0 temp 20000.0
+mixture             air N2 frac 0.5
+mixture             air N frac 0.5
+global              nrho 7.07043E22
+global              fnum 1.5E6
+collide             vss air air.vss
+create_particles    air n 0 twopass
+
+variable            m particle mass
+variable            px particle mass*vx
+variable            py particle mass*vy
+variable            pz particle mass*vz
+compute             P reduce sum v_m v_px v_py v_pz
+compute             E reduce sum ke erot evib
+variable            etot equal c_E[1]+c_E[2]+c_E[3]
+
+stats_style         step np c_P[1] c_P[2] c_P[3] c_P[4] v_etot
+stats_modify        format float %22.16e
+stats               50
+timestep            7.00E-9
+run                 1000

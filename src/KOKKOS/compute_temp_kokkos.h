@@ -33,7 +33,7 @@ class ComputeTempKokkos : public ComputeTemp {
   double compute_scalar();
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(const int&, double&) const;
+  void operator()(const int&, double&) const;  // KK_DOUBLE: reduction value
 
  private:
   t_particle_1d d_particles;

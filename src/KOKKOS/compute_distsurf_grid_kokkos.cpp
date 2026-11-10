@@ -111,7 +111,7 @@ void ComputeDistSurfGridKokkos::compute_per_grid_kokkos()
   k_eflag.sync_device();
   k_slist.sync_device();
 
-  d_sctr = DAT::t_float_1d_3("compute/distsurf/grid:sctr",nsurf);
+  d_sctr = DAT::t_kkpos_1d_3("compute/distsurf/grid:sctr",nsurf);
 
   // pre-compute center point of each eligible surf
   copymode = 1;
@@ -137,7 +137,7 @@ void ComputeDistSurfGridKokkos::compute_per_grid_kokkos()
 
   memoryKK->destroy_kokkos(k_eflag);
   memoryKK->destroy_kokkos(k_slist);
-  d_sctr = DAT::t_float_1d_3();
+  d_sctr = DAT::t_kkpos_1d_3();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -146,15 +146,15 @@ KOKKOS_INLINE_FUNCTION
 void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_centroid, const int &i) const {
 
   // compute surf centroids
-  double invthird = 1.0/3.0;
-  double *p1,*p2,*p3;
+  KK_ACC_FLOAT invthird = static_cast<KK_ACC_FLOAT>(1.0)/static_cast<KK_ACC_FLOAT>(3.0);
+  KK_POS_FLOAT *p1,*p2,*p3;
 
   int m = d_slist[i];
   if (dim == 2) {
     p1 = d_lines[m].p1;
     p2 = d_lines[m].p2;
-    d_sctr(i,0) = 0.5 * (p1[0] + p2[0]);
-    d_sctr(i,1) = 0.5 * (p1[1] + p2[1]);
+    d_sctr(i,0) = static_cast<KK_POS_FLOAT>(0.5) * (p1[0] + p2[0]);
+    d_sctr(i,1) = static_cast<KK_POS_FLOAT>(0.5) * (p1[1] + p2[1]);
     d_sctr(i,2) = 0.0;
   } else {
     p1 = d_tris[m].p1;
@@ -171,9 +171,9 @@ void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_centroid,
 KOKKOS_INLINE_FUNCTION
 void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_distance, const int &icell) const {
   int i,m,n;
-  double dist,mindist;
-  double *lo,*hi;
-  double cctr[3],cell2surf[3];
+  KK_ACC_FLOAT dist,mindist;
+  KK_POS_FLOAT *lo,*hi;
+  KK_POS_FLOAT cctr[3]; KK_ACC_FLOAT cell2surf[3];
 
   if (!(d_cinfo[icell].mask & groupbit)) return;
   if (d_cells[icell].nsplit < 1) return;
@@ -206,9 +206,9 @@ void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_distance,
 
   lo = d_cells[icell].lo;
   hi = d_cells[icell].hi;
-  cctr[0] = 0.5 * (lo[0]+hi[0]);
-  cctr[1] = 0.5 * (lo[1]+hi[1]);
-  if (dim == 3) cctr[2] = 0.5 * (lo[2]+hi[2]);
+  cctr[0] = static_cast<KK_POS_FLOAT>(0.5) * (lo[0]+hi[0]);
+  cctr[1] = static_cast<KK_POS_FLOAT>(0.5) * (lo[1]+hi[1]);
+  if (dim == 3) cctr[2] = static_cast<KK_POS_FLOAT>(0.5) * (lo[2]+hi[2]);
   else cctr[2] = 0.0;
 
   mindist = BIG;
@@ -220,10 +220,10 @@ void ComputeDistSurfGridKokkos::operator()(TagComputeDistSurfGrid_surf_distance,
     cell2surf[2] = d_sctr(i,2) - cctr[2];
 
     if (dim == 2) {
-      if (MathExtraKokkos::dot3(cell2surf,d_lines[m].norm) > 0.0) continue;
+      if (MathExtraKokkos::dot3(cell2surf,d_lines[m].norm) > static_cast<KK_POS_FLOAT>(0.0)) continue;
       dist = GeometryKokkos::dist_line_quad(d_lines[m].p1,d_lines[m].p2,lo,hi);
     } else {
-      if (MathExtraKokkos::dot3(cell2surf,d_tris[m].norm) > 0.0) continue;
+      if (MathExtraKokkos::dot3(cell2surf,d_tris[m].norm) > static_cast<KK_POS_FLOAT>(0.0)) continue;
       dist = GeometryKokkos::dist_tri_hex(d_tris[m].p1,d_tris[m].p2,d_tris[m].p3,
                                           d_tris[m].norm,lo,hi);
     }

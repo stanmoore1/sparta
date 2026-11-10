@@ -67,7 +67,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   void operator()(TagFixEmitSurf_subsonic_grid, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
-  void operator()(TagFixEmitSurf_mflow_grid, const int&, double&) const;
+  void operator()(TagFixEmitSurf_mflow_grid, const int&, double&) const;  // KK_DOUBLE: reduction value
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagFixEmitSurf_mflow_nrho, const int&) const;
@@ -122,25 +122,25 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   tdual_task_1d k_tasks;
   t_task_1d d_tasks;
 
-  DAT::tdual_float_2d_lr k_ntargetsp;          // # of mols to insert for each species
-  DAT::tdual_float_2d_lr k_vscale;             // vscale for each species
-  DAT::tdual_float_2d_lr k_path;               // path for each species
-  DAT::tdual_float_2d_lr k_fracarea;           // fracarea for each species
-  DAT::t_float_2d_lr d_ntargetsp;
-  DAT::t_float_2d_lr d_vscale;
-  DAT::t_float_2d_lr d_path;
-  DAT::t_float_2d_lr d_fracarea;
+  DAT::ttransform_kkacc_2d_lr k_ntargetsp;          // # of mols to insert for each species
+  DAT::ttransform_kkacc_2d_lr k_vscale;             // vscale for each species
+  DAT::ttransform_kkpos_2d_lr k_path;               // path for each species
+  DAT::ttransform_kkfloat_2d_lr k_fracarea;           // fracarea for each species
+  DAT::t_kkacc_2d_lr d_ntargetsp;
+  DAT::t_kkacc_2d_lr d_vscale;
+  DAT::t_kkpos_2d_lr d_path;
+  DAT::t_kkfloat_2d_lr d_fracarea;
 
   DAT::tdual_int_1d k_ninsert;
   Kokkos::View<int*, DeviceType> d_ninsert; // won't compile with DAT::t_int_1d type
   DAT::t_int_1d d_task2cand;
   DAT::t_int_1d d_cands2new;
 
-  DAT::t_float_2d d_x;
-  DAT::t_float_2d d_v;
-  DAT::t_float_1d d_erot;
-  DAT::t_float_1d d_evib;
-  DAT::t_float_1d d_dtremain;
+  DAT::t_kkpos_2d d_x;
+  DAT::t_kkfloat_2d d_v;
+  DAT::t_kkfloat_1d d_erot;
+  DAT::t_kkfloat_1d d_evib;
+  DAT::t_kkpos_1d d_dtremain;
   DAT::t_int_1d   d_id;
   DAT::t_int_1d   d_isp;
   DAT::t_int_1d   d_task;
@@ -148,18 +148,18 @@ class FixEmitSurfKokkos : public FixEmitSurf {
 
   t_particle_1d d_particles;
 
-  DAT::tdual_float_1d k_vscale_mix;
-  DAT::tdual_float_1d k_cummulative_mix;
-  DAT::tdual_float_2d_lr k_cummulative_custom;
+  DAT::ttransform_kkfloat_1d k_vscale_mix;
+  DAT::ttransform_kkfloat_1d k_cummulative_mix;
+  DAT::ttransform_kkfloat_2d_lr k_cummulative_custom;
   DAT::tdual_int_1d k_mspecies;
 
-  DAT::t_float_1d d_vscale_mix;
-  DAT::t_float_1d d_cummulative_mix;
-  DAT::t_float_2d_lr d_cummulative_custom;
+  DAT::t_kkfloat_1d d_vscale_mix;
+  DAT::t_kkfloat_1d d_cummulative_mix;
+  DAT::t_kkfloat_2d_lr d_cummulative_custom;
   DAT::t_int_1d d_mspecies;
 
-  DAT::tdual_float_1d k_fraction;        // mixture fraction for each species
-  DAT::t_float_1d d_fraction;
+  DAT::ttransform_kkfloat_1d k_fraction;        // mixture fraction for each species
+  DAT::t_kkfloat_1d d_fraction;
 
   t_line_1d d_lines;
   t_tri_1d d_tris;
@@ -171,7 +171,7 @@ class FixEmitSurfKokkos : public FixEmitSurf {
   t_cinfo_1d d_cinfo;
   DAT::t_int_2d d_plist;
   DAT::t_int_1d d_cellcount;
-  DAT::t_float_scalar d_tempmax;
+  DAT::t_kkfloat_scalar d_tempmax;
 
   void create_tasks() override;
   void grow_task() override;

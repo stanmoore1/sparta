@@ -177,8 +177,8 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom_init_
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const double mass = d_species[ispecies].mass;
-  double *v = d_particles[i].v;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT *v = d_particles[i].v;
 
   a_vcom_tally(icell,igroup,0) += mass * v[0];
   a_vcom_tally(icell,igroup,1) += mass * v[1];
@@ -202,8 +202,8 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
     if (igroup < 0) continue;
     if (!(d_cinfo[icell].mask & groupbit)) continue;
 
-    const double mass = d_species[ispecies].mass;
-    double *v = d_particles[i].v;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT *v = d_particles[i].v;
 
     d_vcom(icell,igroup,0) += mass * v[0];
     d_vcom(icell,igroup,1) += mass * v[1];
@@ -211,10 +211,10 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
     d_vcom(icell,igroup,3) += mass;
   }
 
-  double norm;
+  KK_ACC_FLOAT norm;
   for (int j=0; j<ngroup; j++) {
     norm = d_vcom(icell,j,3);
-    if (norm == 0.0) continue;
+    if (norm == static_cast<KK_ACC_FLOAT>(0.0)) continue;
     d_vcom(icell,j,0) /= norm;
     d_vcom(icell,j,1) /= norm;
     d_vcom(icell,j,2) /= norm;
@@ -225,10 +225,10 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_vcom, cons
 
 KOKKOS_INLINE_FUNCTION
 void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_normalize_vcom, const int &icell) const {
-  double norm;
+  KK_ACC_FLOAT norm;
   for (int j=0; j<ngroup; j++) {
     norm = d_vcom(icell,j,3);
-    if (norm == 0.0) continue;
+    if (norm == static_cast<KK_ACC_FLOAT>(0.0)) continue;
     d_vcom(icell,j,0) /= norm;
     d_vcom(icell,j,1) /= norm;
     d_vcom(icell,j,2) /= norm;
@@ -254,18 +254,18 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid_a
 
   int k = igroup*npergroup;
 
-  const double mass = d_species[ispecies].mass;
-  double *v = d_particles[i].v;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT *v = d_particles[i].v;
   a_tally(icell,k++) += mass;
 
-  double vthermal[3];
-  double csq;
+  KK_ACC_FLOAT vthermal[3];
+  KK_ACC_FLOAT csq;
   vthermal[0] = v[0] - d_vcom(icell,igroup,0);
   vthermal[1] = v[1] - d_vcom(icell,igroup,1);
   vthermal[2] = v[2] - d_vcom(icell,igroup,2);
   csq = vthermal[0]*vthermal[0] + vthermal[1]*vthermal[1] + vthermal[2]*vthermal[2];
 
-  double value;
+  KK_ACC_FLOAT value;
   for (int m=0; m<nvalue; m++) {
     if (d_which[m] == AMOM) {
       value = mass*vthermal[d_moment[m]] * csq;
@@ -301,19 +301,19 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid, 
     if (igroup < 0) continue;
     if (!(d_cinfo[icell].mask & groupbit)) continue;
 
-    const double mass = d_species[ispecies].mass;
-    double *v = d_particles[i].v;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT *v = d_particles[i].v;
 
     int k = igroup*npergroup;
 
-    double vthermal[3];
-    double csq;
+    KK_ACC_FLOAT vthermal[3];
+    KK_ACC_FLOAT csq;
     vthermal[0] = v[0] - d_vcom(icell,igroup,0);
     vthermal[1] = v[1] - d_vcom(icell,igroup,1);
     vthermal[2] = v[2] - d_vcom(icell,igroup,2);
     csq = vthermal[0]*vthermal[0] + vthermal[1]*vthermal[1] + vthermal[2]*vthermal[2];
 
-    double value;
+    KK_ACC_FLOAT value;
     for (int m=0; m<nvalue; m++) {
       if (d_which[m] == AMOM) {
         value = mass*vthermal[d_moment[m]] * csq;
@@ -342,7 +342,7 @@ void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_compute_per_grid, 
    also return cols = ptr to list of columns in tally for this index
 ------------------------------------------------------------------------- */
 
-int ComputeSonineGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
+int ComputeSonineGridKokkos::query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &d_array)
 {
   d_array = d_tally;
   return 0;
@@ -364,9 +364,9 @@ int ComputeSonineGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array
 
 void ComputeSonineGridKokkos::post_process_grid_kokkos(int index,
                                                          int nsample,
-                                                         DAT::t_float_2d_lr d_etally,
+                                                         DAT::t_kkacc_2d_lr d_etally,
                                                          int *emap,
-                                                         DAT::t_float_1d_strided d_vec)
+                                                         DAT::t_kkacc_1d_strided d_vec)
 {
   index--;
 
@@ -394,8 +394,8 @@ void ComputeSonineGridKokkos::post_process_grid_kokkos(int index,
 KOKKOS_INLINE_FUNCTION
 void ComputeSonineGridKokkos::operator()(TagComputeSonineGrid_post_process_grid, const int &icell) const
 {
-  double norm = d_etally(icell,mass);
-  if (norm == 0.0) d_vec[icell] = 0.0;
+  KK_ACC_FLOAT norm = d_etally(icell,mass);
+  if (norm == static_cast<KK_ACC_FLOAT>(0.0)) d_vec[icell] = 0.0;
   else d_vec[icell] = d_etally(icell,numerator)/norm;
 }
 
@@ -416,5 +416,5 @@ void ComputeSonineGridKokkos::reallocate()
   d_vector_grid = k_vector_grid.view_device();
   memoryKK->create_kokkos(k_tally,tally,nglocal,ntotal,"sonine/grid:tally");
   d_tally = k_tally.view_device();
-  d_vcom = DAT::t_float_3d ("d_vcom",nglocal,ngroup,4);
+  d_vcom = DAT::t_kkacc_3d ("d_vcom",nglocal,ngroup,4);
 }

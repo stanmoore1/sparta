@@ -139,14 +139,14 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
   const int icell = d_particles[i].icell;
   if (!(d_cinfo[icell].mask & groupbit)) return;
 
-  const double mass = d_species[ispecies].mass;
-  double *v = d_particles[i].v;
+  const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+  KK_FLOAT *v = d_particles[i].v;
 
   // 6 tallies per particle: N, Mass, mVx, mVy, mVz, mV^2
 
   int k = igroup*npergroup;
 
-  a_tally(icell,k++) += 1.0;
+  a_tally(icell,k++) += static_cast<KK_ACC_FLOAT>(1.0);
   a_tally(icell,k++) += mass;
   a_tally(icell,k++) += mass*v[0];
   a_tally(icell,k++) += mass*v[1];
@@ -170,8 +170,8 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
 
     const int icell = d_particles[i].icell;
 
-    const double mass = d_species[ispecies].mass;
-    double *v = d_particles[i].v;
+    const KK_ACC_FLOAT mass = d_species[ispecies].mass;
+    KK_FLOAT *v = d_particles[i].v;
 
     // 6 tallies per particle: N, Mass, mVx, mVy, mVz, mV^2
 
@@ -179,7 +179,7 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
 
     int k = igroup*npergroup;
 
-    d_tally(icell,k++) += 1.0;
+    d_tally(icell,k++) += static_cast<KK_ACC_FLOAT>(1.0);
     d_tally(icell,k++) += mass;
     d_tally(icell,k++) += mass*v[0];
     d_tally(icell,k++) += mass*v[1];
@@ -196,7 +196,7 @@ void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_compute_per_grid
    also return cols = ptr to list of columns in tally for this index
 ------------------------------------------------------------------------- */
 
-int ComputeThermalGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_array)
+int ComputeThermalGridKokkos::query_tally_grid_kokkos(DAT::t_kkacc_2d_lr &d_array)
 {
   d_array = d_tally;
   return 0;
@@ -219,7 +219,7 @@ int ComputeThermalGridKokkos::query_tally_grid_kokkos(DAT::t_float_2d_lr &d_arra
 
 void ComputeThermalGridKokkos::
 post_process_grid_kokkos(int index, int nsample,
-                  DAT::t_float_2d_lr d_etally, int *emap, DAT::t_float_1d_strided d_vec)
+                  DAT::t_kkacc_2d_lr d_etally, int *emap, DAT::t_kkacc_1d_strided d_vec)
 {
   index--;
   int ivalue = index % nvalue;
@@ -270,14 +270,14 @@ post_process_grid_kokkos(int index, int nsample,
 
 KOKKOS_INLINE_FUNCTION
 void ComputeThermalGridKokkos::operator()(TagComputeThermalGrid_post_process_grid, const int &icell) const {
-  const double ncount = d_etally(icell,n);
-  if (ncount <= 1.0) d_vec[icell] = 0.0;
+  const KK_ACC_FLOAT ncount = d_etally(icell,n);
+  if (ncount <= static_cast<KK_ACC_FLOAT>(1.0)) d_vec[icell] = 0.0;
   else {
-    const double mass = d_etally(icell,n+1);
-    const double mvx = d_etally(icell,n+2);
-    const double mvy = d_etally(icell,n+3);
-    const double mvz = d_etally(icell,n+4);
-    const double mvsq = d_etally(icell,n+5);
+    const KK_ACC_FLOAT mass = d_etally(icell,n+1);
+    const KK_ACC_FLOAT mvx = d_etally(icell,n+2);
+    const KK_ACC_FLOAT mvy = d_etally(icell,n+3);
+    const KK_ACC_FLOAT mvz = d_etally(icell,n+4);
+    const KK_ACC_FLOAT mvsq = d_etally(icell,n+5);
     d_vec[icell] = mvsq - (mvx*mvx + mvy*mvy + mvz*mvz)/mass;
     d_vec[icell] *= prefactor;
     if (tflag) d_vec[icell] /= ncount;

@@ -149,6 +149,9 @@ void ReactBirdKokkos::init()
   k_reactions.sync_device();
   d_reactions = k_reactions.view_device();
 
+#ifndef SPARTA_KOKKOS_EXACT
+  rand_pool = decltype(rand_pool)(kk_pool_seed(random));
+#endif
 #ifdef SPARTA_KOKKOS_EXACT
   rand_pool.init(random);
 #endif
