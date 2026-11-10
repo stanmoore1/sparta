@@ -1916,6 +1916,16 @@ int ReactBird::max_nelecstate()
        rates involving rotating species are biased, and a reverse
        recombination with a nonlinear third body never fires (its
        continuum weight erot3^(1/2) is zero)
+   (c) a reaction whose products and reactants differ in mass: every
+       event then changes the centre-of-mass kinetic energy, and a gas
+       cycling through forward and reverse reactions gains or loses
+       energy steadily
+   (d) reaction energies that do not sum to zero around reaction cycles
+       (e.g. N2 + O -> NO + N, NO + M -> N + O + M, N + N + M -> N2 + M):
+       each loop then creates or destroys energy, and the equilibrium
+       constants admit no common equilibrium.  Tested by fitting one
+       formation energy per species to the forward reaction energies
+       (least squares) and reporting the largest residual
 ------------------------------------------------------------------------- */
 
 void ReactBird::check_reverse_modes()
@@ -1971,6 +1981,135 @@ void ReactBird::check_reverse_modes()
                         "third body never occurs";
       error->warning(FLERR,mesg.c_str());
     }
+
+    // (c) mass conservation of every active reaction
+    // the third body of a recombination is not listed as a reactant
+
+    int nmass = 0, mworst = -1;
+    double dmworst = 0.0;
+    for (int m = 0; m < nlist; m++) {
+      OneReaction *r = &rlist[m];
+      if (!r->active) continue;
+      double mr = 0.0, mp = 0.0;
+      for (int i = 0; i < r->nreactant; i++)
+        if (r->reactants[i] >= 0) mr += species[r->reactants[i]].mass;
+      int nprod = (r->type == RECOMBINATION) ? 1 : r->nproduct;
+      for (int i = 0; i < nprod; i++)
+        if (r->products[i] >= 0) mp += species[r->products[i]].mass;
+      double dm = fabs(mp-mr) / mr;
+      if (dm > 1.0e-6) {
+        nmass++;
+        if (dm > dmworst) { dmworst = dm; mworst = m; }
+      }
+    }
+    if (nmass) {
+      char str[512];
+      snprintf(str,sizeof(str),"%d reaction(s) do not conserve mass "
+               "(largest relative defect %.2g, reaction %s): with "
+               "detailed-balance reverse reactions energy is then not "
+               "conserved; make the species masses consistent",
+               nmass,dmworst,rlist[mworst].id);
+      error->warning(FLERR,str);
+    }
+
+    // (d) closure of the reaction energies around reaction cycles
+    // unknowns: one formation energy per species; equations: for each
+    //   active forward reaction, sum(E_reactants) - sum(E_products) = C5
+    //   (a reverse reaction carries -C5 of its partner by construction)
+    // normal equations solved by Gaussian elimination with pivoting; the
+    //   null space (one free constant per conserved element and charge)
+    //   is fixed by zeroing the variables with vanishing pivots
+
+    int n = nspecies;
+    double **a = new double*[n];
+    double *rhs = new double[n];
+    double *ef = new double[n];
+    for (int i = 0; i < n; i++) {
+      a[i] = new double[n];
+      for (int j = 0; j < n; j++) a[i][j] = 0.0;
+      rhs[i] = 0.0;
+      ef[i] = 0.0;
+    }
+    double *nu = new double[n];
+    double c5max = 0.0;
+
+    for (int m = 0; m < nlist; m++) {
+      OneReaction *r = &rlist[m];
+      if (!r->active || r->reverse) continue;
+      for (int i = 0; i < n; i++) nu[i] = 0.0;
+      for (int i = 0; i < r->nreactant; i++)
+        if (r->reactants[i] >= 0) nu[r->reactants[i]] += 1.0;
+      int nprod = (r->type == RECOMBINATION) ? 1 : r->nproduct;
+      for (int i = 0; i < nprod; i++)
+        if (r->products[i] >= 0) nu[r->products[i]] -= 1.0;
+      for (int i = 0; i < n; i++) {
+        if (nu[i] == 0.0) continue;
+        rhs[i] += nu[i]*r->coeff[4];
+        for (int j = 0; j < n; j++) a[i][j] += nu[i]*nu[j];
+      }
+      if (fabs(r->coeff[4]) > c5max) c5max = fabs(r->coeff[4]);
+    }
+
+    double amax = 0.0;
+    for (int i = 0; i < n; i++) if (a[i][i] > amax) amax = a[i][i];
+    int *free = new int[n];
+    for (int i = 0; i < n; i++) free[i] = 0;
+
+    for (int k = 0; k < n && amax > 0.0; k++) {
+      int piv = k;
+      for (int i = k+1; i < n; i++)
+        if (fabs(a[i][k]) > fabs(a[piv][k])) piv = i;
+      if (fabs(a[piv][k]) < 1.0e-9*amax) { free[k] = 1; continue; }
+      if (piv != k) {
+        double *t = a[piv]; a[piv] = a[k]; a[k] = t;
+        double tr = rhs[piv]; rhs[piv] = rhs[k]; rhs[k] = tr;
+      }
+      for (int i = k+1; i < n; i++) {
+        double f = a[i][k]/a[k][k];
+        if (f == 0.0) continue;
+        for (int j = k; j < n; j++) a[i][j] -= f*a[k][j];
+        rhs[i] -= f*rhs[k];
+      }
+    }
+    for (int k = n-1; k >= 0 && amax > 0.0; k--) {
+      if (free[k]) { ef[k] = 0.0; continue; }
+      double sum = rhs[k];
+      for (int j = k+1; j < n; j++) sum -= a[k][j]*ef[j];
+      ef[k] = sum/a[k][k];
+    }
+
+    double resmax = 0.0;
+    int rworst = -1;
+    for (int m = 0; m < nlist; m++) {
+      OneReaction *r = &rlist[m];
+      if (!r->active || r->reverse) continue;
+      double sum = 0.0;
+      for (int i = 0; i < r->nreactant; i++)
+        if (r->reactants[i] >= 0) sum += ef[r->reactants[i]];
+      int nprod = (r->type == RECOMBINATION) ? 1 : r->nproduct;
+      for (int i = 0; i < nprod; i++)
+        if (r->products[i] >= 0) sum -= ef[r->products[i]];
+      double res = fabs(sum - r->coeff[4]);
+      if (res > resmax) { resmax = res; rworst = m; }
+    }
+    if (c5max > 0.0 && resmax > 1.0e-5*c5max) {
+      char str[512];
+      snprintf(str,sizeof(str),"Reaction energies are not consistent "
+               "around reaction cycles (largest residual %.3g, %.2g of "
+               "the largest reaction energy, at reaction %s): with "
+               "detailed-balance reverse reactions energy is then not "
+               "conserved; derive all reaction energies from one set "
+               "of species formation energies",
+               resmax,resmax/c5max,rlist[rworst].id);
+      error->warning(FLERR,str);
+    }
+
+    for (int i = 0; i < n; i++) delete [] a[i];
+    delete [] a;
+    delete [] rhs;
+    delete [] ef;
+    delete [] nu;
+    delete [] free;
   }
 
   delete [] flag;

@@ -370,6 +370,20 @@ the {rotfile} gives no symmetry number for a rotating species used by
 a reverse reaction, since the default sigma = 1 is wrong by a factor
 of 2 in K_eq for each homonuclear molecule.
 
+Two properties of the data files are required for energy conservation
+once reverse reactions are active, and SPARTA warns at initialization
+when either fails.  First, every reaction must conserve mass: if the
+product masses do not sum to the reactant masses (e.g. a species file
+with m(O2) different from 2 m(O)), each reaction event changes the
+centre-of-mass kinetic energy, and a gas that cycles through forward
+and reverse reactions gains or loses energy steadily.  Second, the
+reaction energies must be consistent around reaction cycles, such as
+N2 + O -> NO + N, NO + M -> N + O + M, N + N + M -> N2 + M: if they do
+not sum to zero around a cycle, every loop creates or destroys energy
+and the reactions share no common equilibrium.  Both hold when all
+reaction energies are computed from one set of species formation
+energies, as in the {data/air.tce} file, whose header lists them.
+
 This is enforced without evaluating any temperature.  At
 initialization an exchange pair is given a detailed-balance table
 relating the microcanonical densities of states of the two channels
