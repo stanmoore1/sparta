@@ -23,7 +23,7 @@
     zero or more keyword/value pairs may be appended
     keywords = <I>comm</I> or <I>react/extra</I> or <I>react/retry</I> or <I>gpu/aware</I>
       <I>comm</I> value = <I>threaded</I> or <I>serial</I>
-        threaded = perform pack/unpack using KOKKOS (e.g. on GPU or using OpenMP) (default for GPUs)
+        threaded = perform pack/unpack using KOKKOS (e.g. on GPU or using OpenMP) (default for GPUs, and for CPUs in mixed or single precision)
         serial = perform communication pack/unpack in non-KOKKOS mode (default for CPUs in double precision)
       <I>react/extra</I> = <I>factor</I>
         factor = increase memory used for collisions by this factor (default)
@@ -92,9 +92,13 @@ is not possible to resize Kokkos data structures during the reaction
 routines, so two workarounds are provided. The default is to use the
 <I>react/extra</I> keyword, which ensures there is extra memory allocated
 to store new particles. For example, if <I>react/extra</I> is set to 1.1,
-then the memory is over-allocated by 10%. If this space is still not
-sufficient to hold new particles, the code will error out and the
-simulation must be restarted using a larger value for <I>react/extra</I>.
+then the memory is over-allocated by 10%. The per-grid-cell particle
+lists used in collisions also keep at least 8 spare entries, or half
+the largest number of particles in a cell if that is more, since a
+cell can gain several reaction products in one timestep. If this space
+is still not sufficient to hold new particles, the code will error out
+and the simulation must be restarted using a larger value for
+<I>react/extra</I>.
 Alternatively, if the <I>react/retry</I> option is set to <I>yes</I>, backup
 copies of the Kokkos data structures are created. If space is exceeded
 during reactions, the Kokkos data structures are restored from backup,
@@ -116,10 +120,11 @@ fastest. When using GPUs, the <I>threaded</I> value will typically be
 optimal. In this case data can stay on the GPU for many timesteps
 without being fully moved between the host and GPU.
 </P>
-<P>In a mixed or single precision KOKKOS build (see <A HREF = "Section_accelerate.html#acc_3">Section 5.3</A>) the host keeps
-particles in double precision and the device in KK precision, so the
-<I>serial</I> option converts every particle between the two each
-timestep.  <I>Threaded</I> is therefore the default on CPUs in those builds.
+<P>In a mixed or single precision KOKKOS build (see <A HREF = "Section_accelerate.html#acc_3">Section 5.3</A>),
+the host stores particles in double precision and the device in
+single precision, so the <I>serial</I> option would convert every
+particle between the two each timestep. <I>Threaded</I> is therefore
+the default on CPUs in those builds.
 </P>
 <P>The <I>gpu/aware</I> keyword chooses whether GPU-aware MPI will be used. When 
 this keyword is set to <I>on</I>, buffers in GPU memory are passed directly 

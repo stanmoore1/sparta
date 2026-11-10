@@ -52,7 +52,7 @@ parameters (`CollideVSS::Params`) have KK precision device copies
 | `kk_prec_convert.py`  | the bulk rewriter (dry run by default, `--apply` to write); writes `review.md` (not tracked), the list of constructs to review by hand |
 | `kk_prec_audit.py`    | linter: fails if device code contains an unjustified `double`, a bare C math call, an unwrapped literal, or legacy types. Run it on new KOKKOS code. With `--promotions BUILD_LOG --mode mixed\|single` it checks a `-Wdouble-promotion` build log for double arithmetic in device code against `promotions_allowlist.json` |
 | `promotions_allowlist.json` | per file and mode, the number of device code double promotions that are on purpose (masses, accumulators, attempt counts, mixed mode positions); CI fails if a file exceeds it. Update with `kk_prec_audit.py --promotions BUILD_LOG --mode M --update-allowlist` after review |
-| `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build vs. original) or statistically (`--stats`, reduced precision vs. double) |
+| `compare_logs.py`     | compares thermo output of two sets of log files, exactly (double build before vs. after a change) or statistically (`--stats`, reduced precision vs. double) |
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
 | `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
 | `conservation_test/`  | conservation of mass, momentum and energy, and the seed command reaching the KOKKOS random pools (`run_conservation.py`) |
@@ -79,6 +79,13 @@ Device code is the signature and body of `KOKKOS_INLINE_FUNCTION`,
   `boltz`, `dt`, a scale factor) is a KK precision member, set on the host
   before the kernel runs; a double member there makes the arithmetic
   double (check with `kk_prec_audit.py --promotions`)
+- seed a `Kokkos::Random_XorShift64_Pool` from the style's host RNG with
+  `kk_pool_seed(random)` (`rand_pool_wrap.h`), where `SPARTA_KOKKOS_EXACT`
+  builds call `rand_pool.init(random)`, so the `seed` command reaches it;
+  a constant seed makes every run with the same input identical
+- form centre of mass and post-collision velocities with
+  `kk_cm_velocity()` and `kk_split_velocity()` (`collide_vss_kokkos.h`),
+  which keep float rounding unbiased (see *Rounding bias* below)
 
 ## Reduced precision pitfalls found in SPARTA
 
@@ -136,7 +143,10 @@ hand.
 
 ## Testing
 
-A double precision build must reproduce the original code exactly:
+A change to the precision machinery must leave a double precision build
+bit for bit unchanged: compare its logs with those of a double precision
+build of the code before the change.  A `SPARTA_KOKKOS_EXACT` build also
+reproduces the non-KOKKOS code (CI job `mpi-kokkos-exact`).
 
     compare_logs.py REF_LOG_DIR NEW_LOG_DIR
 
