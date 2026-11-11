@@ -199,6 +199,8 @@ class ReactBird : public React {
   void report_tce_prob_flags(int, int);
   virtual void grow_tallies();
   double partition_function(int, double);
+  void forward_cap(OneReaction *, double, int, double *);
+  double pair_channel_prob(int, double);
   int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);

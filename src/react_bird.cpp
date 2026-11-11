@@ -1867,6 +1867,118 @@ static void ladder_convolve(double *arr, double *work, int n, double du,
 }
 
 /* ----------------------------------------------------------------------
+   cap of a forward reaction's numerator, on the energy grid of its reverse
+   the forward probability is capped at 1 at run time (ReactTCE::attempt);
+     where that cap acts the forward rate falls below its Arrhenius fit,
+     and a reverse table built from the uncapped forward numerator would
+     run faster than detailed balance with the realized forward rate
+   the forward probability at total energy E is
+     P_F(E) = pref_F * Gamma_F * num_F(E)/den_F(E)
+     so P_F <= 1 is num_F <= den_F/(pref_F*Gamma_F)
+   on return cap[k] = den_F(E_k)/(pref_F*Gamma_F) with E_k = k*du - C5_F
+     the forward total energy that corresponds to reverse-grid energy
+     k*du (energy conservation: the reverse pair holds the forward
+     energy plus the forward reaction energy C5_F)
+   den_F(E) = E^(zcontF+3/2-omegaF) (x) discrete ladders of the forward
+     pair is built on its own grid, which starts at E = 0, and
+     interpolated at E_k
+------------------------------------------------------------------------- */
+
+void ReactBird::forward_cap(OneReaction *f, double du, int n, double *cap)
+{
+  Particle::Species *species = particle->species;
+  double boltz = update->boltz;
+
+  int sps[2];
+  sps[0] = f->reactants[0];
+  sps[1] = f->reactants[1];
+
+  int vibdiscrete = (collide->vibstyle == DISCRETE);
+  int elecdiscrete = (collide->elecstyle == DISCRETE);
+
+  double zcont = 0.5*(species[sps[0]].rotdof + species[sps[1]].rotdof);
+  if (collide->vibstyle == SMOOTH)
+    zcont += 0.5*(species[sps[0]].vibdof + species[sps[1]].vibdof);
+  double omega = collide->extract(sps[0],sps[1],"omega");
+
+  double gden = tgamma(zcont + f->coeff[3] + 1.5);
+  if (gden < 1.0e-6) gden = 1.0e-6;
+  double pg = f->coeff[2] * tgamma(zcont + 2.5 - omega) / gden;
+
+  if (!(pg > 0.0)) {
+    for (int k = 0; k < n; k++) cap[k] = 1.0e300;
+    return;
+  }
+
+  double shift = -f->coeff[4]/du;
+  int ne = n + (int) fabs(shift) + 3;
+  double emax = ne*du;
+
+  double *den,*work,*leps,*lg;
+  memory->create(den,ne,"react:cap_den");
+  memory->create(work,ne,"react:cap_work");
+
+  double expden = zcont + 1.5 - omega;
+  den[0] = 0.0;
+  for (int j = 1; j < ne; j++) den[j] = pow(j*du,expden);
+
+  double theta_min = 0.0;
+  if (vibdiscrete)
+    for (int s = 0; s < 2; s++)
+      for (int m = 0; m < species[sps[s]].nvibmode; m++) {
+        double th = species[sps[s]].vibtemp[m];
+        if (th > 0.0 && (theta_min == 0.0 || th < theta_min)) theta_min = th;
+      }
+  int maxlev = (theta_min > 0.0) ? (int) (emax/(boltz*theta_min)) + 2 : 0;
+  if (max_nelecstate() + 2 > maxlev) maxlev = max_nelecstate() + 2;
+  memory->create(leps,maxlev,"react:cap_leps");
+  memory->create(lg,maxlev,"react:cap_lg");
+
+  for (int s = 0; s < 2; s++) {
+    int sp = sps[s];
+    if (vibdiscrete)
+      for (int m = 0; m < species[sp].nvibmode; m++) {
+        double th = species[sp].vibtemp[m];
+        if (th <= 0.0) continue;
+        int d = species[sp].vibdegen[m] > 1 ? species[sp].vibdegen[m] : 1;
+        int nlev = 0;
+        double g = 1.0;
+        for (int l = 0; l*th*boltz < emax && nlev < maxlev; l++) {
+          leps[nlev] = l*th*boltz;
+          if (l > 0) g = g*(l+d-1)/l;
+          lg[nlev] = g;
+          nlev++;
+        }
+        ladder_convolve(den,work,ne,du,nlev,leps,lg);
+      }
+    if (elecdiscrete && species[sp].elecdat) {
+      int nlev = species[sp].elecdat->nelecstate;
+      for (int l = 0; l < nlev; l++) {
+        leps[l] = boltz*species[sp].elecdat->states[l].temp;
+        lg[l] = species[sp].elecdat->states[l].degen;
+      }
+      ladder_convolve(den,work,ne,du,nlev,leps,lg);
+    }
+  }
+
+  for (int k = 0; k < n; k++) {
+    double x = k + shift;
+    if (x <= 0.0) cap[k] = 0.0;
+    else if (x >= ne-1) cap[k] = den[ne-1]/pg;
+    else {
+      int j = (int) x;
+      double fr = x - j;
+      cap[k] = ((1.0-fr)*den[j] + fr*den[j+1])/pg;
+    }
+  }
+
+  memory->destroy(den);
+  memory->destroy(work);
+  memory->destroy(leps);
+  memory->destroy(lg);
+}
+
+/* ----------------------------------------------------------------------
    build the per-reaction tables of the microcanonical TCE energy factor
    used with react_modify partial_energy no:
      factor(E_tot) = sum_p g_p (E_tot - eps_p - Ea)_+^(zrot+eta+1/2)
@@ -2290,6 +2402,76 @@ void ReactBird::build_micro_tables()
     memory->destroy(den);
     memory->destroy(work);
   }
+
+  // second pass over the reverse tables: when the capped probabilities
+  // of all channels of a forward pair sum to more than 1, the run-time
+  // selection scales each of them by 1/sum (ReactTCE::attempt), so the
+  // forward reaction realizes min(P,1)/sum.  Apply the same factor to
+  // its reverse table, at the forward pair's total energy, so that the
+  // pair stays reversible under saturation.  The sum uses the tables as
+  // built above (a reverse channel in the sum enters with its own
+  // single-channel cap, which is exact to first order).
+
+  for (int i = 0; i < nlist; i++) {
+    OneReaction *r = &rlist[i];
+    if (!r->active || !r->reverse || r->reverse_partner < 0) continue;
+    if (!mtab[i]) continue;
+    double *tab = (r->type == RECOMBINATION) ? mtab_num[i] : mtab[i];
+    if (!tab) continue;
+    OneReaction *f = &rlist[r->reverse_partner];
+    int isp = f->reactants[0];
+    int jsp = f->reactants[1];
+    int nch = reactions[isp][jsp].n;
+    int *list = reactions[isp][jsp].list;
+    if (nch < 2) continue;
+    for (int k = 0; k < mtab_n[i]; k++) {
+      if (tab[k] <= 0.0) continue;
+      double e = k*mtab_du[i] - f->coeff[4];
+      if (e <= 0.0) continue;
+      double sum = 0.0;
+      for (int c = 0; c < nch; c++) {
+        double p = pair_channel_prob(list[c],e);
+        if (p > 1.0) p = 1.0;
+        sum += p;
+      }
+      if (sum > 1.0) tab[k] /= sum;
+    }
+  }
+}
+
+/* ----------------------------------------------------------------------
+   probability of two-body reaction j as a function of the total collision
+   energy of its reactant pair alone (total-energy model), uncapped;
+   mirrors ReactTCE::channel_prob() for dissociation, ionization and
+   exchange, and returns 0 for recombination, whose probability also
+   depends on the third particle
+------------------------------------------------------------------------- */
+
+double ReactBird::pair_channel_prob(int j, double ecc)
+{
+  OneReaction *r = &rlist[j];
+  if (!r->active || r->type == RECOMBINATION) return 0.0;
+
+  Particle::Species *species = particle->species;
+  int isp = r->reactants[0];
+  int jsp = r->reactants[1];
+  double z = 0.5*(species[isp].rotdof + species[jsp].rotdof);
+  if (collide->vibstyle == SMOOTH)
+    z += 0.5*(species[isp].vibdof + species[jsp].vibdof);
+
+  double e_excess;
+  if (r->coeff[1] > -r->coeff[4]) e_excess = ecc - r->coeff[1];
+  else e_excess = ecc + r->coeff[4];
+  if (e_excess <= 0.0) return 0.0;
+
+  double efactor;
+  if (mtab && mtab[j]) efactor = vib_micro_factor(j,ecc);
+  else efactor = pow(ecc-r->coeff[1],r->coeff[3]-1.0+r->coeff[5]) *
+         pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+
+  double g = tgamma(z+r->coeff[3]+1.5);
+  if (g < 1.0e-6) g = 1.0e-6;
+  return r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / g * efactor;
 }
 
 /* ----------------------------------------------------------------------
@@ -2644,6 +2826,16 @@ void ReactBird::build_db_table(int i)
     }
   }
 
+  // keep the pair reversible where the forward probability is capped at
+  // 1: limit the forward numerator in the reverse table to the value the
+  // capped forward realizes (see forward_cap); done after calibration
+  // and self-check, which refer to the uncapped Arrhenius rate
+
+  forward_cap(f,du,n,work);
+  for (int k = 0; k < n; k++)
+    if (den[k] > 0.0 && scale*work[k]/den[k] < mtab[i][k])
+      mtab[i][k] = scale*work[k]/den[k];
+
   memory->destroy(leps);
   memory->destroy(lg);
   memory->destroy(num);
@@ -2958,6 +3150,14 @@ void ReactBird::build_db3_table(int i)
       error->warning(FLERR,str);
     }
   }
+
+  // keep the pair reversible where the forward dissociation probability
+  // is capped at 1 (see forward_cap and build_db_table)
+
+  forward_cap(f,du,n,work);
+  for (int k = 0; k < n; k++)
+    if (v3[k] > 0.0 && scale*work[k]/v3[k] < mtab_num[i][k])
+      mtab_num[i][k] = scale*work[k]/v3[k];
 
   memory->destroy(leps);
   memory->destroy(lg);

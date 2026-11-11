@@ -418,6 +418,31 @@ are switched off with a warning and the forward reactions run alone,
 so a reaction file that carries reverses (such as data/air.tce) can
 still be used with the default partial-energy model.
 
+The cap on the forward probability described above is carried into the
+reverse tables.  Where a forward reaction's probability is capped at
+1, its rate falls below the Arrhenius fit, and a reverse reaction
+built from the uncapped fit would outrun it and shift the equilibrium.
+Each reverse table is therefore built from the forward probability
+that is actually realized: the value capped at 1, divided by the
+summed probability of the forward pair's reactions where that sum
+exceeds 1.  A capped pair then reacts more slowly than its Arrhenius
+fit in both directions, but relaxes to the correct equilibrium.  With
+the {data/air.tce} set this matters for NO + O and NO + N
+dissociation, whose rate fits exceed the VHS collision rate over much
+of the thermal energy range.  In a test with those two reactions
+alone, the equilibrium constant realized by the simulation was 0.57
+of the partition-function value without the limit and 0.94 with it;
+an adiabatic air reactor that should equilibrate at 6240 K settled
+3.5% too hot with 25% too much NO without the limit, and 1% too hot
+with 4% too much NO with it.  The remainder appears only for reactions
+that are capped, and in the two-reaction test it shrinks from 6% to
+under 2% when the internal relaxation of NO is made fast.  This points
+to the post-reaction energy redistribution: when a reaction proceeds
+at the collision rate, its products react again before they relax.  The limit works in one direction only: a cap on the
+reverse reaction itself (three-body recombination in dense gas, or a
+barrierless reverse at low collision energy) is not carried back into
+its forward reaction.
+
 For quantitatively correct equilibrium constants, define a {rotfile}
 with the rotational symmetry numbers of homonuclear molecules and an
 {elecfile} with at least the ground-state degeneracies of each species
