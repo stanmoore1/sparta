@@ -259,6 +259,13 @@ yes"` to also run the CPU/KOKKOS parity check (check 12).
     (`react_prob>1`); the one-time diagnostic must fire to warn the user while
     the run still completes and tallies reactions (it is a warning, not a stop).
 
+A probability capped at 1 limits the rate of that reaction.  Where a
+*forward* reaction is capped, its reverse table is limited to match, so
+the pair still relaxes to the right equilibrium (see `doc/react.txt`;
+with `data/air.tce` this concerns NO + O and NO + N dissociation).  A
+capped *reverse*, as in check 24, is not carried back into its forward
+reaction.
+
 Accurate reverse rates need accurate partition functions: supply a
 `rotfile` with symmetry numbers and an `elecfile` with the low-lying
 electronic levels for every species that participates in a reverse
