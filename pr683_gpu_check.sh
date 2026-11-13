@@ -5,9 +5,10 @@
 #   base    e071055f  PR base (master before #683)
 #   pr      21763d55  #683 head
 #   fix1    e7151f27  #683 head + first round of review fixes
-#   fix     57cb662c  + simplified two-pass move (no mid-move host wait, RangePolicy
-#                       second pass, two-pass re-enabled each run) -- the candidate
-#   fixvol  57cb662c with the per-branch "volume" reload in the collision kernel
+#   fix     9ff7c43d  + simplified two-pass move (57cb662c: no mid-move host wait,
+#                       RangePolicy second pass, two-pass re-enabled each run) and
+#                       verified cleanups (9ff7c43d) -- the candidate
+#   fixvol  9ff7c43d with the per-branch "volume" reload in the collision kernel
 #           put back.  This checks whether removing it (finding 13) costs anything.
 #
 # Usage, from the top of a sparta clone that has the branches fetched:
@@ -38,7 +39,7 @@ VARIANTS=${VARIANTS:-"base pr fix1 fix fixvol"}
 WORK=${WORK:-$PWD/pr683_check}
 JOBS=${JOBS:-$(nproc --all)}  # nproc alone honours OMP_NUM_THREADS
 
-declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=57cb662c [fixvol]=57cb662c)
+declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=9ff7c43d [fixvol]=9ff7c43d)
 
 mkdir -p "$WORK"
 

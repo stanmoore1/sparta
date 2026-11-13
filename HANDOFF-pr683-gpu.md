@@ -11,9 +11,10 @@ user tells you to.
 | Item | Where |
 |---|---|
 | PR | [sparta/sparta#683](https://github.com/sparta/sparta/pull/683) "optimizations for GPU/cuda", Matt Bettencourt (NVIDIA). Head `21763d55`, base `e071055f`. |
-| Review fixes | branch `claude/code-review-pr-683-29lhfg` on `stanmoore1/sparta`: the PR head plus two commits |
+| Review fixes | branch `claude/code-review-pr-683-29lhfg` on `stanmoore1/sparta`: the PR head plus three commits |
 | &nbsp;&nbsp;`e7151f27` | first round: fixes findings 1-7, 10, 12-15 (below) |
-| &nbsp;&nbsp;`57cb662c` | simplification of the two-pass move (section 3); **this is the candidate** |
+| &nbsp;&nbsp;`57cb662c` | simplification of the two-pass move (section 3) |
+| &nbsp;&nbsp;`9ff7c43d` | verified cleanups (section 3); **the head of the branch, and the candidate** |
 | Scripts | branch `claude/great-allen-5wm0fz` on `stanmoore1/sparta`: `pr683_gpu_check.sh`, `pr683_force_gpu_path.sh`, this file |
 
 ```bash
@@ -29,7 +30,7 @@ git fetch https://github.com/sparta/sparta pull/683/head:pr683
 git checkout claude/great-allen-5wm0fz
 ```
 
-All the commits named above (`e071055f`, `21763d55`, `e7151f27`, `57cb662c`) must be
+All the commits named above (`e071055f`, `21763d55`, `e7151f27`, `9ff7c43d`) must be
 reachable in this clone; the script builds each one in its own `git worktree`.
 
 ### What the PR does (context)
@@ -70,7 +71,10 @@ All reproduced on CPU by forcing the GPU dispatch (section 5); none have been ru
 | 6, 10, 12, 14 | Dead `#if DEALLOC`, dead tally helpers, empty `{}` scopes, hard-coded loop bounds. | Cleaned up. |
 | 13 | A second `const double volume` declared in the recombination branch of the collision kernel, shadowing the outer one. | Removed in `e7151f27`. **Needs a GPU timing check**: the author may have added it on purpose to lower register pressure (section 4, task P2). |
 
-## 3. What `57cb662c` changes (the part never run on a GPU at all)
+## 3. What `57cb662c` and `9ff7c43d` change (never run on a GPU at all)
+
+`57cb662c`:
+
 
 1. `move_execution_space()` returns `DeviceType()` by value. A default-constructed instance is the
    default stream, **the same one sort/collide/comm use**, which the move relies on (there are no
@@ -85,6 +89,19 @@ All reproduced on CPU by forcing the GPU dispatch (section 5); none have been ru
 3. The heuristic threshold is `MOVE_TWO_PASS_KEEP` (0.90); recheck interval is still
    `MOVE_TWO_PASS_RECHECK` (100).
 
+`9ff7c43d` (each item was checked against the code first; none changes results):
+
+4. Particle/Grid/SurfKokkos: `sync(Device,mask)` and `sync_device_async(exec,mask)` share one
+   body, `sync_device_views(mask, exec...)`. Without an execution space it calls
+   `DualView::sync_device()` exactly as before, fences included (finding 9).
+5. `Output::setup()` computes `sync_mask_for_output` once per run instead of six command hooks
+   doing it (finding 11). Not a bug before, but the hooks missed `clear`, which keeps KokkosSPARTA
+   and rebuilds Output, so the old mask stayed in force (a wider mask, so harmless).
+6. Removed a block in `move()` that zeroed the device counters only when `atomic_reduction` was
+   set; `zero_host_scalars()` already clears them before every attempt.
+7. `not_updated` is allocated where the first pass runs, with `realloc_kokkos` (frees first, no
+   zero fill), instead of on every GPU build: MI300 and axisymmetric runs never use it.
+
 Risk to look for on GPU: the `RangePolicy` block size Kokkos picks for the big `moveOne` reduce
 kernel may differ from the old 128-thread teams. Task P1 measures that.
 
@@ -98,8 +115,8 @@ build dir each under `$WORK`):
 | `base` | `e071055f` | master before #683 |
 | `pr` | `21763d55` | #683 head |
 | `fix1` | `e7151f27` | first round of fixes |
-| `fix` | `57cb662c` | **candidate** |
-| `fixvol` | `57cb662c` + the `volume` line restored | for finding 13 |
+| `fix` | `9ff7c43d` | **candidate** |
+| `fixvol` | `9ff7c43d` + the `volume` line restored | for finding 13 |
 
 ```bash
 PRESET=kokkos_cuda EXTRA_CMAKE="-DKokkos_ARCH_HOPPER90=ON" ./pr683_gpu_check.sh 2>&1 | tee check.log
@@ -149,7 +166,8 @@ The script prints ms/step (min of `REPEAT` runs) for `bench/in.free`, `in.collid
   host-side additions; fix 2 only affects axisymmetric runs; `57cb662c` removes a host wait but
   changes the second-pass launch shape. Treat > 2% slower on any case as something to investigate
   (rerun with `REPEAT=5` first; GPU timings of 0.1 ms/step steps are noisy). Compare `fix` vs `fix1`
-  to isolate `57cb662c`.
+  to isolate `57cb662c` + `9ff7c43d`; of those, only the second-pass launch should be able to
+  change GPU time.
 - **P2 `fixvol` vs `fix`** decides finding 13. `in.collide`/`in.sphere` have no reactions, so the
   branch is never taken; any difference would come from register allocation. If `fixvol` is
   faster by more than noise, the line should go back (renamed, for example `recomb_volume`, with a
@@ -189,7 +207,7 @@ Results for `e7151f27`, 4 MPI ranks x 1 thread unless noted:
   beyond noise between `base`, `pr`, `fix1` (collide 1x4, 5 interleaved runs: 81.9-89.9,
   81.7-88.3, 83.6-87.7 ms/step).
 
-Results for `57cb662c` (`fix`), same setup:
+Results for `57cb662c` and `9ff7c43d` (`fix`), same setup:
 
 - Stats **bit-identical to `e7151f27`** on all targeted inputs and all 17 examples, both on the
   CPU path and with the forced GPU path (two-pass on all 400 steps of `in.free3dsmall`).
@@ -199,6 +217,10 @@ Results for `57cb662c` (`fix`), same setup:
   first pass runs at steps 1, 101, 201 | 1 | every step 51-70. Under `e7151f27` the third run left
   it off, because the 100-step wait carried over from the previous run.
 - Exit status 0 everywhere.
+- `9ff7c43d`: the same checks again (targeted inputs, recheck, EXACT, 17 examples), all
+  bit-identical to `e7151f27`, exit 0. Plus an output test (`clear`, `undump`, dumps added
+  between runs, stats-only runs; 10 particle dump files): every dump file and the stats are
+  byte-identical to `base`, on the CPU path and the forced GPU path.
 - Not measured: anything about performance on GPU, and the RangePolicy launch shape. On OpenMP
   the forced path runs with `concurrency` = number of threads, so it says nothing about GPU block
   sizes.
@@ -207,9 +229,10 @@ Results for `57cb662c` (`fix`), same setup:
 
 - Finding 7: in #623 the author deliberately replaced `realloc_kokkos` with a zero-filled
   allocation ("fixed copy in resize sort list"); the review reverted that. Ask why.
-- Findings 8 (now addressed by `57cb662c`), 9 (three copies of the device branch of `sync()`;
-  an execution-space argument on `sync()` would remove them) and 11 (output sync mask recomputed
-  from six command hooks; computing it once in `Output::setup()` is simpler).
+- Findings 8, 9 and 11 are now done on the branch (`57cb662c`, `9ff7c43d`); the author should
+  agree with them.
+- Pre-existing, not from #683: with `SPARTA_KOKKOS_EXACT`, inputs using `fix emit/face` do not
+  match the non-Kokkos code (master shows the same). Worth its own issue.
 - The `d_plist` LayoutRight change measured as noise in the author's table; keep it only if it
   shows a gain somewhere.
 
