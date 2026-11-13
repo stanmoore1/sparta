@@ -28,7 +28,11 @@ SIZES = {"quick": dict(seeds=3, NPF=20000, NSTF=4000, NPR=10000,
                        NSTR=150000, NSTL=150000)}
 FILES = ("cap.tce", "cap_slow.tce", "nofast.species")
 NRHO = 1.0e25
-X_EQ = dict(XNO=0.3326, XO=0.3348, XN=0.3326)     # near equilibrium, 5630 K
+X_EQ = dict(XNO=0.3326, XO=0.3348, XN=0.3326)     # frozen reservoirs
+# the equilibrium at 5600 K and 1e25 m^-3 of the data files (tce_ref
+# Data.keq): the reactor without cap starts there, since with rates
+# divided by 30 it relaxes too slowly to reach equilibrium from elsewhere
+X_SLOW = dict(XNO=0.3233, XO=0.3383, XN=0.3383)
 X_RX = dict(XNO=0.5, XO=0.25, XN=0.25)            # reactor start, 9000 K
 FRZ_T = (5600.0, 8000.0, 10000.0, 15000.0)
 SP = os.path.join(DATA, "air.species")
@@ -52,8 +56,8 @@ def runs(size="quick"):
                    dict(base, SEED=73345, NRHO=NRHO / 10, DT=5.0e-10,
                         NSTEP=sz["NSTL"]), files=FILES))
     out.append(Run(STEP, "rx_slow_s0", "in.cap",
-                   dict(base, SEED=73345, TCE="cap_slow.tce", T=5627.0,
-                        **X_EQ), files=FILES))
+                   dict(base, SEED=73345, TCE="cap_slow.tce", T=5600.0,
+                        **X_SLOW), files=FILES))
     out.append(Run(STEP, "rx_fast_s0", "in.cap",
                    dict(base, SEED=73345, SPFILE="nofast.species"),
                    files=FILES))

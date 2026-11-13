@@ -35,7 +35,7 @@ sys.path.insert(0, HERE)
 import pkg                 # noqa: E402
 import tce_ref as R        # noqa: E402
 sys.modules.pop("runs", None)  # this step's runs.py, not another step's
-from runs import runs, STEP, FRZ_T, X_EQ  # noqa: E402
+from runs import runs, STEP, FRZ_T  # noqa: E402
 
 V = (2.75e-6) ** 3
 FWD = ("NO + O --> N + O + O", "NO + N --> N + O + N")

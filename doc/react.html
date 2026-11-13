@@ -402,17 +402,26 @@ the <I>data/air.tce</I> set this matters for NO + O and NO + N
 dissociation, whose rate fits exceed the VHS collision rate over much
 of the thermal energy range.  In a test with those two reactions
 alone, the equilibrium constant realized by the simulation was 0.57
-of the partition-function value without the limit and 0.94 with it;
-an adiabatic air reactor that should equilibrate at 6240 K settled
-3.5% too hot with 25% too much NO without the limit, and 1% too hot
-with 4% too much NO with it.  The remainder appears only for reactions
-that are capped, and in the two-reaction test it shrinks from 6% to
-under 2% when the internal relaxation of NO is made fast.  This points
-to the post-reaction energy redistribution: when a reaction proceeds
-at the collision rate, its products react again before they relax.  The limit works in one direction only: a cap on the
-reverse reaction itself (three-body recombination in dense gas, or a
-barrierless reverse at low collision energy) is not carried back into
-its forward reaction.
+of the partition-function value without the limit and 1.01 with it
+(three seeds, 1.006-1.025), and 1.01 at a tenth of the density; an
+adiabatic air reactor that should equilibrate at 6240 K settled 3.5%
+too hot with 25% too much NO without the limit.  A test like this
+depends on the post-reaction energy disposal as well: when a reaction
+proceeds at the collision rate, its products react again before they
+relax, so they must leave the reaction with the distribution that the
+reverse samples (see below).  The limit works in one direction only: a
+cap on the reverse reaction itself (three-body recombination in dense
+gas, or a barrierless reverse at low collision energy) is not carried
+back into its forward reaction.
+</P>
+<P>After a reaction the products' discrete levels (vibration, electronic
+states, discrete rotation) are drawn jointly from the conditional, at
+the collision's total energy, of the products' equilibrium collision
+ensemble, and the remaining energy is split between translation and
+the continuous modes; this is the distribution the reverse reaction
+samples, so a reacting gas keeps equilibrium populations in every mode
+even where relaxation is slow (vibration) or forbidden (spin-changing
+electronic transitions).
 </P>
 <P>For quantitatively correct equilibrium constants, define a <I>rotfile</I>
 with the rotational symmetry numbers of homonuclear molecules and an
