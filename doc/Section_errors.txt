@@ -1660,6 +1660,12 @@ integer in size. :dd
 
 Self-explanatory. :dd
 
+{Line in surf file exceeds maximum allowed length} :dt
+
+A line in the Points, Lines, or Triangles section of the surf file is
+longer than 1023 characters.  This can occur if many custom values
+are listed for each surface element. :dd
+
 {Log of zero/negative value in variable formula} :dt
 
 Self-explanatory. :dd
@@ -1849,13 +1855,13 @@ Equal-style variables cannot use per-particle quantities. :dd
 
 It must be an integer from 1 to the number of partitions. :dd
 
-{Per-particle compute in equal-style variable formula} :dt
+{Per-particle compute in non particle-style variable formula} :dt
 
-Equal-style variables cannot use per-particle quantities. :dd
+Only particle-style variables can use per-particle quantities. :dd
 
-{Per-particle fix in equal-style variable formula} :dt
+{Per-particle fix in non particle-style variable formula} :dt
 
-Equal-style variables cannot use per-particle quantities. :dd
+Only particle-style variables can use per-particle quantities. :dd
 
 {Per-processor particle count is too big} :dt
 
