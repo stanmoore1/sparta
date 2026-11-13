@@ -63,13 +63,16 @@ class Run:
     files: extra files the deck reads, copied into the run directory."""
 
     def __init__(self, step, tag, deck, variables, kind="release",
-                 files=()):
+                 files=(), stepdir=None):
         self.step, self.tag, self.deck = step, tag, deck
         self.variables, self.kind, self.files = dict(variables), kind, files
+        self._stepdir = stepdir
 
     @property
     def stepdir(self):
-        return os.path.join(HERE, self.step)
+        """directory of the deck and its files: the step's directory in
+        this package, unless the run was defined elsewhere"""
+        return self._stepdir or os.path.join(HERE, self.step)
 
     @property
     def workdir(self):
