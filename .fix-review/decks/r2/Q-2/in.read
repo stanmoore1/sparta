@@ -1,0 +1,8 @@
+# Q-2: read a (possibly truncated) restart file; must be clean error, no ASan / hang
+seed 12345
+read_restart ${F}
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+collide vss air air.vss
+stats 0
+run 0

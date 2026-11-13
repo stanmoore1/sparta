@@ -1,0 +1,26 @@
+# 03-6: collide_vss_kokkos recombination with ave_dof==0 must conserve energy (v_etot constant)
+seed 12345
+dimension 3
+global gridcut 0.0 comm/sort yes
+boundary p p p
+create_box 0.0 0.001 0.0 0.001 0.0 0.001
+create_grid 5 5 5
+balance_grid rcb cell
+global nrho 1.0e25 fnum 5.0e11
+species ab.species A B AB M
+mixture gas A B AB M temp 3000.0
+mixture gas A frac 0.5
+mixture gas B frac 0.5
+mixture gas AB frac 0.0
+mixture gas M frac 0.0
+collide vss gas ab.vss
+react tce ${R}
+react_modify rboost 1.0
+create_particles gas n 2000 twopass
+timestep 1.0e-9
+compute k reduce sum ke erot evib
+variable etot equal c_k[1]+c_k[2]+c_k[3]
+compute c count A B AB M
+stats_style step np ncoll nreact c_c[*] v_etot
+stats 10
+run 40

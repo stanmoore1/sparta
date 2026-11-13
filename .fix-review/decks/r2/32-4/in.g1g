@@ -1,0 +1,24 @@
+# 32-4: grid custom vectors/arrays resized by adapt_grid refine between runs (kk == host)
+seed 12345
+dimension 2
+global gridcut 0.0 comm/sort yes
+boundary p p p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 20 20 1
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O temp 300
+variable gv grid 2.0
+variable ga grid 5.0
+custom grid create gvec float 0 set gvec v_gv all NULL
+custom grid create garr float 2 set garr[2] v_ga all NULL
+compute gs reduce sum g_gvec g_garr[2]
+create_particles air n 3000 twopass
+stats 10
+stats_style step np c_gs[*]
+run 10
+adapt_grid all refine random 0.5 0.0 iterate 1
+run 10
+adapt_grid all coarsen random 0.0 0.5 iterate 1
+run 10

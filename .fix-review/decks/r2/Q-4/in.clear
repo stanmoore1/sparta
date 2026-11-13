@@ -1,0 +1,19 @@
+# Q-4: clear must not leak 192 B from SPARTA::create()
+seed 12345
+dimension 2
+create_box 0 4 0 4 -0.5 0.5
+create_grid 2 2 1
+species air.species N
+mixture air N
+clear
+seed 12345
+dimension 2
+create_box 0 4 0 4 -0.5 0.5
+create_grid 2 2 1
+species air.species N
+mixture air N temp 300
+global nrho 1.0 fnum 0.1
+create_particles air n 100
+compute t temp
+stats_style step np c_t
+run 10

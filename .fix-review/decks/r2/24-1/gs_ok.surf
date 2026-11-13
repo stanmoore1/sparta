@@ -1,0 +1,7 @@
+# 24-1: same reactions, AA first
+O(g) --> O(s)
+AA S 1.0 10
+
+O(g) --> CO(g)
+ER A 0.0 0 0
+cll 300 1 1 1 1

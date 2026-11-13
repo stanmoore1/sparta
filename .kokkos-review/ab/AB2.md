@@ -1,0 +1,125 @@
+# AB2 results (surf_collide/update/particle)
+S = /tmp/claude-0/-home-user-sparta/890c9580-1a31-5f7e-91e6-8571cb0d6a4f/scratchpad ; work dir $S/ab/AB2 ; runner $S/ab/AB2/run.sh
+(note: on this loaded box t 4 runs need OMP_WAIT_POLICY=passive OMP_PROC_BIND=false or they stall; run.sh exports them)
+
+### F-G09-4b — UpdateKokkos::surf_collide_style_tag rejects explicit "<style>/kk" surf_collide names
+class: cpu-observable
+positive control: 2d circle, N beam, `surf_collide 1 diffuse/kk 300 1.0` (-sf kk); 3d piston deck with `piston/kk`, `vanish/kk`, `specular/kk` | A: ERROR "Unknown Kokkos surface collide method" (update_kokkos.cpp:2768) for both, t1 and t4 | B: runs; stats byte-identical to plain-name decks (diffuse step 400 np 40086 nscoll 191; piston step 100 np 15127 T 273.39) | REPRODUCED
+negative control: plain-name decks | A vs B: identical (all stats rows)
+necessary: yes - A aborts on every explicit /kk surf_collide name tried (diffuse, piston, vanish, specular).
+complete: all 9 kk surf_collide styles checked with explicit /kk names: A aborts for each; B runs and is byte-identical to the plain-name deck (diffuse, cll, td, impulsive, adiabatic on the circle deck; piston, vanish, specular, transparent on the piston deck); diffuse also at t4. Siblings: see 4a residual (compute_surf_kokkos surf_react dispatch).
+verdict: NECESSARY+COMPLETE (for the update_kokkos.cpp site)
+artifacts: $S/ab/AB2/F-G09-4 (in.sc_kk, pist/in.piston_kk)
+
+### F-G09-4a — surf_collide_*_kokkos surf_react dispatch rejects explicit "prob/kk", "global/kk", "adsorb/kk"
+class: cpu-observable
+positive control: same 2d deck + `surf_react r1 prob/kk` (N->O, p=0.5) for diffuse/cll/td/impulsive/adiabatic/specular; `global/kk 0.1 0.1` (diffuse); examples/surf_react_adsorb in.circle.gs with `adsorb/kk`; 3d piston with `prob/kk` on xlo (piston dispatch) | A: every case aborts "Unknown Kokkos surface reaction method" (t1 and t4) | B: all run; each stats table byte-identical to the plain-name deck (diffuse+prob step 400: np 40466 nscoll 183 nsreact 80; global: np 40003; adsorb: identical; piston+prob: identical, t4 also runs) | REPRODUCED
+negative control: plain-name decks (6 models + global + adsorb) | A vs B: identical; CPU ref (diffuse+prob) np 40755 nscoll 194 nsreact 92 (same stats, different RNG)
+necessary: yes - A aborts for prob/kk on all 7 models, global/kk, adsorb/kk.
+complete: NO - sibling site missed: compute_surf_kokkos.cpp:189/201 still exact-matches "global"/"prob". Deck in.sr_kk (prob/kk + `compute surf ... n nflux`): B aborts "Unknown Kokkos surface reaction method" (compute_surf_kokkos.cpp:214). Any explicit surf_react */kk with compute surf/kk still fails in B. (collide_vss_kokkos.cpp:391 already accepts both names.)
+verdict: INCOMPLETE (compute_surf_kokkos.cpp surf_react dispatch still exact-name; explicit prob/kk/global/kk + compute surf aborts in B)
+artifacts: $S/ab/AB2/F-G09-4 (in.sr4a_*, in.glob_kk, ads/in.gs_kk, pist/in.pr_kk, in.sr_kk = failing B case)
+
+### F-G08-1 / F-G09-3 — surf_collide_*_kokkos ignore `fix ambipolar/kk` / `vibmode/kk` given by explicit name (flag stays 0)
+class: cpu-observable
+positive control (ambipolar): 2d circle, N+ beam, fix ambipolar e N+, surf_react prob N+->N p=1, `fix ambi ambipolar/kk`, models diffuse/cll/td/impulsive/adiabatic/specular + 3d piston (react on xlo); invariant sum(p_ionambi) == count(N+) | A: violated, ionambi sum == np (diffuse step 500: np 119932, N+ 51595, sum ionambi 119932; piston: 13468 vs N+ 13306) | B: sum == N+ for all 7 models (51595 / 13306), tables byte-identical to plain-name runs; CPU ref 51572 == 51572 | REPRODUCED
+positive control (vibmode): CO2 (4 vib modes) beam, collide vibrate discrete, `fix vm vibmode/kk`, cll and td; invariant evib/k - sum(theta_m*vibmode_m) == 0 | A: -2.9e8 (cll), -1.8e9 (td) | B: ~1e-4 (roundoff), identical to plain-name run | REPRODUCED
+negative control: plain-name `fix ambipolar` / `fix vibmode` decks | A vs B: identical (all rows, all models)
+necessary: yes - A breaks the invariant for every model with ambipolar/kk and for cll/td with vibmode/kk.
+complete: B correct for ambipolar/kk on all 7 surf_collide kk models, vibmode/kk on cll, td (vibmode on others: same 2-line change, not run). Sibling collide_vss_kokkos.cpp:391 already accepts both names.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G08-1
+
+### F-G00-10 / F-G09-1 — cll/td/impulsive/adiabatic kk backup() did not refresh ambipolar/vibmode fix copies after a retry grew the particle arrays
+class: cpu-observable (react/retry + particle growth)
+positive control: -pk kokkos react/retry yes, 2d circle with dissociating surf reaction so the move kernel overflows and retries:
+  (a) N2+ beam, fix ambipolar, N2+ -> N + N+ (p=1); (b) N beam, fix ambipolar, N -> N+ + e (p=1); (c) CO2 beam, fix vibmode, CO2 -> CO2 + CO2 (p=0.5), invariant evib vs vibmode
+  | A: cll, td, impulsive crash in all three decks ("double free or corruption" exit 134 / SIGSEGV 139); diffuse (already fixed upstream) OK; adiabatic (b): sum ionambi 42671 != N+ 42675
+  | B: all 5 models run; invariants hold: (a) sum ionambi == N2+ + N+ (cll 117327 = 55570+61757); (b) e count 0, ionambi == N+; (c) mismatch ~1e-4 roundoff; stats agree with CPU ref (cll (a): B N+ 61757 vs CPU 61674) | REPRODUCED
+negative control: deck (a) cll with react/extra 4.0 (no retry) | A vs B: identical stats tables
+necessary: yes for cll/td/impulsive (crashes); adiabatic only via the ambipolar surf_react path, and A's adiabatic miss (4 ionambi lost in (b)) is confounded with R-A-4 in the same deck.
+complete: B correct for all 5 models t1; t4 checked for cll (a), td (c), impulsive (b): all correct.
+verdict: NECESSARY+COMPLETE (adiabatic necessity not isolated from R-A-4)
+artifacts: $S/ab/AB2/F-G00-10 (in.{diffuse,cll,td,impulsive,adiabatic}, in.ion.*, in.vib2.*)
+
+### F-G08-3 — vanish/transparent collide() never set `reaction` (callers read it)
+class: cpu-observable
+positive control: 2d, N beam, circle (diffuse + prob N->O p=0.5) + closed square group sq with surf_collide vanish or transparent; on sq: compute surf etot echem + compute surf/reaction/tally dumped every step
+  | A CPU: SIGSEGV (exit 139) for vanish and transparent (surf->sr[isr=-1] with stale reaction)
+  | A KK: no crash, but spurious reaction events on sq: 3840 rows (vanish), 3549 rows (transparent) in the surf/reaction/tally dump; etot/echem equal to B by luck
+  | B CPU and KK: 0 tally rows, runs complete; KK echem 0, etot 9.04e-18 vs CPU 9.08e-18 | REPRODUCED
+negative control: same decks keeping surf_react but with `compute surf sq air n ke` and no reaction tally (no reader of `reaction`) | A vs B: identical stats tables, CPU and KK, vanish and transparent.
+extra positive (no surf_react at all, etot/echem + reaction tally kept): A CPU still SIGSEGV for both styles (CPU `reaction` uninitialized at function scope, update.cpp:578), A KK dumps 23 spurious rows; B CPU/KK run, 0 rows
+necessary: yes (CPU crash; KK spurious tally events).
+complete: B correct for vanish and transparent, CPU and KK t1. Siblings: every other CPU and KK surf_collide collide() and Domain::collide / DomainKokkos::collide_kokkos already set reaction = 0 first (grep), so no model is left that returns without writing it.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G08-3
+
+### F-G08-2 — piston (CPU + kk) dereferenced ip after surface chemistry deleted it; orphaned reaction product on outside-box return
+class: cpu-observable
+positive control: examples/surf_collide/in.piston (100 steps) + `surf_react r1 global 0.3 0.0` (pdelete) on the piston face xlo | A: CPU SIGSEGV (exit 139), KK t1 SIGSEGV (exit 139) | B: CPU, KK t1, KK t4 all complete (step 100: np 15011 / 15046 / 15003, T 272.4 / 270.4 / 269.0) | REPRODUCED
+second part (orphan product on the outside-box early return; deck in.diss3: N2 -> N + N p=1 on the piston face, 200 steps, observables np and count of particles with x <= 1e-15, i.e. sitting exactly on the wall) | A CPU: 16 particles parked at x=0 at step 200 (1 at steps 50/100 with p=0.1), np 10400; A KK t1/t4: np 10383 / 10276 (no x=0 parking, orphans are advected) | B CPU / KK t1 / KK t4: 0 particles at x=0, np 10217 / 10214 / 10230 (A excess over B: CPU +183, KK t1 +169, KK t4 +46; B spread 16) | REPRODUCED
+negative control: in.piston without surf_react | A vs B: identical stats tables (CPU and KK)
+necessary: yes for both parts - null deref crashes CPU and KK; orphan products show up as particles parked on the wall (CPU) and as extra particles in A.
+complete: B correct for the delete reaction (CPU, KK t1, KK t4) and the dissociation/orphan path (CPU, KK t1, KK t4); the KK discard depends on R-A-4 (verified below).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G08-2
+
+### R-A-4 — KK move: reaction product flagged PDISCARD inside a surface collision was never put on the migrate list (advected with garbage, never deleted)
+class: cpu-observable
+positive control: 2d circle, N beam, fix ambipolar e N+, surf_react N -> N+ + e (p=1): fix ambipolar sets j=-1 so the electron product is flagged PDISCARD; react/extra 4.0 (no retry, isolates from F-G00-10); invariant count(e) == 0 (CPU ref: 0) | A: stray electrons survive at step 300: diffuse 2351, cll 2592, td 2325, impulsive 77994, adiabatic 31936, specular 39931 (np inflated accordingly, e.g. specular 134374 vs CPU 94668) | B: e = 0 for all 6 models at t1 and t4 (5 models), np close to CPU (specular 94443 vs 94668; diffuse 226228 vs CPU 227080) | REPRODUCED
+piston outside-box discard path (new PDISCARD source from F-G08-2): B KK t1/t4 with piston + N2 -> N+N on xlo run clean (F-G08-2 in.diss); no A comparison possible (path did not exist in A)
+negative control: N2+ -> N + N+ deck (no PDISCARD product), cll, react/extra 4.0 | A vs B: identical stats tables
+necessary: yes (all 6 surf_collide kk models leak discarded electrons in A).
+complete: B correct for diffuse/cll/td/impulsive/adiabatic/specular t1, 5 of them t4; piston path runs clean.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/R-A-4 (also $S/ab/AB2/F-G00-10/in.ion.* with retry)
+
+### F-G18-1 — device species2group table built only at the first run; mixture/group changes between runs not seen by kk computes
+class: cpu-observable
+positive control: (1) in.regroup: 2d periodic box, run 10; `mixture air O group two`; compute grid all air n + reduce; run 10. (2) in.newmix: run 10; create mixtures m2..m5 after run 1; compute grid on m5 (2 groups); run 10. (3) in.regroup2: beam + circle, after run 1 regroup, compute surf + compute boundary per group | A: (1) groups (10000, 0) instead of (6928, 3072), t1 and t4; (2) t1 hangs (timeout), t4 SIGSEGV (stale 1x2 table indexed with imix=4); (3) surf n (755.24, 0) and xhi boundary (382.08, 0) vs CPU (529.87, 225) and (264.11, 113.96) | B: (1) and (2) stats byte-identical to CPU, t1 and t4; (3) surf (530.94, 224.3), boundary (267.77, 114.31), within noise of CPU (KK RNG stream differs) | REPRODUCED
+negative control: in.neg (same as (3) without the mixture change, one group) | A vs B KK: identical stats tables; KK 755.24 vs CPU 754.87
+necessary: yes (wrong group tallies, hang/segfault for a new mixture).
+complete: per-grid compute (grid/kk), per-surf tally (surf/kk), boundary tally (boundary/kk) checked; t1+t4. All 17 consumers re-fetch k_species2group in pre_*_tally()/compute_*()/end_of_step (grep), so the refreshed view reaches them; collide_vss_kokkos builds its own d_species2group in init() (not affected).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G18-1
+
+### F-G00-11b — KK non-SURFACE boundary branch did not reset jpart, so boundary_tally_kk saw a stale product from an earlier surface reaction of the same particle
+class: cpu-observable
+positive control: 2d, N2 beam (2000 m/s, 3000 K), dt 1e-3, specular circle with prob N2 -> N + N (p=1), boundary o r p, compute boundary all nflux mflux (running average) on the reflecting ylo/yhi faces; physical value 0 exactly (each reflect adds +w and -w); react/extra 4.0 (no retry, keeps the deferred F-G00-11a out) | A t1: ylo nflux -16.77, mflux -3.90e-25, yhi -16.84 / -3.92e-25; A t4: -16.74 / -16.91 | B t1, t4: 0 0 0 0 exactly; CPU ref (A and B CPU): 0 0 0 0 | REPRODUCED
+negative control: same deck without surf_react | A vs B: identical stats tables (0). Also in the positive deck np/nscoll/nsreact columns identical A vs B (only the tally changes).
+necessary: yes.
+complete: reflect faces checked t1/t4; OUTFLOW/PERIODIC branches of boundary_tally_kk do not read jp, so the single reset before domain_kk_copy.obj.collide_kokkos covers every non-SURFACE style. Not covered (by design): retry double-counting F-G00-11a (DEFERRED) - with react/retry yes the tallies would still be inflated.
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G00-11b
+
+### F-G13-4 — ParticleKokkos::remove_custom compacted ewhich/eicol/edcol on host but never synced them to device
+class: gpu-only
+positive control: n/a - on Serial/OpenMP the DualView device side aliases host memory, so the missing sync cannot be observed on this machine
+negative control: 2d circle + emit, `custom particle create a int 0 / b float 2 / c int 0`, set all, run 100; `custom particle remove a`; run 100; uncompute; `custom particle remove b`; run 100 (exercises remove_custom then copy/pack/zero_custom with compacted ewhich/eicol/edcol); observables sum p_b[2], sum p_c | A vs B: identical stats tables KK t1 and CPU (KK t1 step 300 np 78050 sum c 2115); t4 within noise (A 77869/2159, B 77775/2112)
+necessary: NOT shown (needs separate device memory; source review agrees with verify G13: device ewhich/eicol/edcol are read by copy/pack/unpack_custom_kokkos, zero_custom_kokkos, collide_vss_kokkos, compute_tvib_grid_kokkos).
+complete: fix mirrors add_custom's sync block. Sibling: GridKokkos::remove_custom (grid_custom_kokkos.cpp:274-348) has the same omission (compacts ewhich/eicol/edcol, syncs only the outer views), but no kernel reads the grid's device ewhich/eicol/edcol (grep: only particle-side k_ewhich/k_eicol/k_edcol view_device users), so it is latent, not a live bug.
+verdict: NOT-SHOWN-NECESSARY (gpu-only); negative control passes; latent sibling noted in GridKokkos::remove_custom
+artifacts: $S/ab/AB2/F-G13-4
+
+### F-G06-1 — FIXED_LISTS: unused slist_active_{coll,react}_tally_copy slots not re-padded with placeholder computes
+class: unreachable (only -DSPARTA_KOKKOS_FIXED_LISTS builds; verify G06: stale slots never dereferenced, closures copied with tracking disabled, so no UAF reachable)
+positive control: n/a - change is inside #ifdef SPARTA_KOKKOS_FIXED_LISTS, not compiled into A/B; even in such a build the verify analysis shows no observable failure
+negative control: tally_computes deck with two surf/collision/tally computes + tally dumps, run 300; undump/uncompute one (active count 2->1); run 300; uncompute the other (1->0); run 300 | A vs B: stats tables and both tally dumps byte-identical (KK t1: 1131/497 dump lines; CPU too); KK t4 last row identical (np 42986 nscoll 195)
+necessary: NOT shown (latent invariant/hygiene fix; no reachable failure).
+complete: both missing types (coll_tally, react_tally) get placeholders per the diff; not compiled/run with FIXED_LISTS here (fixer reports compile OK with -DSPARTA_KOKKOS_FIXED_LISTS).
+verdict: NOT-SHOWN-NECESSARY (unreachable / build-flag-only, latent); negative control passes
+artifacts: $S/ab/AB2/F-G06-1
+
+### F-G05-1 — Serial-only Kokkos build with `-k on t N>1`: move() read counters from the never-filled `reduce` struct (dispatch always uses ATOMIC_REDUCTION=0 for Serial)
+class: cpu-observable (Serial-only Kokkos build)
+builds: Serial-only Kokkos (KOKKOS_ENABLE_SERIAL only) from HEAD tree = spa_B_serial; spa_A_serial = identical tree with only the fix's Serial override line removed from update_kokkos.cpp (isolates F-G05-1)
+positive control: examples/circle (2d, 500 steps, stats ntouch ncomm nbound nexit nscheck nscoll) with -k on t 2 / t 4 | A t2,t4: ntouch nbound nexit nscheck nscoll all 0 every step (np 41032 correct) | B t2,t4: 46623 182 196 8208 205, full stats tables byte-identical to B t1 (= A t1); CPU ref 46907 200 207 8208 181 (same magnitude, different RNG) | REPRODUCED
+  also: 2d circle + surf_react prob (N->O p=0.5), 300 steps: A t4 ntouch/nexit/nscoll 0, B t4 == B t1 (42169 163 186); 3d examples/sphere 200 steps: A t4 all 0, B t4 == B t1 (96241 1083 613 31696 229; CPU 96085 1116 632 31509 257); 2d axisymmetric examples/axi 300 steps: A t4 all 0, B t4 == B t1 (35082 107 133 6213 94; CPU 35024 92 160 6244 104)
+negative control: Serial build t1 (A vs B identical, all 4 decks); CPU styles (identical); OpenMP builds A_opt vs B_opt t1 and t4 (identical stats tables, use_reduce path unchanged); A_mpi vs B_mpi -np 2 t 2 (identical; ncomm 80 nonzero)
+necessary: yes - A reports zero for every move counter whenever t>1 on a Serial-only build (2d, 2d+react, 3d, axi).
+complete: B matches its own t1 results exactly on 2d / 2d+surf_react / 3d / axi kernels at t2 and t4; counter zeroing and read-back both use use_reduce. nstuck/naxibad share the same read-back block (not triggered here). Siblings: other need_atomics/atomic_reduction users (compute_*_grid_kokkos sorted path, collide, comm, emit) pick kernel and output using the same condition with no Serial-specific dispatch override, so no other dispatch/read-back mismatch (grep: update_kokkos.cpp is the only file with a Serial dispatch special case).
+verdict: NECESSARY+COMPLETE
+artifacts: $S/ab/AB2/F-G05-1 (spa_{A,B}_serial, r.sh, in.pos, in.react, sph/, axi/, omp.*, mpi.*)
+
+## STATUS: COMPLETE

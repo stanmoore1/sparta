@@ -1,0 +1,13 @@
+95% tests passed, 12 tests failed out of 246
+	 88 - kokkos_mpi_only.in.emit.face.region.mpi_1 (Failed)
+	 91 - kokkos_mpi_only.in.emit.surf.flow.region.mpi_1 (Failed)
+	 95 - kokkos_mpi_only.in.emit.surf.normal.region.mpi_1 (Failed)
+	 98 - kokkos_mpi_only.in.emit.face.region.mpi_4 (Failed)
+	101 - kokkos_mpi_only.in.emit.surf.flow.region.mpi_4 (Failed)
+	105 - kokkos_mpi_only.in.emit.surf.normal.region.mpi_4 (Failed)
+	157 - kokkos_mpi_only.in.shocktube.mpi_1 (Failed)
+	158 - kokkos_mpi_only.in.shocktube.mpi_4 (Failed)
+	217 - kokkos_mpi_only.in.ambi_3body.mpi_1 (Failed)
+	218 - kokkos_mpi_only.in.ambi_3body.mpi_4 (Failed)
+	221 - kokkos_mpi_only.in.qk.mpi_1 (Failed)
+	222 - kokkos_mpi_only.in.qk.mpi_4 (Failed)

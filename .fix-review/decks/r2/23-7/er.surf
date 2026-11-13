@@ -1,0 +1,4 @@
+# 23-7: ER product velocity reset by cll (velreset)
+O(g) --> CO(g)
+ER S 0.5
+cll 300 1 1 1 1

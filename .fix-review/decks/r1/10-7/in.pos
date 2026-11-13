@@ -1,0 +1,22 @@
+seed 12345
+dimension 3
+global gridcut 0.0 comm/sort yes
+boundary o r r
+create_box 0 20 0 20 0 20
+create_grid 20 20 20
+balance_grid rcb cell
+global nrho 1.0 fnum 0.001
+species air.species N O
+mixture air N O vstream 100.0 0 0
+create_particles air n 4000
+variable pid particle id
+variable px particle x
+custom particle create ivec int 0 set ivec v_pid all NULL
+custom particle create darr float 2 set darr[1] v_pid all NULL set darr[2] v_px all NULL
+global surfs implicit
+fix ablate ablate all 0 0.2 random 10
+read_isurf all 20 20 20 binary.21x21x21 100.5 ablate
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+dump 1 particle all 1 d.* id x p_ivec p_darr[1] p_darr[2]
+run 0

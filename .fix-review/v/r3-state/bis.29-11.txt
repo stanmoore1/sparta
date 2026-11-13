@@ -1,0 +1,2 @@
+1/2 Test #217: mpi.in.ambi_3body.mpi_1 ..........***Failed  
+2/2 Test #218: mpi.in.ambi_3body.mpi_4 ..........***Failed  

@@ -1,0 +1,11 @@
+include hemit
+mixture air N2 O2 vstream 10.0 0 0 temp 10.0
+read_surf data.circle
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+variable a equal 10
+variable bb equal 20
+fix in emit/surf air all perspecies no n v_bb
+timestep 0.0001
+stats 10
+run 10

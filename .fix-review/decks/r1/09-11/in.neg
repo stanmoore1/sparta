@@ -1,0 +1,5 @@
+include hstat
+create_particles air n 1000
+dump 1 particle all 10 d.* id x
+dump_modify 1 thresh x > 5
+run 10

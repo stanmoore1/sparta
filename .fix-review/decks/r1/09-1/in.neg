@@ -1,0 +1,4 @@
+include hcirc
+compute 1 grid all air n u v
+dump 1 grid all 10 dump.grid id c_1[2]
+run 20

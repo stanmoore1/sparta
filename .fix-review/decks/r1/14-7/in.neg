@@ -1,0 +1,3 @@
+include hstat
+region r block 0 5 INF INF INF INF
+group g1 grid region r one

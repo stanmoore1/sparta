@@ -1,0 +1,5 @@
+include base.inc
+variable            t equal 500.0
+custom              surf create ts float 0 set ts v_t all NULL
+surf_collide        1 diffuse s_ts 1.0
+include tail.inc

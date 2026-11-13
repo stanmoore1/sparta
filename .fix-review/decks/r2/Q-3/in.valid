@@ -1,0 +1,20 @@
+# Q-3 neg
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary o r p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+species air.species N O
+mixture air N O
+read_surf data.circle
+surf_collide 1 diffuse 300 0
+surf_react 1 global 0.3 0.2
+surf_modify all collide 1 react 1
+global nrho 1.0 fnum 0.001
+mixture air N O vstream 100 0 0
+fix in emit/face air xlo
+timestep 0.0001
+stats 100
+run 300

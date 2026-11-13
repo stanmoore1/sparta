@@ -1,0 +1,12 @@
+boundary o r p
+include h2abl
+global surfs explicit/distributed
+read_surf data.irect
+variable d grid 1.0
+fix fablate ablate all 1 1.0 v_d multiple yes
+create_isurf all fablate 100.5 ave
+surf_collide 1 diffuse 300.0 0.0
+surf_modify all collide 1
+stats 1
+stats_style step f_fablate f_fablate[1] f_fablate[3]
+run 3

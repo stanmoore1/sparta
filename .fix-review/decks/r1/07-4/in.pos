@@ -1,0 +1,5 @@
+include h2d
+custom grid create rho float 0 create vs float 3 create t float 0
+fix 1 custom 10 grid file/coarse 1 binary a.*.txt 4 rho vs[1] vs[2] vs[3] file/coarse 1 text b.*.txt 4 t vs[1] vs[2] vs[3]
+dump 1 grid all 10 dump.pos id g_rho g_t
+run 10

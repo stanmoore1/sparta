@@ -1,0 +1,12 @@
+# FX-collide checkpoint
+- F-G01-1 | src/KOKKOS/collide_vss_kokkos.cpp | ambipolar fix lookup matches "ambipolar" or "ambipolar/kk", errors if not found, errors if !kokkos_flag (as surf_collide_diffuse_kokkos) | compile OK | note: CPU collide.cpp:333 and react_bird.cpp:435 (ambi_check, called first when react defined) keep exact strcmp "ambipolar" -> same crash with explicit ambipolar/kk + react; not owned
+- F-G01-2 | src/KOKKOS/collide_vss_kokkos.cpp | set vre_first=1 when vremax/remain reallocated (ngroups != oldgroups) | compile OK | note: CPU collide.cpp ~280 needs same one-liner; not owned
+- F-G01-3 | src/KOKKOS/collide_vss_kokkos.cpp | react-retry path in collisions_one reallocs d_nn_last_partner with d_plist when NEARCP | compile OK
+- F-G01-4 / F-G02-1 | src/KOKKOS/collide_vss_kokkos.cpp | zero-volume cell: set d_error_flag and return at all 5 collision kernels (before rand state acquire) | compile OK
+- F-G00-13 | src/KOKKOS/collide_vss_kokkos.cpp | collisions_one_ambipolar kernel: recomb 3rd body disabled only for np==1 or (np==2 && jpart not electron), matching collide.cpp:1552-1555 (other kernels already match CPU np<=2) | compile OK
+- F-G00-17 | src/KOKKOS/collide_vss_kokkos.cpp | test_collision_kokkos: return 0 if vremax==0 before vre/vremax, matching collide_vss.cpp:228 | compile OK
+- F-G02-2 | src/KOKKOS/collide_vss_kokkos.cpp | 18 racy d_max{delete,cellcount,electron}() += DELTA replaced by Kokkos::atomic_max(..., ndelete+DELTADELETE / d_plist.extent(1)+DELTACELLCOUNT / d_elist.extent(1)+DELTACELLCOUNT) | compile OK
+- F-G00-15 | src/KOKKOS/collide_vss_kokkos.{h,cpp} | added d_vibmode_backup (DAT::t_int_2d_lr); backup() snapshots eiarray vibmode view when vibstyle==DISCRETE && index_vibmode>=0, restore() deep_copies it back and refreshes k_eiarray, released with other backups | compile OK
+- F-G04-2 | src/KOKKOS/react_bird_kokkos.{h,cpp}, react_tce_kokkos.h, collide_vss_kokkos.cpp | ReactBirdKokkos gets d_prob_warn device flag + prob_warn_flag (alloc in ctor, reset in init since react_tce_kokkos.cpp not owned); attempt_kk sets 1/2 for react_prob<0/>1 (replacing dead commented warnings); CollideVSSKokkos::collisions() calls check_prob_warn() which warns once per run with react_tce.cpp text | compile OK
+- F-G21V-1 | src/KOKKOS/collide_vss_kokkos.cpp | react/extra padding applied when !react_retry_flag (was inverted) at the 5 collisions_* pre-loop sites, matching doc/package.txt:85-101 and update_kokkos.cpp:701; do_backup conditions unchanged | compile OK
+## STATUS: COMPLETE

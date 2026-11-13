@@ -1,0 +1,16 @@
+# P-3
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary p p p
+create_box 0 4 0 4 -0.5 0.5
+create_grid 4 4 1
+balance_grid rcb cell
+species air.species N
+mixture air N
+global nrho 1.0 fnum 0.1
+create_particles air n 100
+compute 1 grid all air n
+compute p ke/particle
+dump 1 grid all 10 d.g id foo
+run 0

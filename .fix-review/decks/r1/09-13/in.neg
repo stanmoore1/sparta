@@ -1,0 +1,5 @@
+include hstat
+create_particles air n 500
+custom particle create darr float 2
+dump 1 particle all 1 d.* id p_darr[2]
+run 1

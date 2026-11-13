@@ -1,0 +1,4 @@
+include hstat
+create_particles air n 100
+run 1
+write_restart rst.base

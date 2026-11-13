@@ -1,0 +1,13 @@
+# Q-3 sibling (31-2)
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary o r p
+create_box 0 10 0 10 -0.5 0.5
+create_grid 10 10 1
+balance_grid rcb cell
+species air.species N O
+mixture air N O
+read_surf data.circle
+surf_collide a-b diffuse 300 0
+run 0

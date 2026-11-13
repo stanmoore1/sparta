@@ -1,0 +1,7 @@
+include hstat
+create_particles air n 500
+compute 1 grid all air n
+fix 2 ave/grid all 10 10 100 c_1[1]
+dump 1 image all 100 img.*.ppm type type grid f_2
+dump_modify 1 every 50
+run 200

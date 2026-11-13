@@ -1,0 +1,4 @@
+Implicit-surf custom spread (Surf::spread_own2local for implicit surfs, fix be90280d).
+in.literal (diffuse 500.0) and in.custom (diffuse s_ts with ts = 500 on every surf) must give bit-identical stats
+at every np (np>1 exercises ghost surfs + fix balance migration). Before the fix: ASan heap-buffer-overflow READ in
+Surf::rendezvous_own2local (asan build) / wrong or garbage temperatures.

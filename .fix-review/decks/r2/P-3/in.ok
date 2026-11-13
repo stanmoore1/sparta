@@ -1,0 +1,18 @@
+# P-3 negative
+seed 12345
+dimension 2
+global gridcut 0.0
+boundary p p p
+create_box 0 4 0 4 -0.5 0.5
+create_grid 4 4 1
+balance_grid rcb cell
+species air.species N
+mixture air N
+global nrho 1.0 fnum 0.1
+create_particles air n 100
+compute 1 grid all air n
+compute p ke/particle
+dump 1 grid all 10 d.ok.g id c_1[1]
+dump 2 particle all 10 d.ok.p id x y c_p
+dump_modify 2 format float %.6g
+run 10

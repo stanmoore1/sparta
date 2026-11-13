@@ -1,0 +1,2 @@
+1/2 Test #217: mpi.in.ambi_3body.mpi_1 ..........   Passed   17.79 sec
+2/2 Test #218: mpi.in.ambi_3body.mpi_4 ..........   Passed   20.92 sec

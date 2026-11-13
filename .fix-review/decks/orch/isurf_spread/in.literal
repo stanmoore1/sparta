@@ -1,0 +1,3 @@
+include base.inc
+surf_collide        1 diffuse 500.0 1.0
+include tail.inc
