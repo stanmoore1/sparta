@@ -326,7 +326,7 @@ values for each of these, so they do not need to be specified.
 By default, these header lines are as follows:
 
 
-.. code-block:: SPARTA
+.. parsed-literal::
 
    # Histogram for fix ID
    # TimeStep Number-of-bins Total-counts Missing-counts Min-value Max-value

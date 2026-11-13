@@ -58,7 +58,7 @@ custom command
    custom surf create sdvec float 0 set sdvec v_sdvec all NULL
    custom surf create darray float 2 set darray[1] v_sdarray1 all NULL
    custom surf set darray[2] v_sdarray2 all NULL
-   custom grid create gvec int 0 create garray float 2 file grid.attributes gvec garray 1 garray 2
+   custom grid create gvec int 0 create garray float 2 file grid.attributes gvec garray[1] garray[2]
    custom particle remove ivec
    custom surf remove darray
 

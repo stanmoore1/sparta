@@ -261,7 +261,7 @@ default values for each of these, so they do not need to be specified.
 By default, these header lines are as follows for *mode* = scalar:
 
 
-.. code-block:: SPARTA
+.. parsed-literal::
 
    # Time-averaged data for fix ID
    # TimeStep value1 value2 ...
@@ -274,7 +274,7 @@ so the *title3* setting is ignored when *mode* = scalar.
 By default, these header lines are as follows for *mode* = vector:
 
 
-.. code-block:: SPARTA
+.. parsed-literal::
 
    # Time-averaged data for fix ID
    # TimeStep Number-of-rows

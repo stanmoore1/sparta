@@ -145,7 +145,7 @@ command is invoked.  Thus these lines:
 
    compute t temp
    variable myT equal c_t
-   run 6000 every 2000 "print 'Temp = $ myT '"
+   run 6000 every 2000 "print 'Temp = ${myT}'"
 
 are the equivalent of:
 
@@ -155,11 +155,11 @@ are the equivalent of:
    compute t temp
    variable myT equal c_t
    run 2000
-   print "Temp = $ myT "
+   print "Temp = ${myT}"
    run 2000
-   print "Temp = $ myT "
+   print "Temp = ${myT}"
    run 2000
-   print "Temp = $ myT "
+   print "Temp = ${myT}"
 
 which does 3 runs of 2000 steps and prints the x-coordinate of a
 particular atom between runs.  Note that the variable "$q" will

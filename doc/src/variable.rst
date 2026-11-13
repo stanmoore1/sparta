@@ -745,7 +745,7 @@ An example of its usage is as follows:
 
    variable     csq particle "vx*vx + vy*vy + vz*vz"
    compute      therm thermal/grid all all temp press
-   variable     csq_norm particle v_csq/grid2part(c_therm 1 )
+   variable     csq_norm particle v_csq/grid2part(c_therm[1])
 
 The per-particle variable csq\_norm will calculate the kinetic energy
 for each particle, normalized by the thermal temperature of the full

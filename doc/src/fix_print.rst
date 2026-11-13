@@ -67,7 +67,7 @@ printed as the first line of the output file, assuming the *file*
 keyword was used.  By default, the title line is as follows:
 
 
-.. code-block:: SPARTA
+.. parsed-literal::
 
    # Fix print output for fix ID
 

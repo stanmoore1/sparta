@@ -555,8 +555,8 @@ by these to define grid-style variables which invoke the same Python
 .. code-block:: SPARTA
 
    compute         1 property/grid all xc yc
-   variable        xnew grid py_foo(c_1 1 )
-   variable        ynew grid py_foo(c_1 2 )
+   variable        xnew grid py_foo(c_1[1])
+   variable        ynew grid py_foo(c_1[2])
    dump            1 grid all 1000 dump.grid.pyvar id xc yc v_xnew v_ynew
 
 When the dump command invokes the 2 grid-style variables, their
@@ -604,7 +604,7 @@ Now consider these (made up) commands:
    variable        myValue equal "2.0*np"
    compute         1 property/grid all xc yc zc
    compute         2 grid all n
-   variable        field grid py_foo(c_1 1 +3.0,sqrt(c_1 2 ),(c_1 3 -zlo)*c_2 1 )
+   variable        field grid py_foo(c_1[1]+3.0,sqrt(c_1[2]),(c_1[3]-zlo)*c_2[1])
 
 They define a Python "mixedargs" function with 6 arguments.  Three of
 them are internal-style variables, which the variable formula
