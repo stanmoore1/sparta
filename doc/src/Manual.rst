@@ -27,9 +27,9 @@ the first page of the manual (this page).
   version you have.  "make -C doc html" builds them into doc/html, and
   "make -C doc pdf" builds the `PDF file <Manual.pdf>`_ of the whole
   manual beside them.  "make -C doc" on its own lists the targets.
-* At some point, there also will be a Developer.pdf file
-  in the doc directory, which describes the internal structure and
-  algorithms of SPARTA.
+* The :doc:`Developer guide <Developer>` describes the internal
+  structure and algorithms of SPARTA.  It is part of this manual, and of
+  the PDF file built from it.
 
 SPARTA stands for Stochastic PArallel Rarefied-gas Time-accurate
 Analyzer.
@@ -150,6 +150,7 @@ it gives quick access to documentation for all SPARTA commands.
 * :doc:`Future and history <Section_history>`
   13.1 `Coming attractions <hist_1_>`_
   13.2 `Past versions <hist_2_>`_
+* :doc:`Developer guide <Developer>`
 * :doc:`Bibliography <Bibliography>`
 
 
@@ -416,6 +417,7 @@ it gives quick access to documentation for all SPARTA commands.
    Section_python
    Section_errors
    Section_history
+   Developer
    Bibliography
    adapt_grid
    balance_grid
