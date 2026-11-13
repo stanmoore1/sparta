@@ -34,9 +34,10 @@ hold; the array grows in fixed chunks of ``DELTA`` (16384) particles
 rather than one at a time.
 
 Two fields exist only for the duration of a move. ``dtremain`` is how much
-of the timestep a particle still has to move: it is set when a move is
-suspended for migration to another processor, and on a new particle created
-by a surface reaction partway through the step -- and ``flag`` is the ``PKEEP``/``PDONE``/``PENTRY``/... state
+of the timestep a particle still has to move: it is set on particles
+inserted by the fix emit styles (a random fraction of the step), when a
+move is suspended for migration to another processor, and on a new
+particle created by a surface reaction partway through the step -- and ``flag`` is the ``PKEEP``/``PDONE``/``PENTRY``/... state
 described in :doc:`Developer_flow`.
 
 Note what is *not* in the struct: no force, no neighbor list, no per-particle
@@ -86,8 +87,8 @@ one cell's particles is therefore:
    }
 
 The ``sorted`` flag records whether the lists are currently valid.  Nothing
-enforces it: the move and the compress routines clear it, but
-``add_particle()`` does not.  Code that relies on the lists should check it
+enforces it: the move, ``compress_migrate()`` and ``compress_rebalance()``
+clear it, but ``compress_reactions()`` and ``add_particle()`` do not.  Code that relies on the lists should check it
 first (``if (!particle->sorted) particle->sort();``).
 
 Following a linked list scatters memory accesses, which costs cache misses

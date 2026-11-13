@@ -96,8 +96,8 @@ Assigning surfaces to cells
 
 ``Grid::ChildCell`` carries ``nsurf`` and ``csurfs``: the number of surface
 elements intersecting the cell and their indices. Building this mapping is
-the job of ``src/grid_surf.cpp``, which marks every cell a surface crosses
-as ``OVERLAP`` (``ChildInfo::type``); the cut-cell code in ``cut2d.cpp`` and
+the job of ``src/grid_surf.cpp``, which marks every cell a non-transparent
+surface element crosses as ``OVERLAP`` (``ChildInfo::type``); the cut-cell code in ``cut2d.cpp`` and
 ``cut3d.cpp`` sets those cells' per-corner flags (``ChildInfo::corner``),
 and ``Grid::set_inout()`` in ``src/grid.cpp`` then marks the cells no surface
 crosses as ``OUTSIDE`` or ``INSIDE``.
@@ -129,8 +129,8 @@ to degenerate input: surfaces that touch a cell face exactly, elements that
 are nearly coplanar, points that coincide to within round-off. Much of the
 length of ``cut3d.cpp`` is these cases. If you are changing it, the
 ``examples`` problems with surfaces are the regression net
-(:doc:`Developer_testing`), and `Surface elements: explicit, implicit, distributed <Section_howto.html#howto_13>`_
-describes the invariants a valid surface must satisfy -- chiefly that it be
+(:doc:`Developer_testing`), and `Details of surfaces in SPARTA <Section_howto.html#howto_9>`_ and
+:doc:`read_surf <read_surf>` describe the invariants a valid surface must satisfy -- chiefly that it be
 watertight.
 
 Surface collisions during a move
