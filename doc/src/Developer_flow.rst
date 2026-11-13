@@ -15,8 +15,10 @@ matters in an input script.
 
 ``Input`` handles a handful of commands itself -- variable substitution,
 ``if``, ``jump``, ``include``, ``shell`` and so on. Everything else is
-dispatched either to an ``Input`` method (``Input::collide_command()``,
-``Input::fix()``, ...) that hands it to the subsystem that owns it, or, for
+dispatched either to an ``Input`` method that handles it or passes it
+to the class that owns it (``Input::fix()`` and ``Input::compute()`` hand
+theirs to ``Modify``; ``Input::collide_command()`` creates the collision
+style itself), or, for
 one-shot commands such as ``create_grid``, to a ``Command``
 style instantiated from the generated ``style_command.h``, run once, and
 destroyed.

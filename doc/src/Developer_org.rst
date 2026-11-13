@@ -117,8 +117,8 @@ code:
      - the PYTHON package interface
    * - ``kokkos``, ``memoryKK``
      - ``KokkosSPARTA``, ``MemoryKokkos``
-     - always declared; non-NULL only when the KOKKOS package is built in
-       and enabled with ``-k on``
+     - always declared, but set only when the KOKKOS package is built in
+       and enabled with ``-k on`` (``kokkos`` is NULL otherwise)
 
 Reading ``src/sparta.h`` is the fastest way to get oriented; each member is
 annotated with a one-line comment.

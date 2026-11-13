@@ -122,7 +122,7 @@ ones first, then ghost ones appended after them.
 :doc:`Developer_particle`. ``type`` records the cell's relationship to the
 surfaces: OUTSIDE means outside every surface object, i.e. entirely in the
 flow; INSIDE means entirely inside a surface object, with no flow; OVERLAP
-means a surface crosses it, so it needs cut-cell geometry; UNKNOWN is the
+means a non-transparent surface element crosses it, so it needs cut-cell geometry; UNKNOWN is the
 state before it has been classified.
 
 Face neighbors and ``nmask``
@@ -157,7 +157,8 @@ cell, or not known at all:
 An "unknown" entry is 0 and is not used.  The field is typed ``cellint``
 rather than ``int`` because ``Grid::unset_neighbors()`` temporarily replaces
 the local indices of child and parent neighbors with global cell IDs --
-around a rebalance, while cells move between processors -- and
+around a rebalance, while cells move between processors, or a change to
+the surfaces -- and
 ``Grid::reset_neighbors()`` turns them back into local indices.  In the
 common case the move loop steps from cell to cell with a single array
 lookup.

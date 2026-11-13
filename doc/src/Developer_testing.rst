@@ -52,8 +52,9 @@ Tests are registered with ctest when SPARTA is configured with
    ctest --output-on-failure -j4
 
 ``sparta_add_all_tests_to_config()`` in ``sparta_test_utils.cmake`` finds
-every ``in.*`` script in the enabled example directories and creates one
-ctest entry per script for 1 and for 4 MPI ranks, each running in the
+every ``in.*`` script in the enabled example directories, apart from those
+listed in ``SPARTA_DISABLED_TESTS``, and creates one ctest entry per script
+for 1 and for 4 MPI ranks (only 1 in a build without MPI), each running in the
 directory's copy under ``build/examples/<directory>`` and invoking
 ``regression.py`` as the test driver.  Tests from the same directory share
 that copy.
@@ -110,9 +111,10 @@ requests to master, three of which run the test suite:
        ``-k on -sf kk`` against the *same* reference logs as the non-KOKKOS
        build. See :doc:`Developer_kokkos`.
    * - ``bigbig``
-     - Compile only: a KOKKOS/OpenMP build with ``-DSPARTA_BIGBIG``,
-       covering the wide integer variant and the OpenMP backend, neither of
-       which the other jobs build.
+     - Compile only: a KOKKOS build (the ``kokkos_omp`` preset) with
+       ``-DSPARTA_BIGBIG``, covering the wide integer variant, which the
+       other jobs do not build.  Despite its name, the preset does not
+       enable Kokkos' OpenMP backend, so this build uses Serial.
 
 A fifth job, ``doc``, builds this manual with warnings treated as errors on
 Python 3.9 and 3.11, then checks its links, checks the command and style

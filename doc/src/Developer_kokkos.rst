@@ -61,7 +61,7 @@ wrap these in two methods that other classes call for the data they use:
 
 (``CollideVSSKokkos`` has the same pair, named ``sync`` and ``modified``.)
 The bitmask argument, built from the masks in
-``src/KOKKOS/sparta_masks.h``, selects which DualViews are involved --
+``src/sparta_masks.h``, selects which DualViews are involved --
 ``PARTICLE_MASK``, ``SPECIES_MASK``, the grid and surface masks -- so a
 kernel that touched only the particle array does not force a transfer of
 species or grid data.  The mask is per array, not per field: all of a

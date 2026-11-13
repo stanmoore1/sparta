@@ -138,8 +138,8 @@ should be preferred to hand-rolled parsing:
 
 ``Variable`` (``src/variable.cpp``) implements the
 :doc:`variable <variable>` command: index, loop, uloop, world, universe,
-string, getenv, file, format, internal, equal, particle, grid and surf
-styles, plus the expression evaluator used
+string, getenv, file, format, internal, python, equal, particle, grid
+and surf styles, plus the expression evaluator used
 for equal-style formulas. It is the largest single file in ``src``, mostly
 because of the operator and function table in the evaluator.
 
