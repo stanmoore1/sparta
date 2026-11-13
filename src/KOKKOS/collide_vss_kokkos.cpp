@@ -4904,6 +4904,18 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
 
   double tcoll = (shape_classical > 0.0) ? E_Dispose/(boltz*shape_classical) : 0.0;
 
+  // a product with a discrete ladder: exact microcanonical draw of all
+  // product states at once (see the CPU twin in collide_vss.cpp)
+
+  int ndiscrete_rot = 0;
+  if (rotstyle == DISCRETE)
+    for (i = 0; i < numspecies; i++)
+      if (d_species[plist[i]->ispecies].rotdof == 2) ndiscrete_rot++;
+  if (nvibflat || nelecflat || ndiscrete_rot) {
+    reacting_disposal_exact(plist,numspecies,aveomega,postcoln,rand_gen);
+    return;
+  }
+
   if ((nvibflat || nelecflat) && E_Dispose > 0.0) {
     tcoll = reacting_pool_temp(shape_classical,nvibflat,theta,
                                nelecflat,elecsp,E_Dispose);
@@ -5060,6 +5072,213 @@ void CollideVSSKokkos::EEXCHANGE_ReactingEDisposal(int icell,
 
   postcoln.eint = postcoln.erot + postcoln.evib + postcoln.eelec;
   postcoln.etrans = E_Dispose;
+}
+
+/* ----------------------------------------------------------------------
+   exact microcanonical post-reaction disposal for products with discrete
+   ladders, matching CollideVSS::reacting_disposal_exact draw-for-draw
+   (see that method for the derivation)
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+void CollideVSSKokkos::reacting_disposal_exact(Particle::OnePart **plist,
+                                               int n, double aveomega,
+                                               struct State &postcoln,
+                                               rand_type &rand_gen) const
+{
+  double E = postcoln.etotal;
+  int i;
+
+  // continuous shape of the pool and the discrete ladders of the products
+
+  double shape = 2.5 - aveomega;
+  double classical_dof = 0.0;
+  double theta[3*Particle::MAXVIBMODE];
+  int elecsp[3];
+  int nvib = 0, nelec = 0;
+
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    int rotdof = d_species[sp].rotdof;
+    if (rotdof && rotstyle != NONE) {
+      shape += 0.5*rotdof;
+      if (!(rotstyle == DISCRETE && rotdof == 2)) classical_dof += rotdof;
+    }
+    int vibdof = d_species[sp].vibdof;
+    if (vibdof && vibstyle != NONE) {
+      if (vibstyle == DISCRETE) {
+        if (vibdof == 2 || has_custom(p))
+          for (int m = 0; m < d_species[sp].nvibmode; m++)
+            if (d_species[sp].vibtemp[m] > 0.0)
+              theta[nvib++] = d_species[sp].vibtemp[m];
+      } else {
+        shape += 0.5*vibdof;
+        classical_dof += vibdof;
+      }
+    }
+    if (elecstyle == DISCRETE && d_nelecstates[sp] > 0 && has_custom(p))
+      elecsp[nelec++] = sp;
+  }
+  double s = 2.5 - aveomega + 0.5*classical_dof;
+
+  double tc = (E > 0.0) ? reacting_pool_temp(shape,nvib,theta,nelec,elecsp,E)
+    : 0.0;
+
+  int qvib[3][Particle::MAXVIBMODE];
+  int qelec[3],qrot[3];
+  for (i = 0; i < n; i++) {
+    qelec[i] = qrot[i] = 0;
+    for (int m = 0; m < Particle::MAXVIBMODE; m++) qvib[i][m] = 0;
+  }
+
+  double C = (E > 0.0) ? E : 0.0;
+
+  if (E > 0.0 && tc > 0.0) {
+    double beta = 1.0/(boltz*tc);
+    double cstar = (s - 1.0)/beta;
+
+    double zel[3],zrot[3];
+    for (i = 0; i < n; i++) {
+      zel[i] = zrot[i] = 0.0;
+      int sp = plist[i]->ispecies;
+      if (elecstyle == DISCRETE && d_nelecstates[sp] > 0 && has_custom(plist[i]))
+        for (int l = 0; l < d_nelecstates[sp]; l++)
+          zel[i] += d_elecstates(sp,l).degen * exp(-beta*boltz*d_elecstates(sp,l).temp);
+      if (rotstyle == DISCRETE && d_species[sp].rotdof == 2) {
+        double a = beta*boltz*d_species[sp].rottemp[0];
+        for (int j = 0; ; j++) {
+          double x = a*j*(j+1.0);
+          if (x > 46.0) break;
+          zrot[i] += (2.0*j+1.0)*exp(-x);
+        }
+      }
+    }
+
+    int accepted = 0;
+    for (int iter = 0; iter < 1000000 && !accepted; iter++) {
+      double esum = 0.0;
+      for (i = 0; i < n && esum < E; i++) {
+        Particle::OnePart *p = plist[i];
+        int sp = p->ispecies;
+
+        if (vibstyle == DISCRETE && d_species[sp].vibdof &&
+            (d_species[sp].vibdof == 2 || has_custom(p))) {
+          for (int m = 0; m < d_species[sp].nvibmode; m++) {
+            double th = d_species[sp].vibtemp[m];
+            if (th <= 0.0) { qvib[i][m] = 0; continue; }
+            double u = rand_gen.drand();
+            double dv = log1p(-u)/(-beta*boltz*th);
+            int v = static_cast<int> (dv < 1.0e8 ? dv : 1.0e8);
+            qvib[i][m] = v;
+            esum += v*boltz*th;
+          }
+        }
+
+        if (zel[i] > 0.0) {
+          int nst = d_nelecstates[sp];
+          double r = rand_gen.drand()*zel[i];
+          int l = 0;
+          for (; l < nst-1; l++) {
+            r -= d_elecstates(sp,l).degen * exp(-beta*boltz*d_elecstates(sp,l).temp);
+            if (r < 0.0) break;
+          }
+          qelec[i] = l;
+          esum += boltz*d_elecstates(sp,l).temp;
+        }
+
+        if (zrot[i] > 0.0) {
+          double a = beta*boltz*d_species[sp].rottemp[0];
+          double r = rand_gen.drand()*zrot[i];
+          int j = 0;
+          for (;; j++) {
+            double x = a*j*(j+1.0);
+            r -= (2.0*j+1.0)*exp(-x);
+            if (r < 0.0 || x > 46.0) break;
+          }
+          qrot[i] = j;
+          esum += j*(j+1.0)*boltz*d_species[sp].rottemp[0];
+        }
+      }
+      if (esum >= E) continue;
+      C = E - esum;
+      double lacc = (s - 1.0)*log(C/cstar) - beta*(C - cstar);
+      if (log(rand_gen.drand()) < lacc) accepted = 1;
+    }
+    if (!accepted) {
+      C = E;
+      for (i = 0; i < n; i++) {
+        qelec[i] = qrot[i] = 0;
+        for (int m = 0; m < Particle::MAXVIBMODE; m++) qvib[i][m] = 0;
+      }
+    }
+  }
+
+  // assign the discrete levels
+
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    if (rotstyle == DISCRETE && d_species[sp].rotdof == 2)
+      p->erot = qrot[i]*(qrot[i]+1.0)*boltz*d_species[sp].rottemp[0];
+    if (vibstyle == DISCRETE && d_species[sp].vibdof) {
+      if (d_species[sp].vibdof == 2) {
+        p->evib = qvib[i][0]*boltz*d_species[sp].vibtemp[0];
+      } else if (has_custom(p)) {
+        const auto &d_vibmode = k_eiarray.view_device()[d_ewhich[index_vibmode]].k_view.view_device();
+        int pindex = p - d_particles.data();
+        p->evib = 0.0;
+        for (int m = 0; m < d_species[sp].nvibmode; m++) {
+          d_vibmode(pindex,m) = qvib[i][m];
+          p->evib += qvib[i][m]*boltz*d_species[sp].vibtemp[m];
+        }
+      }
+    }
+    if (elecstyle == DISCRETE && d_nelecstates[sp] > 0 && has_custom(p)) {
+      auto &d_estates = k_eivec.view_device()[d_ewhich[index_elecstate]].k_view.view_device();
+      auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
+      int pindex = p - d_particles.data();
+      d_estates[pindex] = qelec[i];
+      d_eelecs[pindex] = d_elecstates(sp,qelec[i]).temp*boltz;
+    }
+  }
+
+  // split C between translation and the continuous internal modes
+
+  double remaining_dof = classical_dof;
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    int rotdof = d_species[sp].rotdof;
+    if (rotdof && rotstyle != NONE && !(rotstyle == DISCRETE && rotdof == 2)) {
+      double b = (1.5 - aveomega) + 0.5*(remaining_dof - rotdof);
+      if (rotdof == 2) p->erot = C*(1.0 - pow(rand_gen.drand(),1.0/(1.0+b)));
+      else p->erot = C*sample_bl(rand_gen,0.5*rotdof-1.0,b);
+      C -= p->erot;
+      remaining_dof -= rotdof;
+    }
+    int vibdof = d_species[sp].vibdof;
+    if (vibdof && vibstyle == SMOOTH) {
+      double b = (1.5 - aveomega) + 0.5*(remaining_dof - vibdof);
+      if (vibdof == 2) p->evib = C*(1.0 - pow(rand_gen.drand(),1.0/(1.0+b)));
+      else p->evib = C*sample_bl(rand_gen,0.5*vibdof-1.0,b);
+      C -= p->evib;
+      remaining_dof -= vibdof;
+    }
+  }
+
+  postcoln.erot = postcoln.evib = postcoln.eelec = 0.0;
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    postcoln.erot += p->erot;
+    postcoln.evib += p->evib;
+    if (elecstyle == DISCRETE && d_nelecstates[p->ispecies] > 0 && has_custom(p)) {
+      auto &d_eelecs = k_edvec.view_device()[d_ewhich[index_eelec]].k_view.view_device();
+      postcoln.eelec += d_eelecs[p - d_particles.data()];
+    }
+  }
+  postcoln.eint = postcoln.erot + postcoln.evib + postcoln.eelec;
+  postcoln.etrans = C;
 }
 
 /* ---------------------------------------------------------------------- */

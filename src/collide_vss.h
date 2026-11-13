@@ -108,6 +108,7 @@ class CollideVSS : public Collide {
   double eff_vib_dof(double, double);
   double eff_elec_dof(int, double);
   double reacting_pool_temp(double, int, double *, int, int *, double);
+  void reacting_disposal_exact(Particle::OnePart **, int, double);
 
   void relax_electronic_mode(Particle::OnePart *, Particle::OnePart *,
                              double&, double, bool);

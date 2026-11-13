@@ -1160,6 +1160,22 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
 
   double tcoll = (shape_classical > 0.0) ? E_Dispose/(boltz*shape_classical) : 0.0;
 
+  // a product with a discrete ladder (vibration, electronic states, or
+  // discrete rotation of a linear molecule): draw all product states at
+  // once from the exact microcanonical distribution (see
+  // reacting_disposal_exact); the sequential draws below remain for
+  // products whose internal modes are all continuous, for which they are
+  // exact
+
+  int ndiscrete_rot = 0;
+  if (rotstyle == DISCRETE)
+    for (i = 0; i < numspecies; i++)
+      if (species[plist[i]->ispecies].rotdof == 2) ndiscrete_rot++;
+  if (nvibflat || nelecflat || ndiscrete_rot) {
+    reacting_disposal_exact(plist,numspecies,aveomega);
+    return;
+  }
+
   if ((nvibflat || nelecflat) && E_Dispose > 0.0) {
     tcoll = reacting_pool_temp(shape_classical,nvibflat,theta,
                                nelecflat,elecsp,E_Dispose);
@@ -1322,6 +1338,260 @@ void CollideVSS::EEXCHANGE_ReactingEDisposal(Particle::OnePart *ip,
 
   postcoln.eint = postcoln.erot + postcoln.evib + postcoln.eelec;
   postcoln.etrans = E_Dispose;
+}
+
+/* ----------------------------------------------------------------------
+   exact microcanonical post-reaction disposal for products with discrete
+   ladders, called by EEXCHANGE_ReactingEDisposal() with the products
+   plist[0..n) (internal energies already zeroed) and the pool energy
+   E = postcoln.etotal
+
+   target: the distribution of the products' states at total energy E in
+   their collision ensemble,
+     P(states) ~ prod_l g_l * C^(s-1),  C = E - sum_l eps_l >= 0,
+   over the discrete levels l of every ladder (vibrational modes with
+   g = 1, electronic levels with their degeneracy, rigid-rotor levels of a
+   linear molecule under discrete rotation with g = 2J+1), with the
+   continuous energy C shared by the relative translation (shape
+   5/2 - omega) and the continuous internal modes (shape dof/2 each),
+   s = 5/2 - omega + sum dof/2.  This is the conditional at fixed E of
+   the equilibrium collision ensemble that the reverse reaction samples,
+   so a reaction followed by its reverse leaves equilibrium
+   populations of every mode unchanged.  The sequential draws with
+   effective DOF used before were exact for continuous modes only; for
+   discrete ladders their bias accumulates in a reacting gas wherever
+   relaxation is slow (e.g. vibration) or forbidden (spin-changing
+   electronic transitions).
+
+   sampling: each ladder is drawn independently from its Boltzmann
+   distribution at beta = 1/(kB*Tc), and the draw is accepted with
+   probability (C/C*)^(s-1) exp(-beta (C - C*)), C* = (s-1)/beta, the
+   ratio of target to proposal divided by its maximum; rejection
+   sampling is exact for any beta, and Tc of reacting_pool_temp() makes
+   the acceptance high.  C is then split between translation and the
+   continuous internal modes by Dirichlet stick-breaking.
+------------------------------------------------------------------------- */
+
+void CollideVSS::reacting_disposal_exact(Particle::OnePart **plist, int n,
+                                         double aveomega)
+{
+  Particle::Species *species = particle->species;
+  double boltz = update->boltz;
+  double E = postcoln.etotal;
+
+  int *estates = NULL;
+  double *eelecs = NULL;
+  if (elecstyle == DISCRETE) {
+    estates = particle->eivec[particle->ewhich[index_elecstate]];
+    eelecs = particle->edvec[particle->ewhich[index_eelec]];
+  }
+
+  // continuous shape of the pool and the discrete ladders of the products
+
+  double shape = 2.5 - aveomega;
+  double classical_dof = 0.0;
+  double theta[3*Particle::MAXVIBMODE];
+  int elecsp[3];
+  int nvib = 0, nelec = 0;
+  int i;
+
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    int rotdof = species[sp].rotdof;
+    if (rotdof && rotstyle != NONE) {
+      shape += 0.5*rotdof;         // discrete rotation enters Tc as classical
+      if (!(rotstyle == DISCRETE && rotdof == 2)) classical_dof += rotdof;
+    }
+    int vibdof = species[sp].vibdof;
+    if (vibdof && vibstyle != NONE) {
+      if (vibstyle == DISCRETE) {
+        if (vibdof == 2 || has_custom(p))
+          for (int m = 0; m < species[sp].nvibmode; m++)
+            if (species[sp].vibtemp[m] > 0.0)
+              theta[nvib++] = species[sp].vibtemp[m];
+      } else {
+        shape += 0.5*vibdof;
+        classical_dof += vibdof;
+      }
+    }
+    if (elecstyle == DISCRETE && species[sp].elecdat != NULL && has_custom(p))
+      elecsp[nelec++] = sp;
+  }
+  double s = 2.5 - aveomega + 0.5*classical_dof;
+
+  // proposal temperature
+
+  double tc = (E > 0.0) ? reacting_pool_temp(shape,nvib,theta,nelec,elecsp,E)
+    : 0.0;
+
+  // levels drawn for each product: vib quanta per mode, electronic state,
+  // rotational level J
+
+  int qvib[3][Particle::MAXVIBMODE];
+  int qelec[3],qrot[3];
+  for (i = 0; i < n; i++) {
+    qelec[i] = qrot[i] = 0;
+    for (int m = 0; m < Particle::MAXVIBMODE; m++) qvib[i][m] = 0;
+  }
+
+  double C = (E > 0.0) ? E : 0.0;
+
+  if (E > 0.0 && tc > 0.0) {
+    double beta = 1.0/(boltz*tc);
+    double cstar = (s - 1.0)/beta;
+
+    // normalizations of the electronic and rotational Boltzmann
+    // distributions at beta, once per event
+
+    double zel[3],zrot[3];
+    for (i = 0; i < n; i++) {
+      zel[i] = zrot[i] = 0.0;
+      int sp = plist[i]->ispecies;
+      if (elecstyle == DISCRETE && species[sp].elecdat != NULL &&
+          has_custom(plist[i])) {
+        const Particle::ElecState *st = species[sp].elecdat->states;
+        for (int l = 0; l < species[sp].elecdat->nelecstate; l++)
+          zel[i] += st[l].degen * exp(-beta*boltz*st[l].temp);
+      }
+      if (rotstyle == DISCRETE && species[sp].rotdof == 2) {
+        double a = beta*boltz*species[sp].rottemp[0];
+        for (int j = 0; ; j++) {
+          double x = a*j*(j+1.0);
+          if (x > 46.0) break;
+          zrot[i] += (2.0*j+1.0)*exp(-x);
+        }
+      }
+    }
+
+    int accepted = 0;
+    for (int iter = 0; iter < 1000000 && !accepted; iter++) {
+      double esum = 0.0;
+      for (i = 0; i < n && esum < E; i++) {
+        Particle::OnePart *p = plist[i];
+        int sp = p->ispecies;
+
+        if (vibstyle == DISCRETE && species[sp].vibdof &&
+            (species[sp].vibdof == 2 || has_custom(p))) {
+          for (int m = 0; m < species[sp].nvibmode; m++) {
+            double th = species[sp].vibtemp[m];
+            if (th <= 0.0) { qvib[i][m] = 0; continue; }
+            // geometric: P(v) = (1-q) q^v, q = exp(-beta k theta)
+            // (a draw beyond 1e8 quanta is capped; it exceeds E and is
+            // rejected anyway)
+            double u = random->uniform();
+            double dv = log1p(-u)/(-beta*boltz*th);
+            int v = static_cast<int> (MIN(dv,1.0e8));
+            qvib[i][m] = v;
+            esum += v*boltz*th;
+          }
+        }
+
+        if (zel[i] > 0.0) {
+          const Particle::ElecState *st = species[sp].elecdat->states;
+          int nst = species[sp].elecdat->nelecstate;
+          double r = random->uniform()*zel[i];
+          int l = 0;
+          for (; l < nst-1; l++) {
+            r -= st[l].degen * exp(-beta*boltz*st[l].temp);
+            if (r < 0.0) break;
+          }
+          qelec[i] = l;
+          esum += boltz*st[l].temp;
+        }
+
+        if (zrot[i] > 0.0) {
+          double a = beta*boltz*species[sp].rottemp[0];
+          double r = random->uniform()*zrot[i];
+          int j = 0;
+          for (;; j++) {
+            double x = a*j*(j+1.0);
+            r -= (2.0*j+1.0)*exp(-x);
+            if (r < 0.0 || x > 46.0) break;
+          }
+          qrot[i] = j;
+          esum += j*(j+1.0)*boltz*species[sp].rottemp[0];
+        }
+      }
+      if (esum >= E) continue;
+      C = E - esum;
+      double lacc = (s - 1.0)*log(C/cstar) - beta*(C - cstar);
+      if (log(random->uniform()) < lacc) accepted = 1;
+    }
+    if (!accepted) {               // not reached in practice: ground states
+      C = E;
+      for (i = 0; i < n; i++) {
+        qelec[i] = qrot[i] = 0;
+        for (int m = 0; m < Particle::MAXVIBMODE; m++) qvib[i][m] = 0;
+      }
+    }
+  }
+
+  // assign the discrete levels
+
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    if (rotstyle == DISCRETE && species[sp].rotdof == 2)
+      p->erot = qrot[i]*(qrot[i]+1.0)*boltz*species[sp].rottemp[0];
+    if (vibstyle == DISCRETE && species[sp].vibdof) {
+      if (species[sp].vibdof == 2) {
+        p->evib = qvib[i][0]*boltz*species[sp].vibtemp[0];
+      } else if (has_custom(p)) {
+        int **vibmode = particle->eiarray[particle->ewhich[index_vibmode]];
+        int pindex = p - particle->particles;
+        p->evib = 0.0;
+        for (int m = 0; m < species[sp].nvibmode; m++) {
+          vibmode[pindex][m] = qvib[i][m];
+          p->evib += qvib[i][m]*boltz*species[sp].vibtemp[m];
+        }
+      }
+    }
+    if (elecstyle == DISCRETE && species[sp].elecdat != NULL && has_custom(p)) {
+      int pindex = p - particle->particles;
+      estates[pindex] = qelec[i];
+      eelecs[pindex] = species[sp].elecdat->states[qelec[i]].temp*boltz;
+    }
+  }
+
+  // split C between translation and the continuous internal modes by
+  // Dirichlet stick-breaking (each draw against the modes still waiting)
+
+  double remaining_dof = classical_dof;
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    int sp = p->ispecies;
+    int rotdof = species[sp].rotdof;
+    if (rotdof && rotstyle != NONE && !(rotstyle == DISCRETE && rotdof == 2)) {
+      double b = (1.5 - aveomega) + 0.5*(remaining_dof - rotdof);
+      if (rotdof == 2) p->erot = C*(1.0 - pow(random->uniform(),1.0/(1.0+b)));
+      else p->erot = C*sample_bl(random,0.5*rotdof-1.0,b);
+      C -= p->erot;
+      remaining_dof -= rotdof;
+    }
+    int vibdof = species[sp].vibdof;
+    if (vibdof && vibstyle == SMOOTH) {
+      double b = (1.5 - aveomega) + 0.5*(remaining_dof - vibdof);
+      if (vibdof == 2) p->evib = C*(1.0 - pow(random->uniform(),1.0/(1.0+b)));
+      else p->evib = C*sample_bl(random,0.5*vibdof-1.0,b);
+      C -= p->evib;
+      remaining_dof -= vibdof;
+    }
+  }
+
+  // post-collision energies
+
+  postcoln.erot = postcoln.evib = postcoln.eelec = 0.0;
+  for (i = 0; i < n; i++) {
+    Particle::OnePart *p = plist[i];
+    postcoln.erot += p->erot;
+    postcoln.evib += p->evib;
+    if (elecstyle == DISCRETE && species[p->ispecies].elecdat != NULL &&
+        has_custom(p))
+      postcoln.eelec += eelecs[p - particle->particles];
+  }
+  postcoln.eint = postcoln.erot + postcoln.evib + postcoln.eelec;
+  postcoln.etrans = C;
 }
 
 /* ---------------------------------------------------------------------- */
