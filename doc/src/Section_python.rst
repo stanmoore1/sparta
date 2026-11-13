@@ -466,7 +466,7 @@ The last command requires that the first line of the script be
 something like this:
 
 
-.. parsed-literal::
+.. code-block:: SPARTA
 
    #!/usr/local/bin/python 
    #!/usr/local/bin/python -i
