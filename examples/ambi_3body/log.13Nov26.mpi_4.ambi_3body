@@ -1,4 +1,4 @@
-SPARTA (24 Sep 2025)
+SPARTA (27 Aug 2026)
 Running on 4 MPI task(s)
 ################################################################################
 # Ambipolar ions as third bodies in dissociation and recombination (issue #176)
@@ -22,14 +22,14 @@ boundary            p p p
 create_box          0.0 0.001 0.0 0.001 0.0 0.001
 Created orthogonal box = (0 0 0) to (0.001 0.001 0.001)
 create_grid         10 10 10
-WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (/home/user/sparta/src/grid.cpp:486)
+WARNING: Could not acquire nearby ghost cells b/c grid partition is not clumped (../grid.cpp:486)
 Created 1000 child grid cells
-  CPU time = 0.0010655 secs
-  create/ghost percent = 88.428 11.572
+  CPU time = 0.0399926 secs
+  create/ghost percent = 19.994 80.006
 balance_grid        rcb cell
 Balance grid migrated 740 cells
-  CPU time = 0.000843833 secs
-  reassign/sort/migrate/ghost percent = 43.6789 0.328501 15.9548 40.0378
+  CPU time = 0.0685334 secs
+  reassign/sort/migrate/ghost percent = 99.4736 0.00626264 0.181533 0.338631
 
 global              nrho 1.0e22 fnum 1.0e8
 
@@ -53,7 +53,7 @@ react               tce ambi_3body.tce
 
 create_particles    gas n 0 twopass
 Created 99999 particles
-  CPU time = 0.0077028 secs
+  CPU time = 0.00707285 secs
 
 timestep            1.0e-9
 
@@ -62,7 +62,7 @@ stats_style         step cpu np nattempt ncoll nreact                     c_c[1]
 stats               50
 
 run                 500
-WARNING: Single-group ambipolar collisions are inefficient; grouping electrons separately (e.g. collide ... species) is recommended (/home/user/sparta/src/collide.cpp:355)
+WARNING: Single-group ambipolar collisions are inefficient; grouping electrons separately (e.g. collide ... species) is recommended (../collide.cpp:390)
 Memory usage per proc in Mbytes:
   particles (ave,min,max) = 4 4 4
   grid      (ave,min,max) = 1.51379 1.51379 1.51379
@@ -71,70 +71,70 @@ Memory usage per proc in Mbytes:
   total     (ave,min,max) = 5.51379 5.51379 5.51379
 Step CPU Np Natt Ncoll Nreact c_c[1] c_c[2] c_c[3] c_c[4] 
        0            0    99999        0        0        0        50013        30006        19980            0 
-      50   0.25837697   100487   221613    15292        6        49525        30982        19980            0 
-     100   0.52969439   100950   223108    15093        7        49062        31908        19980            0 
-     150   0.79824022   101442   224889    15062        8        48570        32892        19980            0 
-     200    1.0543701   101917   226609    15212       12        48095        33842        19980            0 
-     250    1.3196561   102365   228250    15341       12        47647        34738        19980            0 
-     300    1.5836764   102790   229922    15254        9        47222        35588        19980            0 
-     350    1.8580471   103268   231700    15100        9        46744        36544        19980            0 
-     400    2.1300416   103717   233395    15259       10        46295        37442        19980            0 
-WARNING: TCE reaction probability exceeded 1.0, chemistry may be under-resolved, consider reducing timestep or fnum (further warnings suppressed) (/home/user/sparta/src/react_tce.cpp:204)
-     450    2.3947466   104180   235109    15127        9        45832        38368        19980            0 
-     500    2.6791988   104598   236855    15281        5        45414        39204        19980            0 
-Loop time of 2.67927 on 4 procs for 500 steps with 104598 particles
-Performance: 186.618 timesteps/s, 19.520 Mparticle-step/s
+      50   0.24436384   100451   221159    15248        4        49561        30910        19980            0 
+     100   0.45640141   100914   223120    15259        9        49098        31836        19980            0 
+     150   0.64019112   101353   224620    15302        9        48659        32714        19980            0 
+     200   0.85009748   101811   226077    15227       10        48201        33630        19980            0 
+     250    1.0616814   102257   228084    15148        8        47755        34522        19980            0 
+     300    1.2415766   102709   229575    15037       10        47303        35426        19980            0 
+     350    1.4266246   103187   231457    15280       15        46825        36382        19980            0 
+     400    1.6092625   103607   232886    15158        6        46405        37222        19980            0 
+     450     1.823657   104043   234506    15132        8        45969        38094        19980            0 
+     500    2.0060542   104476   236284    15032        6        45536        38960        19980            0 
+Loop time of 2.00607 on 4 procs for 500 steps with 104476 particles
+Performance: 249.244 timesteps/s, 26.040 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.12656    | 0.13298    | 0.13651    |   1.1 |  4.96
-Coll    | 2.1289     | 2.2068     | 2.2432     |   3.1 | 82.37
-Sort    | 0.048117   | 0.050791   | 0.052483   |   0.8 |  1.90
-Comm    | 0.059006   | 0.061459   | 0.064185   |   0.8 |  2.29
+Move    | 0.096362   | 0.10149    | 0.10545    |   1.1 |  5.06
+Coll    | 1.5892     | 1.648      | 1.6795     |   2.8 | 82.15
+Sort    | 0.026496   | 0.03017    | 0.034751   |   1.7 |  1.50
+Comm    | 0.035112   | 0.035366   | 0.035591   |   0.1 |  1.76
 Modify  | 0          | 0          | 0          |   0.0 |  0.00
-Output  | 0.0019282  | 0.0037829  | 0.0053814  |   2.3 |  0.14
-MPI Sync| 0.1849     | 0.22321    | 0.30947    |  10.6 |  8.33
-Other   |            | 0.0002087  |            |       |  0.01
+Output  | 0.0025165  | 0.0044697  | 0.0059802  |   2.1 |  0.22
+MPI Sync| 0.15352    | 0.18652    | 0.25234    |   9.3 |  9.30
+Other   |            | 8.649e-05  |            |       |  0.00
 
-Particle moves    = 51168099 (51.2M)
-Cells touched     = 56168020 (56.2M)
-Particle comms    = 666189 (0.666M)
+Particle moves    = 51127719 (51.1M)
+Cells touched     = 56118468 (56.1M)
+Particle comms    = 664251 (0.664M)
 Boundary collides = 0 (0K)
 Boundary exits    = 0 (0K)
 SurfColl checks   = 0 (0K)
 SurfColl occurs   = 0 (0K)
 Surf reactions    = 0 (0K)
-Collide attempts  = 114139243 (114M)
-Collide occurs    = 7614092 (7.61M)
-Reactions         = 4609 (4.61K)
+Collide attempts  = 113988006 (114M)
+Collide occurs    = 7627427 (7.63M)
+Reactions         = 4483 (4.48K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 4.77445e+06
-Particle-moves/step: 102336
-Cell-touches/particle/step: 1.09772
-Particle comm iterations/step: 2.666
-Particle fraction communicated: 0.0130196
+Particle-moves/CPUsec/proc: 6.37163e+06
+Particle-moves/step: 102255
+Cell-touches/particle/step: 1.09761
+Particle comm iterations/step: 2.652
+Particle fraction communicated: 0.012992
 Particle fraction colliding with boundary: 0
 Particle fraction exiting boundary: 0
 Surface-checks/particle/step: 0
 Surface-collisions/particle/step: 0
 Surf-reactions/particle/step: 0
-Collision-attempts/particle/step: 2.23067
-Collisions/particle/step: 0.148805
-Reactions/particle/step: 9.00757e-05
+Collision-attempts/particle/step: 2.22948
+Collisions/particle/step: 0.149184
+Reactions/particle/step: 8.76824e-05
 
 Gas reaction tallies:
   style tce #-of-reactions 2
-  reaction O2 + O2+ --> O + O2+ + O: 4604
-  reaction O + O --> O2 + O2+: 5
+  reaction O2 + O2+ --> O + O2+ + O: 4480
+  reaction O + O --> O2 + O2+: 3
 
-Particles: 26149.5 ave 26219 max 26046 min
-Histogram: 1 0 0 0 0 1 0 0 1 1
+Particles: 26119 ave 26277 max 25927 min
+Histogram: 1 0 0 0 1 0 0 1 0 1
 Cells:      250 ave 250 max 250 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
 GhostCell: 240 ave 240 max 240 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
 EmptyCell: 130 ave 130 max 130 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
+WARNING: Summed TCE reaction probability exceeded 1.0 during this run, e.g. at reaction O + O --> O2 + O2+: the Arrhenius rates exceed the collision rate at some collision energies, where the reactions of that species pair are limited to the collision rate (each selected in proportion to its probability), so their rates are under-predicted; this is independent of timestep and fnum (../react_bird.cpp:1291)

@@ -126,12 +126,12 @@ create_grid 	    ${xncells} ${yncells} 1 block * * *
 create_grid 	    315 ${yncells} 1 block * * *
 create_grid 	    315 148 1 block * * *
 Created 46620 child grid cells
-  CPU time = 0.0078778 secs
-  create/ghost percent = 33.7812 66.2188
+  CPU time = 0.0036977 secs
+  create/ghost percent = 44.8155 55.1845
 balance_grid        rcb cell
 Balance grid migrated 222 cells
-  CPU time = 0.0115923 secs
-  reassign/sort/migrate/ghost percent = 30.8278 0.988229 5.09924 63.0847
+  CPU time = 0.0028784 secs
+  reassign/sort/migrate/ghost percent = 43.3362 2.75486 12.8724 41.0366
 
 #####################################
 # Gas/Collision Model Specification #
@@ -161,10 +161,10 @@ read_surf	    circle.surf group 1
   41504 4890 226 = cells outside/inside/overlapping surfs
   226 = surf cells with 1,2,etc splits
   0.303541 0.303541 = cell-wise and global flow volume
-  CPU time = 0.0101649 secs
-  read/check/sort/surf2grid/ghost/inout/particle percent = 1.35288 1.61042 3.57976 67.1534 26.3035 19.0626 0.16615
-  surf2grid time = 0.0068261 secs
-  map/comm1/comm2/comm3/comm4/split percent = 53.0839 0.646226 21.5328 2.80495 2.73632 4.74375
+  CPU time = 0.00490577 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 0.715261 1.51921 3.44482 73.5482 20.7725 15.2922 0.0227691
+  surf2grid time = 0.0036081 secs
+  map/comm1/comm2/comm3/comm4/split percent = 42.332 0.721571 19.4998 1.99127 19.477 3.05088
 #write_surf          circle-clipped.out
 
 surf_collide        1 diffuse ${surftemp} 1.0
@@ -182,11 +182,11 @@ fix                 in emit/face all xlo twopass
 ###################################
 create_particles    all n 0 twopass
 Created 41620 particles
-  CPU time = 0.0038516 secs
+  CPU time = 0.00199743 secs
 balance_grid        rcb part
 Balance grid migrated 13631 cells
-  CPU time = 0.0123151 secs
-  reassign/sort/migrate/ghost percent = 23.1524 1.57358 52.4532 22.8208
+  CPU time = 0.00708352 secs
+  reassign/sort/migrate/ghost percent = 26.9732 1.23487 50.6069 21.185
 
 ###################################
 # Unsteady Output
@@ -219,69 +219,68 @@ Memory usage per proc in Mbytes:
   total     (ave,min,max) = 7.54272 7.22939 8.29318
 Step CPU Np Ncoll Nreact Nscoll Nsreact Ngrid c_echem Maxlevel 
        0            0    41620        0        0        0        0    46620            0        1 
-    1000    1.0324482    41387        0        0        4        0    47418            0        2 
-    2000    1.9700259    41307        1        0        3        0    50490    674.60842        3 
-    3000    3.1382746    41135        1        0        5        0    55248    4722.2091        4 
-Loop time of 3.13841 on 4 procs for 3000 steps with 41135 particles
-Performance: 955.899 timesteps/s, 39.321 Mparticle-step/s
+    1000   0.88091228    41387        1        0        4        0    47418            0        2 
+    2000    1.8113947    41302        1        0        2        0    50541            0        3 
+    3000    2.8349436    41129        2        0        6        0    55422    1349.2075        4 
+Loop time of 2.83513 on 4 procs for 3000 steps with 41129 particles
+Performance: 1058.154 timesteps/s, 43.521 Mparticle-step/s
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Move    | 0.46745    | 0.52437    | 0.61415    |   7.7 | 16.71
-Coll    | 0.24574    | 0.29567    | 0.35607    |   8.3 |  9.42
-Sort    | 0.19845    | 0.22243    | 0.23803    |   3.1 |  7.09
-Comm    | 0.030709   | 0.034638   | 0.037449   |   1.5 |  1.10
-Modify  | 1.303      | 1.3927     | 1.5331     |   7.3 | 44.38
-Output  | 7.3446e-05 | 0.00014516 | 0.00035264 |   0.0 |  0.00
-MPI Sync| 0.37082    | 0.66565    | 0.83658    |  22.4 | 21.21
-Other   |            | 0.002832   |            |       |  0.09
+Move    | 0.3544     | 0.44441    | 0.57965    |  12.8 | 15.68
+Coll    | 0.16134    | 0.20825    | 0.26502    |   8.1 |  7.35
+Sort    | 0.13945    | 0.19595    | 0.26196    |  11.9 |  6.91
+Comm    | 0.04274    | 0.05124    | 0.059434   |   3.0 |  1.81
+Modify  | 0.83604    | 1.0816     | 1.3816     |  22.1 | 38.15
+Output  | 5.7373e-05 | 0.00016209 | 0.00047164 |   0.0 |  0.01
+MPI Sync| 0.28658    | 0.85053    | 1.2405     |  43.1 | 30.00
+Other   |            | 0.00297    |            |       |  0.10
 
-Particle moves    = 124005321 (124M)
-Cells touched     = 128225683 (128M)
-Particle comms    = 28486 (28.5K)
-Boundary collides = 727 (0.727K)
-Boundary exits    = 15251 (15.3K)
-SurfColl checks   = 1708016 (1.71M)
-SurfColl occurs   = 12727 (12.7K)
-Surf reactions    = 13 (0.013K)
-Collide attempts  = 393008 (0.393M)
-Collide occurs    = 264447 (0.264M)
-Reactions         = 49 (0.049K)
+Particle moves    = 123989616 (124M)
+Cells touched     = 128213177 (128M)
+Particle comms    = 28661 (28.7K)
+Boundary collides = 690 (0.69K)
+Boundary exits    = 15233 (15.2K)
+SurfColl checks   = 1704339 (1.7M)
+SurfColl occurs   = 12520 (12.5K)
+Surf reactions    = 4 (0.004K)
+Collide attempts  = 388444 (0.388M)
+Collide occurs    = 262031 (0.262M)
+Reactions         = 22 (0.022K)
 Particles stuck   = 0
 Axisymm bad moves = 0
 
-Particle-moves/CPUsec/proc: 9.87804e+06
-Particle-moves/step: 41335.1
-Cell-touches/particle/step: 1.03403
+Particle-moves/CPUsec/proc: 1.09333e+07
+Particle-moves/step: 41329.9
+Cell-touches/particle/step: 1.03406
 Particle comm iterations/step: 1
-Particle fraction communicated: 0.000229716
-Particle fraction colliding with boundary: 5.86265e-06
-Particle fraction exiting boundary: 0.000122987
-Surface-checks/particle/step: 0.0137737
-Surface-collisions/particle/step: 0.000102633
-Surf-reactions/particle/step: 1.04834e-07
-Collision-attempts/particle/step: 0.00316928
-Collisions/particle/step: 0.00213255
-Reactions/particle/step: 3.95144e-07
+Particle fraction communicated: 0.000231156
+Particle fraction colliding with boundary: 5.56498e-06
+Particle fraction exiting boundary: 0.000122857
+Surface-checks/particle/step: 0.0137458
+Surface-collisions/particle/step: 0.000100976
+Surf-reactions/particle/step: 3.22608e-08
+Collision-attempts/particle/step: 0.00313288
+Collisions/particle/step: 0.00211333
+Reactions/particle/step: 1.77434e-07
 
 Gas reaction tallies:
   style tce #-of-reactions 45
-  reaction N2 + N2 --> N + N + N2: 48
-  reaction N2 + N --> N + N + N: 1
+  reaction N2 + N2 --> N + N + N2: 22
 
 Surface reaction tallies:
   id 1 style prob #-of-reactions 9
-    reaction all: 13
-    reaction N --> N2: 8
-    reaction N --> NULL: 5
+    reaction all: 4
+    reaction N --> N2: 2
+    reaction N --> NULL: 2
 
-Particles: 10283.8 ave 10608 max 10030 min
+Particles: 10282.2 ave 10604 max 10048 min
 Histogram: 1 0 1 0 1 0 0 0 0 1
-Cells:      13812 ave 16108 max 10705 min
-Histogram: 1 0 0 0 0 0 2 0 0 1
-GhostCell: 1023.75 ave 1384 max 761 min
-Histogram: 1 1 0 0 0 1 0 0 0 1
+Cells:      13855.5 ave 15997 max 10811 min
+Histogram: 1 0 0 0 0 1 0 1 0 1
+GhostCell: 1015.75 ave 1340 max 747 min
+Histogram: 1 1 0 0 0 0 1 0 0 1
 EmptyCell: 0 ave 0 max 0 min
 Histogram: 4 0 0 0 0 0 0 0 0 0
 Surfs:    50 ave 50 max 50 min
