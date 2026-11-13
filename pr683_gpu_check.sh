@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # GPU correctness and performance check for sparta/sparta#683 and the review fixes.
 #
-# Builds four variants from the same repo and compares them:
+# Builds these variants from the same repo and compares them:
 #   base    e071055f  PR base (master before #683)
 #   pr      21763d55  #683 head
-#   fix     e7151f27  #683 head + review fixes
-#   fixvol  e7151f27 with the per-branch "volume" reload in the collision kernel
+#   fix1    e7151f27  #683 head + first round of review fixes
+#   fix     57cb662c  + simplified two-pass move (no mid-move host wait, RangePolicy
+#                       second pass, two-pass re-enabled each run) -- the candidate
+#   fixvol  57cb662c with the per-branch "volume" reload in the collision kernel
 #           put back.  This checks whether removing it (finding 13) costs anything.
 #
 # Usage, from the top of a sparta clone that has the branches fetched:
@@ -20,7 +22,7 @@
 #   KKARGS       SPARTA Kokkos args (default "-k on g 1 -sf kk")
 #   SIZES        bench grid edge lengths (default "50 100": 1.25M and 10M particles)
 #   REPEAT       timing repeats per case, the minimum is reported (default 3)
-#   VARIANTS     subset to build and run (default "base pr fix fixvol")
+#   VARIANTS     subset to build and run (default "base pr fix1 fix fixvol")
 #   WORK         scratch dir (default ./pr683_check)
 
 set -euo pipefail
@@ -32,11 +34,11 @@ RUN=${RUN:-}
 KKARGS=${KKARGS:-"-k on g 1 -sf kk"}
 SIZES=${SIZES:-"50 100"}
 REPEAT=${REPEAT:-3}
-VARIANTS=${VARIANTS:-"base pr fix fixvol"}
+VARIANTS=${VARIANTS:-"base pr fix1 fix fixvol"}
 WORK=${WORK:-$PWD/pr683_check}
-JOBS=${JOBS:-$(nproc)}
+JOBS=${JOBS:-$(nproc --all)}  # nproc alone honours OMP_NUM_THREADS
 
-declare -A REV=([base]=e071055f [pr]=21763d55 [fix]=e7151f27 [fixvol]=e7151f27)
+declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=57cb662c [fixvol]=57cb662c)
 
 mkdir -p "$WORK"
 
