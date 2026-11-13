@@ -48,13 +48,36 @@ jobs:
       run: make -C sparta-src/doc html
 
     # replace rather than merge, so pages deleted upstream also disappear
-    # from the site instead of lingering
+    # from the site instead of lingering -- except for the files listed in
+    # KEEP, which the HTML build does not produce.  doc/Manual.pdf is the
+    # live PDF manual, rebuilt separately at release time; deleting it here
+    # would take it off the site with nothing to put it back.  If a kept
+    # file is missing beforehand the step fails rather than publishing a
+    # site that has silently lost it.
     - name: Stage into doc/
+      env:
+        KEEP: Manual.pdf
       run: |
+        set -euo pipefail
+        keep=$(mktemp -d)
+        for f in $KEEP; do
+          if [ ! -f "doc/$f" ]; then
+            echo "doc/$f is missing from the site; refusing to publish without it" >&2
+            exit 1
+          fi
+          cp -a "doc/$f" "$keep/$f"
+        done
         rm -rf doc
         mkdir -p doc
         cp -a sparta-src/doc/html/. doc/
-        rm -rf sparta-src
+        for f in $KEEP; do
+          if [ -e "doc/$f" ]; then
+            echo "the manual build now produces doc/$f; remove it from KEEP" >&2
+            exit 1
+          fi
+          cp -a "$keep/$f" "doc/$f"
+        done
+        rm -rf "$keep" sparta-src
 
     - name: Commit if changed
       run: |
