@@ -83,14 +83,18 @@ class Run:
         return os.path.join(self.workdir, "log.sparta")
 
     def record(self):
-        """what defines the run: deck, variables, executable kind"""
-        return {"deck": self.deck, "kind": self.kind,
+        """what defines the run: deck (name and content), variables,
+        executable kind"""
+        import hashlib
+        with open(os.path.join(self.stepdir, self.deck), "rb") as fh:
+            sha = hashlib.sha1(fh.read()).hexdigest()
+        return {"deck": self.deck, "deck_sha1": sha, "kind": self.kind,
                 "variables": {k: str(v) for k, v in self.variables.items()}}
 
     def done(self):
         """the log finished, and run.json shows the run was made with the
-        current deck, variables and executable kind (a run whose definition
-        changed is run again)"""
+        current deck (name and content), variables and executable kind: a
+        run whose definition changed is run again"""
         rec = os.path.join(self.workdir, "run.json")
         if not (os.path.exists(self.log) and os.path.exists(rec)):
             return False

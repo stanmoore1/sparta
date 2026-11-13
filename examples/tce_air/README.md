@@ -1,7 +1,109 @@
-# tce_air: reproducing the paper step by step
+# tce_air: the paper's claims, step by step
 
-**Work in progress (2026-11-13).** This directory will reproduce every
-figure and table of the paper *A rate-preserving microcanonical total
-collision energy model for discrete internal states and detailed-balance
-reverse reactions* from new runs of this branch. It is not finished: do
-not use it yet. The plan and the status of each step will be listed here.
+This directory checks the main claims of the paper *A rate-preserving
+microcanonical total collision energy model for discrete internal states
+and detailed-balance reverse reactions* with SPARTA runs on an ordinary
+computer.  Each step runs a few small simulations of air chemistry and
+compares what SPARTA does with a reference that is computed independently,
+from the data files and the formulas of the paper, by `tce_ref.py`.  Every
+comparison is printed as a PASS or FAIL line.
+
+It is meant for reviewing the code and the physics.  You need no knowledge
+of SPARTA internals: each step is one directory with its input decks
+(`in.*`), its run list (`runs.py`) and its analysis (`analyze.py`), and
+the analysis says in words what it compares.
+
+## What you need
+
+- A Linux or macOS machine with 4 cores (more is faster), an MPI C++
+  compiler (`mpicxx`), `make`, and Python 3 with `numpy`, `scipy` and
+  `matplotlib`.
+- About 1 hour for all steps with 4 cores.
+
+## Quick start
+
+```bash
+cd examples/tce_air
+./build.sh                       # builds bin/spa_release from this branch
+./tce_air.py run all --jobs 4 --np 1
+./tce_air.py analyze all
+```
+
+`run` skips runs that already finished, so it can be repeated after an
+interruption.  `analyze` writes everything to `results/<step>/` and
+returns the number of failed checks.  On a machine with more cores, run
+more jobs at a time: `--jobs 6 --np 2` on 12 cores.
+
+Two optional builds add comparisons with earlier treatments:
+
+```bash
+./build.sh --compare             # bin/spa_compare: the earlier TCE treatments
+./build.sh --precap              # bin/spa_precap: before the cap correction
+```
+
+Without them the runs that need them are skipped, and their checks are
+left out.
+
+## What each step checks
+
+Each step corresponds to a part of the paper.  The step's `runs.py` lists
+its runs, `analyze.py` its checks; `results/<step>/results.txt` has the
+outcome.
+
+| step | paper | what is checked |
+|---|---|---|
+| `step1_rates` | Secs. III-IV, VII A; Figs. 1, 3; Table VI | The equilibrium dissociation rate of O2 + N2 reproduces the input Arrhenius rate with the microcanonical factor, for vibrational, electronic and joint ladders and discrete rotation; the earlier treatments (adding electronic energy to the collision energy, leaving it out, instantaneous vibrational DOF) miss it by the amounts the paper derives. |
+| `step2_noneq` | Sec. VII B; Figs. 4-6; Table V | With vibrational or electronic populations frozen away from the translational temperature, the rate follows an independent quadrature of the ladder average; comparison with Bird's QK model, Park's two-temperature model and QCT data for N2 + N2. |
+| `step3_balance` | Secs. V, VII C; Fig. 7; Table VII | Derived reverse reactions balance their forward partners: the Zeldovich exchange, three-body recombination with atomic and molecular third bodies, with an equilibrium-constant fit, and the full 11-species mechanism. |
+| `step4_box` | Sec. VII C; Fig. 9 | A closed reacting box with the Zeldovich pair relaxes to the equilibrium composition from both sides, thermostatted and adiabatic, and the internal modes of every species stay at the translational temperature. |
+| `step5_energy` | Sec. VII D; Table VIII | Total energy is conserved through dense reaction cycling only when reaction energies close around cycles and species masses are conserved; each defect alone makes the energy drift. |
+| `step6_noneq_reverse` | Sec. VII E; Table XI | The reverse rate responds to the internal temperature with no cell temperature in the model, mode by mode, and recombination responds to the electronic populations, as the microcanonical tables predict. |
+| `step7_cap` | Secs. IV D, VII G; Table X | Where fitted rates exceed the collision rate, the capped forward rate and its reverse follow the capped fraction of the microcanonical probability, and a reacting gas still reaches the partition-function equilibrium. |
+| `step8_thermo` | Sec. VII F; Fig. 10 | The equilibrium constants of the data files against the NASA Glenn (CEA) database; no SPARTA runs. |
+
+## Reading the results
+
+`results/<step>/results.txt` lists every check:
+
+```
+  [PASS] TV=  300 K microcanonical: 0.538 +/- 0.012, analytic 0.538
+```
+
+The measured value carries two standard deviations of its counting
+statistics (or of the spread over seeds, if larger); a check passes when
+the measurement agrees with the reference within three standard
+deviations plus a small allowance stated in the analysis.  Lines without
+PASS or FAIL are information (numbers the paper quotes, or values a check
+does not need).  Each step also writes its figures (`fig*.pdf`), tables
+(`table*.tex`, `.txt`) and `numbers.json`.
+
+The quick size of the package resolves the claims at the few-percent
+level.  The paper's numbers come from the same decks at larger sizes,
+run on GPUs (the `paper-runs` branch of the paper's repository).
+
+## How the references are computed
+
+`tce_ref.py` reads the data files (`data/air.*`) and implements the
+paper's formulas directly: partition functions and equilibrium
+constants, the TCE probability and its microcanonical ladder average, the
+derived reverse probability with its calibration and the cap at one, and
+the three-body recombination average.  It does not call SPARTA or use any
+of its tables.  Where the paper says "quadrature", `tce_ref.py` computes
+the integral numerically; each reference function also checks itself
+against a closed form where one exists (for example, the calibration
+constant of a reverse table must not depend on temperature).
+
+## Files
+
+```
+build.sh        builds bin/spa_release (and optionally spa_compare, spa_precap)
+tce_air.py      list, run and analyze the steps
+pkg.py          runs, logs and reports shared by the steps
+tce_ref.py      the independent reference calculations
+paper_style.py  figure style
+stepN_*/        one step: in.* decks, runs.py, analyze.py, data files
+results/        written by run and analyze
+```
+
+Each run writes `results/<step>/<run>/log.sparta` and `run.json` (how the
+run was made); a run whose definition changes is run again.

@@ -1,4 +1,4 @@
-"""Step 9 analysis: equilibrium constants of the data files against the
+"""Step 8 analysis: equilibrium constants of the data files against the
 NASA Glenn (CEA) database (Sec. VII F, Fig. 10).  No SPARTA runs.
 
 K_eq of the data files: tce_ref.Data.keq, the partition functions of
@@ -10,7 +10,7 @@ Also: a Morse vibrational ladder truncated at the dissociation energy
 (constants of Huber and Herzberg), and the legacy convention of using the
 activation energy as the reaction energy.
 
-Produces, in results/step9_thermo/:
+Produces, in results/step8_thermo/:
   fig10_keq_cea.pdf, keq_cea.txt, numbers.json, results.txt
 """
 import json
@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 import pkg                 # noqa: E402
 import tce_ref as R        # noqa: E402
 
-STEP = "step9_thermo"
+STEP = "step8_thermo"
 NA = 6.02214076e23
 P0 = 1.0e5                 # Pa, standard state of the database
 RXN = (("N2 + N2 --> N + N + N2", "N$_2$ $\\rightleftharpoons$ 2N"),

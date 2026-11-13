@@ -43,6 +43,19 @@ def sums(rl, prefix):
     return tot, sel
 
 
+def mean_T(sel):
+    """translational temperature of the runs, averaged over time (stats
+    rows after the first) and over the runs: the reference values are
+    evaluated at it, since a closed reservoir settles a few tens of kelvin
+    away from its nominal temperature"""
+    vals = []
+    for r in sel:
+        head, rows = pkg.stats(r.log)
+        i = head.index("c_temp")
+        vals.append(np.mean([row[i] for row in rows[1:]]))
+    return float(np.mean(vals))
+
+
 def ratio_err(F, B, per_seed):
     """ratio F/B with the larger of the Poisson and the seed error"""
     r = F / B
@@ -85,6 +98,7 @@ def analyze(size="quick"):
         tot, sel = sums(rl, "zeld_T%d" % T)
         if not tot:
             continue
+        Tn, T = T, mean_T(sel)
         F, B = tot.get(fwd["label"], 0), tot.get("NO + N --> N2 + O", 0)
         per = [pkg.tallies(r.log).get(fwd["label"], 0) /
                max(pkg.tallies(r.log).get("NO + N --> N2 + O", 0), 1)
@@ -97,17 +111,17 @@ def analyze(size="quick"):
         kb = B * fnum / (n * n * V * NST * DT * len(sel))
         kb_e = kb / math.sqrt(B)
         capf = XR.mean_p(T) / XR.mean_p(T, cap=False)
-        zel[T] = (r / keq, e / keq, kb, kb_e, capf)
-        num["zeld_ratio_%d" % T] = [r / keq, 2 * e / keq, 1.0 / capf]
+        zel[Tn] = (r / keq, e / keq, kb, kb_e, capf)
+        num["zeld_ratio_%d" % Tn] = [r / keq, 2 * e / keq, 1.0 / capf, T]
         kd = R.arrhenius(fwd, T) / keq
-        num["zeld_kb_%d" % T] = [kb, 2 * kb_e, kd, kd * capf]
+        num["zeld_kb_%d" % Tn] = [kb, 2 * kb_e, kd, kd * capf, T]
         rep.check(abs(r / keq * capf - 1) <= 3 * e / keq + 0.005,
-                  "Zeldovich T=%5d K: (f/b)/K_eq = %.3f +/- %.3f (%d/%d "
+                  "Zeldovich T=%5.0f K: (f/b)/K_eq = %.3f +/- %.3f (%d/%d "
                   "tallies), expected %.4f (reverse capped to %.4f of "
                   "k_f/K_eq)" % (T, r / keq, 2 * e / keq, F, B, 1 / capf,
                                  capf))
         rep.check(abs(kb / (kd * capf) - 1) <= 3 * kb_e / kd + 0.005,
-                  "Zeldovich T=%5d K: reverse rate %.4e +/- %.1e, derived "
+                  "Zeldovich T=%5.0f K: reverse rate %.4e +/- %.1e, derived "
                   "k_f/K_eq x capped fraction %.4e" % (T, kb, 2 * kb_e,
                                                        kd * capf))
     # legacy published pair
@@ -131,7 +145,7 @@ def analyze(size="quick"):
         tot, sel = sums(rl, "rec_" + name)
         if not tot:
             continue
-        T = float(sel[0].variables["T"])
+        T = mean_T(sel)
         if "mol" in name:
             fl, bl = "N2 + N2 --> N + N + N2", "N + N --> N2 + N2"
         else:
@@ -153,7 +167,7 @@ def analyze(size="quick"):
         rec[name] = (dev, res, F, B, T)
         num["rec_%s" % name] = [dev, 2 * res]
         rep.check(abs(dev) <= 3 * res + 0.01,
-                  "recombination %-9s T=%5d K: K_eq measured/partition "
+                  "recombination %-9s T=%5.0f K: K_eq measured/partition "
                   "function = %.3f +/- %.3f (%d/%d tallies)"
                   % (name, T, 1 + dev, 2 * res, F, B))
 

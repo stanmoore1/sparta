@@ -1,0 +1,52 @@
+# NO, N and O with only NO + O and NO + N dissociation and their derived
+# recombinations (cap.tce), the two forward fits that exceed the VHS
+# collision rate (Sec. IV D and the cap test of Sec. VII G).
+#
+# CHEM = "compute_chem_rates yes": frozen reservoir, reactions tallied but
+#        not performed, rates at fixed T
+# CHEM = "compute_chem_rates no": adiabatic reactor at constant volume that
+#        relaxes to the NO = N + O equilibrium; the total energy is summed
+#        over particles (as in step 5) so that the analysis can find the
+#        temperature that the mean composition and the conserved energy imply
+#
+# Variables: DATA, SEED, SPFILE, TCE, T, XNO, XO, XN (mole fractions),
+# NRHO, NP, NSTEP, DT, NOUT, CHEM
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 2.75e-6 0 2.75e-6 0 2.75e-6
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${SPFILE} O N NO rotfile ${DATA}/air.rot elecfile ${DATA}/air.elec
+mixture             air O N NO vstream 0.0 0.0 0.0 temp ${T}
+mixture             air NO frac ${XNO}
+mixture             air O  frac ${XO}
+mixture             air N  frac ${XN}
+
+variable            fn equal ${NRHO}*(2.75e-6)^3/${NP}
+global              nrho ${NRHO}
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${TCE}
+react_modify        partial_energy no rboost 1.0 ${CHEM}
+
+create_particles    air n ${NP} twopass
+
+compute             spc count O N NO
+compute             esum reduce sum ke erot evib p_eelec
+variable            eform equal c_spc[1]*4.09804e-19+c_spc[2]*7.81811e-19+c_spc[3]*1.50723e-19
+variable            etot equal c_esum[1]+c_esum[2]+c_esum[3]+c_esum[4]+v_eform
+compute             temp temp
+stats               ${NOUT}
+stats_style         step cpu np c_spc[1] c_spc[2] c_spc[3] c_temp v_etot
+stats_modify        format float %.15g
+timestep            ${DT}
+run                 ${NSTEP}

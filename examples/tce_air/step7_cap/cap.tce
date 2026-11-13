@@ -1,0 +1,15 @@
+# NO + O and NO + N dissociation with their derived recombinations: the
+# two forward fits of data/air.tce that exceed the VHS collision rate.
+# Lines copied from data/air.tce; analyze.py checks they still agree.
+
+NO + O --> N + O + O
+D A 1.0 1.04089e-18 1.862e-13 0.0 -1.04089e-18
+
+N + O --> NO + O
+R B 0.0 0.0 0.0 0.0 0.0
+
+NO + N --> N + O + N
+D A 1.0 1.04089e-18 1.862e-13 0.0 -1.04089e-18
+
+N + O --> NO + N
+R B 0.0 0.0 0.0 0.0 0.0

@@ -19,12 +19,15 @@ STEP = "step3_balance"
 # NSTEP: Zeldovich reservoirs (dilute); NSTR: recombination reservoirs
 # (dense, about 5 collisions per particle per step); NSTM: 11-species
 # reservoirs (dense)
-# REC_T: temperature of the recombination configurations (the paper uses
+# REC_T: temperature of the recombination configurations.  The paper uses
 # 15 kK, where recombination tallies are about 1/2400 of the dissociation
-# tallies at this density; at 8 kK the two are comparable, so a short run
-# resolves the ratio)
-SIZES = {"quick": dict(seeds=2, NP=40000, NSTEP=4000, NSTR=3000, REC_T=8000.0,
-                       NPM=40000, NSTM=400)}
+# tallies at this density, too few for a short run; at 10 kK they are
+# 1/40.  Lower temperatures resolve the ratio sooner but make it more
+# sensitive to the temperature (d ln K_eq/dT = D0/kT^2: 0.2% per 10 K at
+# 10 kK), so every reference is evaluated at the measured mean
+# temperature of the run.
+SIZES = {"quick": dict(seeds=2, NP=40000, NSTEP=4000, NSTR=6000,
+                       REC_T=10000.0, NPM=40000, NSTM=400)}
 FILES = ("zeldovich.tce", "recomb_atom.tce", "recomb_atom_fwd.tce",
          "recomb_mol.tce", "park_recomb.keq")
 NLOW, NHIGH = 7.07043e22, 1.414086e25

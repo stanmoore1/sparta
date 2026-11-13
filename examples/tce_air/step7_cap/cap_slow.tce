@@ -1,0 +1,14 @@
+# As cap.tce with both forward rates divided by 30, so that the forward
+# probabilities stay below one (no cap).
+
+NO + O --> N + O + O
+D A 1.0 1.04089e-18 6.2067e-15 0.0 -1.04089e-18
+
+N + O --> NO + O
+R B 0.0 0.0 0.0 0.0 0.0
+
+NO + N --> N + O + N
+D A 1.0 1.04089e-18 6.2067e-15 0.0 -1.04089e-18
+
+N + O --> NO + N
+R B 0.0 0.0 0.0 0.0 0.0

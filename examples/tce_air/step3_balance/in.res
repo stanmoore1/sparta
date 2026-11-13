@@ -37,7 +37,7 @@ react_modify        partial_energy no compute_chem_rates yes rboost 1.0 ${RMOD}
 
 create_particles    air n ${NP} twopass
 compute             temp temp
-stats               1000
+stats               100
 stats_style         step cpu np nattempt ncoll c_temp
 timestep            1.0e-9
 run                 ${NSTEP}

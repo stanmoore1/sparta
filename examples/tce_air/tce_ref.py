@@ -861,3 +861,48 @@ class Recombination3:
 
     def ratio(self, Ttr, Tel):
         return self.mean_unit(Ttr, Tel) / self.mean_unit(Ttr, Ttr)
+
+
+def _recomb_capped_fraction(self, T, n_M, nq=200, ne=200):
+    """fraction of the uncapped equilibrium recombination rate that the cap
+    P_r <= 1 leaves, at temperature T and third-body density n_M (m^-3):
+    E[min(1, P_r)]/E[P_r] over the equilibrium sampling of Eq. (pr3), with
+    the absolute calibration S fixed by k_coll,AB(T) <P_r> = n_M k_f/K_eq"""
+    D, kT = self.D, KB * T
+    A, B = self.pair
+    a1 = special.gammaln(self.s) + self.s * math.log(kT)
+    a2 = special.gammaln(1.5) + 1.5 * math.log(kT)
+    Qp = np.sum(self.gq * np.exp(-self.eq / kT))
+    QM = np.sum(self.gm * np.exp(-self.em / kT))
+    mean_closed = self.mean_unit_closed(T) / math.exp(a1 + a2)  # / (Qp QM) in it
+    kr = arrhenius(self.f, T) / D.keq(self.f, T)
+    S = kr / (D.kcoll(A, B, T) * mean_closed)
+    # G(w) = N_F(w + dH0)/V3(w) on a fine grid in w
+    wg = self._grid(kT)
+    Gw = self._G(wg)
+    t, wt = _graded_rule(40.0 ** 0.5, npanel=40, norder=8, power=1.0)
+    x, wx = t * t * kT, 2.0 * t * wt * kT          # energies above a threshold
+    capped = uncapped = 0.0
+    wq = self.gq * np.exp(-self.eq / kT) / Qp
+    wm = self.gm * np.exp(-self.em / kT) / QM
+    for eq, w1 in zip(self.eq, wq):
+        if w1 < 1e-8:
+            continue
+        u = eq + x                                   # pair energy
+        dab = _ladder_sum(u, self.eq, self.gq, self.s - 1.0)
+        rho_u = np.exp((self.s - 1.0) * np.log(x) - x / kT - a1)
+        for em, w2 in zip(self.em, wm):
+            if w2 < 1e-8:
+                continue
+            eps = x                                  # third-body translation
+            rho_e = np.exp(0.5 * np.log(eps) - eps / kT - a2)
+            W = u[:, None] + eps[None, :] + em
+            G = np.interp(W, wg, Gw, left=Gw[0], right=0.0)
+            P = S * n_M * G / (dab[:, None] * np.sqrt(eps)[None, :])
+            wgt = (w1 * w2) * (rho_u * wx)[:, None] * (rho_e * wx)[None, :]
+            uncapped += np.sum(wgt * P)
+            capped += np.sum(wgt * np.minimum(P, 1.0))
+    return capped / uncapped, uncapped
+
+
+Recombination3.capped_fraction = _recomb_capped_fraction
