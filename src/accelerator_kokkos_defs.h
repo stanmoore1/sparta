@@ -17,8 +17,8 @@
 
 #ifdef SPARTA_KOKKOS
 
-// a CMake build with Kokkos for CUDA compiles sources that do not use Kokkos
-// with the host compiler alone (see cmake/common/process/kokkos_host_only.cmake),
+// a CMake build with Kokkos for CUDA or HIP compiles sources that do not use
+// Kokkos for the host alone (see cmake/common/process/kokkos_host_only.cmake),
 // which cannot use the Kokkos headers.  SPARTA_KOKKOS_GPU must still be set for
 // them, since it changes the layout of structs shared with the KOKKOS package.
 
