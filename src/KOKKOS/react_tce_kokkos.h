@@ -73,7 +73,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
   // biased by the ordering of reactions in the input file
 
   double total_prob = 0.0;
-  int capped = 0;
   int isel = -1;
 
   for (int i = 0; i < n; i++) {
@@ -82,9 +81,13 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                                recomb_species,recomb_density,recomb_part3,
                                recomb_p3_eelec,d_species,tgas_cell);
     if (p < 0.0) Kokkos::atomic_max(&d_probneg(),1);
-    if (p > 1.0) { p = 1.0; capped = 1; }
+    int over = 0;
+    if (p > 1.0) { p = 1.0; over = 1; }
+    const double before = total_prob;
     total_prob += p;
-    if (capped || total_prob > 1.0)
+    // a channel whose own probability was capped, or the channel at which
+    // the pair's summed probability crossed 1 (matches ReactTCE::attempt)
+    if (over || (before <= 1.0 && total_prob > 1.0))
       Kokkos::atomic_min(&d_probbig(),d_list[i]);
     if (isel < 0 && total_prob > random_prob) isel = i;
   }

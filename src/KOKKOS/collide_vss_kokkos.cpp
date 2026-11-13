@@ -1151,7 +1151,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
         //react->recomb_density = np * update->fnum / volume;
         recomb_part3 = &d_particles[d_plist(icell,k)];
         recomb_species = recomb_part3->ispecies;
-        recomb_density = np * fnum / volume;
+        recomb_density = (np-2) * fnum / volume;
       }
     }
 
@@ -1593,7 +1593,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
         while (k == i || k == j) k = np * rand_gen.drand();
         recomb_part3 = &d_particles[d_plist(icell,k)];
         recomb_species = recomb_part3->ispecies;
-        recomb_density = np * fnum / volume;
+        recomb_density = (np-2) * fnum / volume;
       }
     }
 
@@ -2352,7 +2352,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             while (k == ii || k == jj) k = np * rand_gen.drand();
             recomb_part3 = &d_particles[d_plist(icell,k)];
             recomb_species = recomb_part3->ispecies;
-            recomb_density = np * fnum / volume;
+            recomb_density = (np-2) * fnum / volume;
           }
         }
 
@@ -2934,7 +2934,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             while (k == ii || k == jj) k = np * rand_gen.drand();
             recomb_part3 = &d_particles[d_plist(icell,k)];
             recomb_species = recomb_part3->ispecies;
-            recomb_density = np * fnum / volume;
+            recomb_density = (np - 1 - (ajg != egroup)) * fnum / volume;
           }
         }
 
@@ -3607,7 +3607,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         //react->recomb_density = np * update->fnum / volume;
         recomb_part3 = &d_particles[d_plist(icell,k)];
         recomb_species = recomb_part3->ispecies;
-        recomb_density = np * fnum / volume;
+        recomb_density = (np - (i < np) - (j < np)) * fnum / volume;
       }
     }
 

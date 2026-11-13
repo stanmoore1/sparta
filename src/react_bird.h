@@ -136,6 +136,40 @@ class ReactBird : public React {
   };
 
   OneReaction *rlist;              // list of all reactions read from file
+
+  // pieces of the TCE probability of a two-body channel shared by the
+  // run-time ReactTCE::channel_prob() and the table-time
+  // pair_channel_prob(), so the two cannot drift apart; the operation
+  // order is that of the original expressions, so results are unchanged
+  // (the KOKKOS twin, ReactTCEKokkos::channel_prob_kk, mirrors them)
+
+  // energy above the threshold: the activation energy, or the
+  // endothermicity where it is larger
+  inline double tce_excess(const OneReaction *r, double ecc) const {
+    if (r->coeff[1] > ((-1)*r->coeff[4])) return ecc - r->coeff[1];
+    return ecc + r->coeff[4];
+  }
+
+  // energy factor: the microcanonical table when one is built and used,
+  // else the standard (ecc-Ea)^(eta-1+omega) (1-Ea/ecc)^(z+3/2-omega)
+  inline double tce_efactor(int ireact, double ecc, double z,
+                            int use_table) const {
+    const OneReaction *r = &rlist[ireact];
+    if (use_table && mtab && mtab[ireact])
+      return vib_micro_factor(ireact,ecc);
+    return pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
+      pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
+  }
+
+  // prefactor times the Gamma-function ratio; the denominator is clamped
+  // at 1e-6 below the TCE exponent bound (warned by check_tce_bounds)
+  inline double tce_prefactor(const OneReaction *r, double z,
+                              double prefactor) const {
+    double g = tgamma(z+r->coeff[3]+1.5);
+    if (g < 1.0e-6) g = 1.0e-6;
+    return prefactor * tgamma(z+2.5-r->coeff[5]) / g;
+  }
+
   int maxlist;                     // max # of reactions in rlist
 
   // all reactions a pair of reactant species is part of
@@ -201,6 +235,7 @@ class ReactBird : public React {
   double partition_function(int, double);
   void forward_cap(OneReaction *, double, int, double *);
   double pair_channel_prob(int, double);
+  double pair_channel_z(OneReaction *);
   int max_nelecstate();
   void build_db_table(int);
   void build_db3_table(int);

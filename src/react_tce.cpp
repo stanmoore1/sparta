@@ -123,16 +123,20 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   // machinery ((sigma_T c_r)_max) is untouched.
 
   double total_prob = 0.0;
-  int capped = 0;
   int isel = -1;
 
   for (int i = 0; i < n; i++) {
     double p = channel_prob(list[i],ip,jp,pre_etrans,pre_erot,
                             pre_evib,pre_eelec,pre_ave_rotdof);
     if (p < 0.0) prob_neg_flag = 1;
-    if (p > 1.0) { p = 1.0; capped = 1; }
+    int over = 0;
+    if (p > 1.0) { p = 1.0; over = 1; }
+    double before = total_prob;
     total_prob += p;
-    if ((capped || total_prob > 1.0) &&
+    // record a channel whose own probability was capped, or the channel
+    // at which the pair's summed probability crossed 1 (end_of_run()
+    // names the lowest such reaction index)
+    if ((over || (before <= 1.0 && total_prob > 1.0)) &&
         (prob_big_index < 0 || list[i] < prob_big_index))
       prob_big_index = list[i];
     if (isel < 0 && total_prob > random_prob) isel = i;
@@ -281,8 +285,7 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
 
     // Cover cases where coeff[1].neq.coeff[4]
 
-    if (r->coeff[1]>((-1)*r->coeff[4])) e_excess = ecc - r->coeff[1];
-    else e_excess = ecc + r->coeff[4];
+    e_excess = tce_excess(r,ecc);
     if (e_excess <= 0.0 && !micro3) return 0.0;
 
     // energy-dependent factor of the TCE probability:
@@ -297,13 +300,8 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
     // internal states of the colliding pair count toward the barrier.
 
     double efactor = 0.0;
-    if (!micro3) {   // a micro3 reaction uses its own 3-body factor below
-      if (!partialEnergy && mtab && mtab[rindex])
-        efactor = vib_micro_factor(rindex,ecc);
-      else
-        efactor = pow(ecc-r->coeff[1],r->coeff[3]-1+r->coeff[5]) *
-                  pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
-    }
+    if (!micro3)     // a micro3 reaction uses its own 3-body factor below
+      efactor = tce_efactor(rindex,ecc,z,!partialEnergy);
 
     // residual thermal correction for a reverse reaction matched to an
     // external Keq curve fit (react_modify keq_file): its detailed-balance
@@ -339,8 +337,7 @@ double ReactTCE::channel_prob(int rindex, Particle::OnePart *ip,
     case IONIZATION:
     case EXCHANGE:
       {
-        return prefactor * tgamma(z+2.5-r->coeff[5]) / MAX(1.0e-6,tgamma(z+r->coeff[3]+1.5)) *
-          efactor;
+        return tce_prefactor(r,z,prefactor) * efactor;
       }
 
     case RECOMBINATION:

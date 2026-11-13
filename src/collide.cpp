@@ -644,7 +644,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_one()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          react->recomb_density = (np-2) * update->fnum / volume;
         }
       }
 
@@ -982,7 +982,7 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          react->recomb_density = (np-2) * update->fnum / volume;
         }
       }
 
@@ -1386,7 +1386,7 @@ template < int NEARCP, int GASTALLY > void Collide::collisions_group()
             while (k == ii || k == jj) k = np * random->uniform();
             react->recomb_part3 = &particles[plist[k]];
             react->recomb_species = react->recomb_part3->ispecies;
-            react->recomb_density = np * update->fnum / volume;
+            react->recomb_density = (np-2) * update->fnum / volume;
           }
         }
 
@@ -1656,7 +1656,7 @@ template < int GASTALLY > void Collide::collisions_one_ambipolar()
           while (k == i || k == j) k = np * random->uniform();
           react->recomb_part3 = &particles[plist[k]];
           react->recomb_species = react->recomb_part3->ispecies;
-          react->recomb_density = np * update->fnum / volume;
+          react->recomb_density = (np - (i < np) - (j < np)) * update->fnum / volume;
         }
       }
 
@@ -2037,7 +2037,7 @@ template < int GASTALLY > void Collide::collisions_group_ambipolar()
             while (k == ii || k == jj) k = np * random->uniform();
             react->recomb_part3 = &particles[plist[k]];
             react->recomb_species = react->recomb_part3->ispecies;
-            react->recomb_density = np * update->fnum / volume;
+            react->recomb_density = (np - 1 - (jgroup != egroup)) * update->fnum / volume;
           }
         }
 

@@ -63,6 +63,14 @@ of a recombination reaction becomes > 1.0, when it is does occur.
 SPARTA does not check for this, so you should estimate the largest
 boost factor that is safe to use for your model.
 
+Reverse (B-style) recombination reactions, derived by detailed balance
+(see the "react"_react.html command), have a probability that grows
+without bound for soft collisions, so any boost moves part of their
+rate into the cap at 1 and lowers the realized recombination rate
+(by about 25% at 1e24 m^-3 and 6000 K with rboost = 1000).  Use
+{rboost} = 1.0 with such reactions; SPARTA prints a warning when they
+are active with {rboost} > 1.0.
+
 The {compute_chem_rates} keyword is a setting that allows the user to
 only compute Arrhenius rates for chemical reactions without performing them.
 Currently only the TCE reaction model supports this keyword; an error

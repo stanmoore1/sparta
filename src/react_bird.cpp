@@ -546,6 +546,19 @@ void ReactBird::init()
         rlist[m].reverse_partner >= 0)
       reverse_recomb_active = 1;
 
+  // the recombination boost tests recombination in 1/rboost of the
+  // collisions with rboost times the probability.  The derived (B-style)
+  // recombination probability is unbounded for soft collisions and is
+  // capped at 1 at run time, so the boost moves rate into the cap and
+  // lowers the realized recombination rate (by about 25% at 1e24 m^-3 and
+  // 6000 K with the default 1000).  The default is kept; warn
+
+  if (reverse_recomb_active && recomb_boost > 1.0 && comm->me == 0)
+    error->warning(FLERR,"Reverse (B-style) recombination reactions with "
+                   "react_modify rboost > 1: the boosted probability is "
+                   "capped at 1, which lowers the recombination rate below "
+                   "its detailed-balance value; use react_modify rboost 1");
+
   // count possible active reactions for each species pair
   // include J,I reactions in I,J list and vice versa
   // this allows collision pair I,J to be in either order in Collide
@@ -2410,7 +2423,14 @@ void ReactBird::build_micro_tables()
   // its reverse table, at the forward pair's total energy, so that the
   // pair stays reversible under saturation.  The sum uses the tables as
   // built above (a reverse channel in the sum enters with its own
-  // single-channel cap, which is exact to first order).
+  // single-channel cap, which is exact to first order).  All factors are
+  // computed before any table is changed: a reverse exchange can itself
+  // be a channel of another reverse's forward pair, and dividing its
+  // table in the same loop would make the result depend on the order of
+  // the reactions in the input file.
+
+  double **satfac = new double*[nlist];      // pair sums S_F > 1, or 1
+  for (int i = 0; i < nlist; i++) satfac[i] = NULL;
 
   for (int i = 0; i < nlist; i++) {
     OneReaction *r = &rlist[i];
@@ -2424,19 +2444,45 @@ void ReactBird::build_micro_tables()
     int nch = reactions[isp][jsp].n;
     int *list = reactions[isp][jsp].list;
     if (nch < 2) continue;
+    // per-channel constants of pair_channel_prob(), hoisted out of the
+    // grid loop (same values, same operation order)
+    double *cz = new double[nch];
+    double *cpre = new double[nch];
+    int *clive = new int[nch];
+    for (int c = 0; c < nch; c++) {
+      OneReaction *rc = &rlist[list[c]];
+      clive[c] = (rc->active && rc->type != RECOMBINATION);
+      cz[c] = clive[c] ? pair_channel_z(rc) : 0.0;
+      cpre[c] = clive[c] ? tce_prefactor(rc,cz[c],rc->coeff[2]) : 0.0;
+    }
+    satfac[i] = new double[mtab_n[i]];
     for (int k = 0; k < mtab_n[i]; k++) {
+      satfac[i][k] = 1.0;
       if (tab[k] <= 0.0) continue;
       double e = k*mtab_du[i] - f->coeff[4];
       if (e <= 0.0) continue;
       double sum = 0.0;
       for (int c = 0; c < nch; c++) {
-        double p = pair_channel_prob(list[c],e);
+        if (!clive[c] || tce_excess(&rlist[list[c]],e) <= 0.0) continue;
+        double p = cpre[c] * tce_efactor(list[c],e,cz[c],1);
         if (p > 1.0) p = 1.0;
         sum += p;
       }
-      if (sum > 1.0) tab[k] /= sum;
+      if (sum > 1.0) satfac[i][k] = sum;
     }
+    delete [] cz;
+    delete [] cpre;
+    delete [] clive;
   }
+
+  for (int i = 0; i < nlist; i++) {
+    if (!satfac[i]) continue;
+    double *tab = (rlist[i].type == RECOMBINATION) ? mtab_num[i] : mtab[i];
+    for (int k = 0; k < mtab_n[i]; k++)
+      if (satfac[i][k] > 1.0) tab[k] /= satfac[i][k];
+    delete [] satfac[i];
+  }
+  delete [] satfac;
 }
 
 /* ----------------------------------------------------------------------
@@ -2451,27 +2497,25 @@ double ReactBird::pair_channel_prob(int j, double ecc)
 {
   OneReaction *r = &rlist[j];
   if (!r->active || r->type == RECOMBINATION) return 0.0;
+  double z = pair_channel_z(r);
+  if (tce_excess(r,ecc) <= 0.0) return 0.0;
+  return tce_prefactor(r,z,r->coeff[2]) * tce_efactor(j,ecc,z,1);
+}
 
+/* ----------------------------------------------------------------------
+   continuum z of a two-body channel in the total-energy model, as
+   ReactTCE::channel_prob() forms it at run time
+------------------------------------------------------------------------- */
+
+double ReactBird::pair_channel_z(OneReaction *r)
+{
   Particle::Species *species = particle->species;
   int isp = r->reactants[0];
   int jsp = r->reactants[1];
-  double z = 0.5*(species[isp].rotdof + species[jsp].rotdof);
+  double z = (species[isp].rotdof + species[jsp].rotdof)/2.0;
   if (collide->vibstyle == SMOOTH)
-    z += 0.5*(species[isp].vibdof + species[jsp].vibdof);
-
-  double e_excess;
-  if (r->coeff[1] > -r->coeff[4]) e_excess = ecc - r->coeff[1];
-  else e_excess = ecc + r->coeff[4];
-  if (e_excess <= 0.0) return 0.0;
-
-  double efactor;
-  if (mtab && mtab[j]) efactor = vib_micro_factor(j,ecc);
-  else efactor = pow(ecc-r->coeff[1],r->coeff[3]-1.0+r->coeff[5]) *
-         pow(1.0-r->coeff[1]/ecc,z+1.5-r->coeff[5]);
-
-  double g = tgamma(z+r->coeff[3]+1.5);
-  if (g < 1.0e-6) g = 1.0e-6;
-  return r->coeff[2] * tgamma(z+2.5-r->coeff[5]) / g * efactor;
+    z += (species[isp].vibdof + species[jsp].vibdof)/2.0;
+  return z;
 }
 
 /* ----------------------------------------------------------------------
