@@ -1,0 +1,15 @@
+# data/air.species with every rotational and vibrational relaxation
+# probability set to zero (columns 5 and 7): with relax constant the
+# rotational and vibrational populations then stay where they were created.
+# analyze.py checks that all other columns equal data/air.species.
+O2  32.00  5.30E-26  2  0.0  2  0.0  2256.0  1.0  0.0
+N2  28.016  4.65E-26  2  0.0  2  0.0  3371.0  1.0  0.0
+O  16.00  2.65E-26  0  0.0  0  0.0  0.0  1.0  0.0
+N  14.008  2.325E-26  0  0.0  0  0.0  0.0  1.0  0.0
+NO  30.008  4.975E-26  2  0.0  2  0.0  2719.0  1.0  0.0
+O2+  32.00  5.29990891E-26  2  0.0  2  0.0  2741.0  1.0  1.0
+N2+  28.016  4.64990891E-26  2  0.0  2  0.0  3176.0  1.0  1.0
+O+  16.00  2.64990891E-26  0  0.0  0  0.0  0.0  1.0  1.0
+N+  14.008  2.32490891E-26  0  0.0  0  0.0  0.0  1.0  1.0
+NO+  30.008  4.97490891E-26  2  0.0  2  0.0  3419.0  1.0  1.0
+e  0.001  9.10938188E-31  0  0.0  0  0.0  0.0  1.0  -1.0

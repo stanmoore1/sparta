@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Driver of the tce_air reproduction package.
 
-  ./tce_air.py list    STEP [--size quick|paper]      runs and their status
-  ./tce_air.py run     STEP [--size ...] [--group G] [--gpus N] [--shard i/n]
-                                                      run here: CPU (MPI) or
-                                                      one run per GPU
-  ./tce_air.py jobs    STEP --size paper --system slurm|flux [...]
-                                                      write batch job scripts
-  ./tce_air.py analyze STEP [--size ...]              figures, tables, checks
+  ./tce_air.py list    STEP [-v]                      runs and their status
+  ./tce_air.py run     STEP [--np N] [--jobs J]       run the pending runs, J at
+                            [--group G] [--shard i/n]  a time with N MPI ranks
+                                                       each (N x J <= cores)
+  ./tce_air.py analyze STEP                           figures, tables, checks
 
 STEP is a step directory name (e.g. step1_rates) or 'all'.  Runs whose log
 already finished are skipped, so 'run' can be repeated after an
@@ -63,53 +61,45 @@ def shard(rl, spec):
 
 
 def cmd_run(a):
-    if a.gpus:
-        return cmd_run_gpus(a)
-    for st in steps(a.step):
-        rl = shard(selected(st, a.size, a.group), a.shard)
-        todo = [r for r in rl if not r.done()]
-        skip = [r for r in todo if not pkg.have(r.kind)]
-        todo = [r for r in todo if pkg.have(r.kind)]
-        if skip:
-            print("%s: skipping %d runs that need the '%s' executable"
-                  % (st, len(skip), "/".join(sorted({r.kind for r in skip}))))
-        failed = []
-        for i, r in enumerate(todo):
-            print("%s: [%d/%d] %s" % (st, i + 1, len(todo), r.tag), flush=True)
-            try:
-                pkg.run_local(r, np=a.np)
-            except RuntimeError:
-                failed.append(r.tag)
-        if failed:
-            print("%s: %d runs FAILED (see their log.sparta): %s"
-                  % (st, len(failed), " ".join(failed)))
-
-
-def cmd_run_gpus(a):
-    """run the pending runs of a step concurrently, one run per GPU, as many
-    at a time as there are GPUs; each run uses one MPI rank"""
+    """run the pending runs of the step(s), --jobs at a time with --np MPI
+    ranks each"""
     import time
-    pending = []
+    pending, skip = [], set()
     for st in steps(a.step):
-        rl = shard(selected(st, a.size, a.group), a.shard)
-        pending += [r for r in rl if not r.done() and pkg.have(r.kind)]
-    print("%d runs on %d GPUs" % (len(pending), a.gpus), flush=True)
-    busy = {}
+        for r in shard(selected(st, a.size, a.group), a.shard):
+            if r.done():
+                continue
+            if pkg.have(r.kind):
+                pending.append(r)
+            else:
+                skip.add(r.kind)
+    if skip:
+        print("skipping the runs that need the '%s' executable (not built; "
+              "see README)" % "/".join(sorted(skip)))
+    print("%d runs, %d at a time" % (len(pending), a.jobs), flush=True)
+    busy, failed, n0 = {}, [], len(pending)
     while pending or busy:
-        for g in [g for g in range(a.gpus) if g not in busy]:
+        for k in [k for k in range(a.jobs) if k not in busy]:
             if not pending:
                 break
             r = pending.pop(0)
-            busy[g] = (r, pkg.start_gpu(r, g), time.time())
-            print("GPU %d: start %s/%s" % (g, r.step, r.tag), flush=True)
-        time.sleep(2)
-        for g, (r, proc, t0) in list(busy.items()):
+            busy[k] = (r, pkg.start_cpu(r, a.np), time.time())
+            print("[%d/%d] start %s/%s" % (n0 - len(pending), n0, r.step,
+                                            r.tag), flush=True)
+        time.sleep(0.5)
+        for k, (r, proc, t0) in list(busy.items()):
             if proc.poll() is not None:
                 ok = proc.returncode == 0 and r.done()
-                print("GPU %d: %s %s/%s (%.0f s)"
-                      % (g, "done" if ok else "FAILED", r.step, r.tag,
+                if not ok:
+                    failed.append("%s/%s" % (r.step, r.tag))
+                print("        %s %s/%s (%.0f s)"
+                      % ("done" if ok else "FAILED", r.step, r.tag,
                          time.time() - t0), flush=True)
-                del busy[g]
+                del busy[k]
+    if failed:
+        print("%d runs FAILED (see log.sparta and stdout in their run "
+              "directories): %s" % (len(failed), " ".join(failed)))
+        sys.exit(1)
 
 
 def cmd_analyze(a):
@@ -120,41 +110,28 @@ def cmd_analyze(a):
     sys.exit(min(nfail, 255))
 
 
-def cmd_jobs(a):
-    import jobs
-    for st in steps(a.step):
-        rl = [r for r in selected(st, a.size, a.group) if not r.done()]
-        jobs.write(st, rl, a)
-
-
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawTextHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("list", "run", "analyze", "jobs"):
+    for name in ("list", "run", "analyze"):
         s = sub.add_parser(name)
         s.add_argument("step")
-        s.add_argument("--size", default="quick", choices=("quick", "paper"))
+        s.add_argument("--size", default="quick")
         s.add_argument("--group", default=None)
         if name == "list":
             s.add_argument("-v", "--verbose", action="store_true")
         if name == "run":
             s.add_argument("--np", type=int, default=None,
-                           help="MPI ranks per run for CPU runs")
-            s.add_argument("--gpus", type=int, default=0,
-                           help="run concurrently, one run per GPU")
+                           help="MPI ranks per CPU run (default "
+                           "$SPARTA_NP or 4)")
+            s.add_argument("--jobs", type=int, default=1,
+                           help="CPU runs at a time (e.g. --jobs 6 --np 2 "
+                           "on 12 cores)")
             s.add_argument("--shard", default=None,
                            help="i/n: only every n-th run starting at i")
-        if name == "jobs":
-            s.add_argument("--system", required=True,
-                           choices=("slurm", "flux"))
-            s.add_argument("--gpus-per-node", type=int, default=4)
-            s.add_argument("--runs-per-job", type=int, default=16)
-            s.add_argument("--hours", type=float, default=2.0)
-            s.add_argument("--outdir", default=os.path.join(HERE, "jobs"))
     a = p.parse_args()
-    {"list": cmd_list, "run": cmd_run, "analyze": cmd_analyze,
-     "jobs": cmd_jobs}[a.cmd](a)
+    {"list": cmd_list, "run": cmd_run, "analyze": cmd_analyze}[a.cmd](a)
 
 
 if __name__ == "__main__":

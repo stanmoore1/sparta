@@ -1,0 +1,43 @@
+# Two-temperature frozen reservoir of N2, O, NO and N (one quarter each):
+# translation at T, rotation at TROT, vibration at TVIB, electronic states
+# at TELEC, held there because every relaxation probability is zero
+# (air_frozen.species, air_frozen.elec).  Reactions are tallied but not
+# performed (compute_chem_rates yes), so the tallies measure the rates of
+# both directions of the pair in TCE at this fixed non-equilibrium state.
+#
+# Variables: DATA, SEED, T, TROT, TVIB, TELEC, TCE, NP, NSTEP (steps of 1 ns)
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 1.0e-4 0 1.0e-4 0 1.0e-4
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             air_frozen.species N2 O NO N rotfile ${DATA}/air.rot elecfile air_frozen.elec
+mixture             air N2 O NO N vstream 0.0 0.0 0.0 temp ${T} &
+                    trot ${TROT} tvib ${TVIB} telec ${TELEC}
+mixture             air N2 frac 0.25
+mixture             air O  frac 0.25
+mixture             air NO frac 0.25
+mixture             air N  frac 0.25
+
+variable            fn equal 7.07043e22*1.0e-12/${NP}
+global              nrho 7.07043e22
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${TCE}
+react_modify        partial_energy no compute_chem_rates yes
+
+create_particles    air n ${NP} twopass
+compute             temp temp
+stats               1000
+stats_style         step cpu np nattempt ncoll c_temp
+timestep            1.0e-9
+run                 ${NSTEP}

@@ -1,0 +1,46 @@
+# Frozen-composition reservoir of O2 + N2 (the paper's test case): the
+# dissociation O2 + N2 -> O + O + N2 is tallied but not performed
+# (compute_chem_rates yes), so the tally measures the rate coefficient at
+# fixed temperature.  Translation and rotation are at T; vibration starts at
+# TV and electronic states at TE (equal to T for equilibrium).  With
+# EFILE = o2n2_frozen*.elec the electronic relaxation probability is zero,
+# so the electronic populations stay at TE.
+#
+# Variables: SPFILE (species file: data/air.species, or air_vfrozen.species
+# to keep the vibrational populations at TV), DATA (directory of the air data files), SEED, T, TV, TE,
+# EFILE (electronic file), VIB (discrete, or no to leave vibration out),
+# ROT (smooth or discrete rotation), TCE (reaction file), RMOD (react_modify settings that select the TCE
+# treatment), NP (simulated particles), NSTEP (steps of 1 ns)
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 1.0e-4 0 1.0e-4 0 1.0e-4
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${SPFILE} N2 O2 O N rotfile ${DATA}/air.rot elecfile ${EFILE}
+mixture             gas N2 O2 vstream 0.0 0.0 0.0 temp ${T} trot ${T} tvib ${TV} telec ${TE}
+mixture             gas N2 frac 0.5
+mixture             gas O2 frac 0.5
+
+# number density 7.07e22 m^-3 in a box of 1e-12 m^3, with NP particles
+variable            fn equal 7.07043e22*1.0e-12/${NP}
+global              nrho 7.07043E22
+global              fnum ${fn}
+
+collide             vss all ${DATA}/air.vss relax constant
+collide_modify      rotate ${ROT} vibrate ${VIB} electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${TCE}
+react_modify        compute_chem_rates yes ${RMOD}
+
+create_particles    gas n ${NP} twopass
+compute             temp temp
+stats               500
+stats_style         step cpu np nattempt ncoll c_temp
+timestep            1.0e-9
+run                 ${NSTEP}

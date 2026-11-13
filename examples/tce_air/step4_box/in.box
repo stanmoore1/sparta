@@ -1,0 +1,67 @@
+# Closed reacting box with the Zeldovich pair only: N2 + O <-> NO + N, the
+# forward reaction of data/air.tce and its derived detailed-balance reverse
+# (zeldovich.tce).  Reactions are performed (not only tallied), so the
+# composition relaxes from its initial state toward chemical equilibrium.
+# The element totals close because no other reaction is defined.
+#
+# THERMO = 1: the thermal velocities are rescaled to T every 10 steps (fix
+#             temp/rescale), so the box relaxes to the isothermal
+#             equilibrium at T, which follows from K_eq(T) alone.
+# THERMO = 0: adiabatic box; the reaction energy changes the temperature,
+#             and the box relaxes to the equilibrium that conserves total
+#             (thermal plus formation) energy.
+#
+# The stats output also prints the mode temperatures of each species, so
+# that the steady state of the internal modes can be compared with the
+# translational temperature.
+#
+# Variables: DATA, SEED, T, FN2 (mole fraction of N2 and of O), FNO (mole
+# fraction of NO and of N; FN2 + FNO = 0.5), THERMO, NP, NSTEP (steps of 1 ns)
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 1.0e-4 0 1.0e-4 0 1.0e-4
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${DATA}/air.species N2 O NO N rotfile ${DATA}/air.rot elecfile ${DATA}/air.elec
+mixture             air N2 O NO N vstream 0.0 0.0 0.0 temp ${T}
+mixture             air N2 frac ${FN2}
+mixture             air O  frac ${FN2}
+mixture             air NO frac ${FNO}
+mixture             air N  frac ${FNO}
+
+variable            fn equal 7.07043e22*1.0e-12/${NP}
+global              nrho 7.07043e22
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce zeldovich.tce
+react_modify        partial_energy no
+
+if "${THERMO} == 1" then "fix thermostat temp/rescale 10 ${T} ${T}"
+
+create_particles    air n ${NP} twopass
+compute             spc count N2 O NO N
+compute             temp temp
+# mode temperatures of each species (one group per species), averaged over
+# the 8 cells: rotation and vibration of N2 and NO, electronic states of
+# N2, O, NO and N
+compute             trot grid all species trot
+compute             trotave reduce ave c_trot[1] c_trot[3]
+compute             tvib tvib/grid all species
+compute             tvibave reduce ave c_tvib[1] c_tvib[3]
+compute             tel telec/grid all species
+compute             telave reduce ave c_tel[1] c_tel[2] c_tel[3] c_tel[4]
+stats               500
+stats_style         step cpu np c_spc[1] c_spc[2] c_spc[3] c_spc[4] c_temp &
+                    c_trotave[1] c_trotave[2] c_tvibave[1] c_tvibave[2] &
+                    c_telave[1] c_telave[2] c_telave[3] c_telave[4]
+timestep            1.0e-9
+run                 ${NSTEP}

@@ -1,0 +1,55 @@
+# Energy audit of a dense adiabatic air reactor (Sec. VII D, Table VIII):
+# air (79% N2, 21% O2) at 9.6e26 m^-3 and 13 600 K in all modes, the five
+# neutral species and the 17 forward reactions with their derived reverses,
+# unboosted recombination.  Reactions cycle many times per particle, so any
+# defect of the energy bookkeeping shows up as a steady drift of the total
+# energy.  At this density the gas is not dilute: this is a numerical
+# stress test of the bookkeeping, not a physical prediction.
+#
+# The total energy is summed over all particles every NOUT steps:
+# translational, rotational, vibrational and electronic energy (compute
+# reduce) plus the formation energy of each species (the table of the
+# data/air.tce header), printed with 15 digits.
+#
+# Variables: DATA, SEED, SPFILE (species file), TCE (reaction file), RMOD
+# (react_modify settings), NP, NSTEP, NOUT, DT
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 2.75e-6 0 2.75e-6 0 2.75e-6
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${SPFILE} O2 N2 O N NO rotfile ${DATA}/air.rot elecfile ${DATA}/air.elec
+mixture             air O2 N2 O N NO vstream 0.0 0.0 0.0 temp 13600.0
+mixture             air N2 frac 0.79
+mixture             air O2 frac 0.21
+mixture             air O  frac 0.0
+mixture             air N  frac 0.0
+mixture             air NO frac 0.0
+
+variable            fn equal 9.6e26*(2.75e-6)^3/${NP}
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${TCE}
+react_modify        partial_energy no ${RMOD}
+
+create_particles    air n ${NP} twopass
+
+compute             spc count O2 N2 O N NO
+compute             esum reduce sum ke erot evib p_eelec
+variable            eform equal c_spc[3]*4.09804e-19+c_spc[4]*7.81811e-19+c_spc[5]*1.50723e-19
+variable            etot equal c_esum[1]+c_esum[2]+c_esum[3]+c_esum[4]+v_eform
+compute             temp temp
+stats               ${NOUT}
+stats_style         step cpu np c_spc[1] c_spc[2] c_spc[3] c_spc[4] c_spc[5] c_temp v_eform v_etot
+stats_modify        format float %.15g
+timestep            ${DT}
+run                 ${NSTEP}

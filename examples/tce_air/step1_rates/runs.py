@@ -22,11 +22,17 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pkg import Run, DATA  # noqa: E402
+from pkg import Run as _Run, DATA, size_params  # noqa: E402
+
+
+def Run(step, tag, deck, variables, kind="release", files=()):
+    """comparison-build runs use the deck variant without rotfile"""
+    if kind == "compare":
+        deck = deck + "_cmp"
+    return _Run(step, tag, deck, variables, kind=kind, files=files)
 
 STEP = "step1_rates"
-SIZES = {"quick": dict(seeds=2, NP=40000, NSTEP=2000),
-         "paper": dict(seeds=5, NP=1000000, NSTEP=2000)}
+SIZES = {"quick": dict(seeds=2, NP=40000, NSTEP=2000)}
 
 FILES = ("o2n2.tce", "o2n2_refit.tce", "o2n2.elec", "o2n2_dof1.elec",
          "o2n2_frozen.elec", "o2n2_frozen_dof1.elec")
@@ -59,7 +65,8 @@ def _run(group, treat, T, seed, size, VIB="discrete", TE=None, efile=None,
     v = dict(DATA=DATA, SEED=12345 + 1000 * seed, T=T, TV=T,
              TE=TE if TE is not None else T, ROT=ROT, VIB=VIB,
              RMOD=rmod.replace(" ", " "), TCE=tce,
-             NP=SIZES[size]["NP"], NSTEP=SIZES[size]["NSTEP"])
+             NP=size_params(STEP, SIZES, size)["NP"],
+             NSTEP=size_params(STEP, SIZES, size)["NSTEP"])
     if ef:
         v["EFILE"] = ef
     tag = "%s_%s_T%d%s%s_s%d" % (group, treat, T,
@@ -69,7 +76,7 @@ def _run(group, treat, T, seed, size, VIB="discrete", TE=None, efile=None,
 
 
 def runs(size="quick"):
-    n = SIZES[size]["seeds"]
+    n = size_params(STEP, SIZES, size)["seeds"]
     out = []
     for s in range(n):
         for T in (5000.0, 10000.0, 20000.0, 40000.0):

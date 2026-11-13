@@ -1,0 +1,52 @@
+# Frozen-composition reservoir of 11-species air with the full mechanism of
+# data/air.tce (31 forward reactions, each with its derived reverse): every
+# forward/reverse pair is tallied at once.  Electrons are an ordinary
+# species here (no ambipolar treatment).
+#
+# Variables: DATA, SEED, T, NRHO, NP, NSTEP
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 1.0e-4 0 1.0e-4 0 1.0e-4
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${DATA}/air.species N2 O2 NO N O N2+ O2+ NO+ N+ O+ e &
+                    rotfile ${DATA}/air.rot elecfile ${DATA}/air.elec
+mixture             air N2 O2 NO N O N2+ O2+ NO+ N+ O+ e vstream 0.0 0.0 0.0 temp ${T}
+mixture             air N2  frac 0.15
+mixture             air O2  frac 0.15
+mixture             air NO  frac 0.15
+mixture             air N   frac 0.15
+mixture             air O   frac 0.15
+mixture             air N2+ frac 0.045
+mixture             air O2+ frac 0.045
+mixture             air NO+ frac 0.045
+mixture             air N+  frac 0.045
+mixture             air O+  frac 0.045
+mixture             air e   frac 0.025
+# one collision group per species: the electrons' large relative speed then
+# sets the attempt rate of electron pairs only (same collisions, about 8
+# times fewer rejected attempts than a single group)
+mixture             air group SELF
+
+variable            fn equal ${NRHO}*1.0e-12/${NP}
+global              nrho ${NRHO}
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${DATA}/air.tce
+react_modify        partial_energy no compute_chem_rates yes rboost 1.0
+
+create_particles    air n ${NP} twopass
+compute             temp temp
+stats               1000
+stats_style         step cpu np nattempt ncoll c_temp
+timestep            1.0e-9
+run                 ${NSTEP}

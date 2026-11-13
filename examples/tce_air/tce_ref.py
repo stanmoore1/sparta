@@ -192,6 +192,35 @@ class Data:
         return num / den * math.exp(r["C5"] / (KB * T))
 
 
+    def e_mean(self, s, T):
+        """mean energy per particle in J (translation, rotation, vibration,
+        electronic states) at equilibrium at T, consistent with q(s, T)"""
+        e = 1.5 * KB * T
+        if self.sp[s]["rotdof"] >= 2:
+            e += 0.5 * self.sp[s]["rotdof"] * KB * T
+        th = self.sp[s]["vibtemp"]
+        if self.sp[s]["vibdof"] > 0 and th > 0.0:
+            e += KB * th / math.expm1(th / T)
+        if s in self.elec:
+            w = [(g * math.exp(-t / T), t) for t, g in self.elec[s]]
+            e += KB * sum(a * t for a, t in w) / sum(a for a, t in w)
+        return e
+
+
+# formation energies (J) of the closed air set: the table in the header of
+# data/air.tce (0-K enthalpies of formation of the NASA Glenn database);
+# every reaction energy C5 of data/air.tce is a difference of these
+EFORM = {"N2": 0.0, "O2": 0.0, "e": 0.0, "N": 7.81811e-19, "O": 4.09804e-19,
+         "NO": 1.50723e-19, "N2+": 2.49630e-18, "O2+": 1.93453e-18,
+         "NO+": 1.63499e-18, "N+": 3.11044e-18, "O+": 2.59166e-18}
+
+
+def closure_residual(r):
+    """C5 minus the formation-energy difference, relative to |C5|"""
+    d = sum(EFORM[s] for s in r["reac"]) - sum(EFORM[s] for s in r["prod"])
+    return (r["C5"] - d) / max(abs(r["C5"]), 1e-30)
+
+
 def arrhenius(r, T):
     return r["A"] * T ** r["eta"] * math.exp(-r["Ea"] / (KB * T))
 
@@ -325,7 +354,8 @@ def R_instdof(T, thA, thB, z0, om, eta, Ea, Tvib=None):
     eA, pA, zA = _sho(thA, T, Ea / KB, Tvib)
     eB, pB, zB = _sho(thB, T, Ea / KB, Tvib)
     E = (eA[:, None] + eB[None, :]).ravel() / T
-    lw = (np.log(pA)[:, None] + np.log(pB)[None, :]).ravel() + E
+    with np.errstate(divide="ignore"):
+        lw = (np.log(pA)[:, None] + np.log(pB)[None, :]).ravel() + E
     Z = (z0 + zA[:, None] + zB[None, :]).ravel()
     keep = lw > -80.0
     J = avgP_scaled(E[keep], Z[keep], z0, om, eta, ea)
@@ -434,3 +464,400 @@ def refit_inclusion(lad, z0, om, eta, Ea, A, dofA, dofB, Tmin=5000.0,
     a, b, c = res.x
     return (A * math.exp(a), eta + b, Ea + c * KB, Ts,
             np.array([ratio(res.x, T) for T in Ts]))
+
+
+# -------------------- joint vibrational-electronic factor, frozen ladders
+def _conv(arr, eps, wts, du):
+    """shift-and-add convolution of arr (on grid du) with a ladder"""
+    out = np.zeros_like(arr)
+    n = arr.size
+    for e, w in zip(eps, wts):
+        if w == 0.0:
+            continue
+        sh = e / du
+        i0 = int(math.floor(sh))
+        fr = sh - i0
+        if i0 < n:
+            out[i0:] += w * (1 - fr) * arr[:n - i0]
+        if i0 + 1 < n:
+            out[i0 + 1:] += w * fr * arr[:n - i0 - 1]
+    return out
+
+
+class JointLadder:
+    """microcanonical factor N/D of a pair on an energy grid (kelvin):
+    continuum = translation + rotation (z, omega), composite ladder =
+    harmonic vibrational ladders (thetas, untruncated up to umax) times
+    electronic ladders [(temp_K, g)].  rate(T, Tv, Te) is the equilibrium-
+    calibrated rate with vibration populated at Tv and electronic states at
+    Te, divided by the input Arrhenius rate at T (independent of A)."""
+
+    def __init__(self, z, om, eta, Ea_K, thetas=(), elecs=(), du=10.0,
+                 umax=2.0e6):
+        self.z, self.om, self.eta, self.Ea = z, om, eta, Ea_K
+        self.du = du
+        self.u = np.arange(0.0, umax, du)
+        u = self.u
+        self.thetas = list(thetas)
+        self.vibs = [np.arange(0, int(umax / th) + 1) * th for th in thetas]
+        self.elecs = [(np.array([t for t, g in L]), np.array([g for t, g in L]))
+                      for L in elecs]
+        num = np.clip(u - Ea_K, 0.0, None) ** (z + eta + 0.5)
+        den = u ** (z + 1.5 - om)
+        for lv in self.vibs:
+            num = _conv(num, lv, np.ones_like(lv), du)
+            den = _conv(den, lv, np.ones_like(lv), du)
+        for t, g in self.elecs:
+            num = _conv(num, t, g, du)
+            den = _conv(den, t, g, du)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            self.fac = np.where(den > 0, num / den, 0.0)
+
+    def rate(self, T, Tv=None, Te=None):
+        Tv = T if Tv is None else Tv
+        Te = T if Te is None else Te
+        u = self.u
+        sr = self.z + 2.5 - self.om
+        with np.errstate(divide="ignore"):
+            kern = np.where(u > 0, np.exp((sr - 1) * np.log(np.where(u > 0, u, 1))
+                                          - u / T), 0.0)
+        for lv, th in zip(self.vibs, self.thetas):
+            p = np.exp(-lv / Tv) * (1 - math.exp(-th / Tv))
+            kern = _conv(kern, lv, p, self.du)
+        for t, g in self.elecs:
+            w = g * np.exp(-t / Te)
+            kern = _conv(kern, t, w / w.sum(), self.du)
+        lhs = _trapz(self.fac * kern, dx=self.du)
+        ref = math.exp(_lgam(self.z + self.eta + 1.5) +
+                       (self.z + self.eta + 1.5) * math.log(T) - self.Ea / T)
+        return lhs / ref
+
+
+def park_ratio(T, Tv, q, eta, Ea_K):
+    """Park two-temperature rate k(Ta)/k(T), Ta = T^q Tv^(1-q)"""
+    Ta = T ** q * Tv ** (1 - q)
+    return (Ta / T) ** eta * math.exp(-Ea_K / Ta + Ea_K / T)
+
+
+def qk_over_kcoll(T, Tv, theta, Ea_K, om):
+    """Bird's quantum-kinetic dissociation probability averaged over the
+    VHS collision ensemble: a molecule at SHO level i (levels below the
+    dissociation energy) dissociates if E_tr + i k theta >= E_d, with the
+    collision-weighted E_tr Gamma(5/2-omega) distributed at T and the
+    levels populated at Tv"""
+    from scipy.special import gammaincc
+    lv = np.arange(int(Ea_K / theta) + 1)
+    p = np.exp(-lv * theta / Tv)
+    p /= p.sum()
+    thr = np.clip((Ea_K - lv * theta) / T, 0.0, None)
+    return float(np.sum(p * gammaincc(2.5 - om, thr)))
+
+
+def park_fit(func, Ts):
+    """Park equilibrium-constant coefficients c0..c4 with
+    ln f(T) = c0/Z + c1 + c2 ln Z + c3 Z + c4 Z^2, Z = 1e4/T, through the
+    five given temperatures (the form react_modify keq_file reads)"""
+    A = [[1e4 / (1e4 / T) * 0 + 1.0 / (1e4 / T), 1.0, math.log(1e4 / T),
+          1e4 / T, (1e4 / T) ** 2] for T in Ts]
+    y = [math.log(func(T)) for T in Ts]
+    return list(np.linalg.solve(np.array(A), np.array(y)))
+
+
+# ------------------------------------------------ derived reverse reactions
+def pair_states(D, species, emax, vib="discrete"):
+    """discrete states of one species or a pair, as numpy arrays of the
+    vibrational part, the electronic part (J) and the degeneracy; states
+    above emax (J) are dropped.  vib='smooth' leaves vibration out of the
+    ladder (it is then a continuum mode, see pair_z)."""
+    ev, ee, gg = [0.0], [0.0], [1.0]
+    for s in species:
+        th = D.sp[s]["vibtemp"]
+        if vib == "discrete" and D.sp[s]["vibdof"] > 0 and th > 0.0:
+            lv = [l * KB * th for l in range(int(emax / (KB * th)) + 1)]
+        else:
+            lv = [0.0]
+        if s in D.elec:
+            le = [(KB * t, float(g)) for t, g in D.elec[s]]
+        elif D.sp[s]["charge"] < 0 and D.sp[s]["mass"] < 1e-29:
+            le = [(0.0, 2.0)]                     # free electron: spin
+        else:
+            le = [(0.0, 1.0)]
+        nv, ne, ng = [], [], []
+        for a, b, c in zip(ev, ee, gg):
+            for v in lv:
+                for e, g in le:
+                    if a + v + b + e <= emax:
+                        nv.append(a + v)
+                        ne.append(b + e)
+                        ng.append(c * g)
+        ev, ee, gg = nv, ne, ng
+    return np.array(ev), np.array(ee), np.array(gg)
+
+
+def pair_z(D, species, vib="discrete"):
+    """continuum internal DOF / 2 of a pair: rotation, plus vibration when
+    it is continuous"""
+    z = sum(0.5 * D.sp[s]["rotdof"] for s in species)
+    if vib == "smooth":
+        z += sum(0.5 * D.sp[s]["vibdof"] for s in species)
+    return z
+
+
+def _powp(x, p):
+    """(x)_+^p with (x)_+^0 = step function"""
+    xp = np.maximum(x, 0.0)
+    if p == 0.0:
+        return (x > 0.0).astype(float)
+    with np.errstate(divide="ignore"):
+        return np.where(x > 0.0, xp ** p, 0.0)
+
+
+def _ladder_sum(u, e, g, p, chunk=2000000):
+    """sum_k g_k (u - e_k)_+^p for an array u"""
+    u = np.asarray(u, float)
+    out = np.zeros(u.size)
+    flat = u.ravel()
+    step = max(1, chunk // max(e.size, 1))
+    for i0 in range(0, flat.size, step):
+        x = flat[i0:i0 + step, None] - e[None, :]
+        out[i0:i0 + step] = _powp(x, p) @ g
+    return out.reshape(u.shape)
+
+
+def _cont_density(c, a1, th1, a2, th2, n=48):
+    """density of x1 + x2 with x1 ~ Gamma(a1, th1), x2 ~ Gamma(a2, th2);
+    a2 = 0 means x2 = 0"""
+    c = np.asarray(c, float)
+    if a2 == 0.0 or th1 == th2:
+        a = a1 + a2
+        with np.errstate(divide="ignore"):
+            return np.where(c > 0, np.exp((a - 1) * np.log(c) - c / th1 -
+                                          special.gammaln(a) -
+                                          a * math.log(th1)), 0.0)
+    # x1 = c y: Gauss-Jacobi in y with weight y^(a1-1) (1-y)^(a2-1)
+    y, w = special.roots_jacobi(n, a2 - 1.0, a1 - 1.0)
+    y = 0.5 * (y + 1.0)
+    w = w * 0.5 ** (a1 + a2 - 1.0)
+    cc = c[..., None]
+    expo = np.exp(-cc * (y / th1 + (1.0 - y) / th2))
+    pref = np.exp(-(special.gammaln(a1) + special.gammaln(a2) +
+                    a1 * math.log(th1) + a2 * math.log(th2)))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(c > 0, pref * c ** (a1 + a2 - 1.0) *
+                        (expo @ w), 0.0)
+
+
+class ExchangeReverse:
+    """The derived reverse of a two-body forward reaction fwd (exchange,
+    charge exchange, associative ionization), Eq. (exch) of the paper:
+
+        P_B(u) = S N_F(u + dH0) / D_B(u),
+        N_F(E) = sum_p g_p (E - e_p - Ea_F)_+^(z_F + eta_F + 1/2)   (forward
+                 pair ladder), D_B(u) = sum_q g_q (u - e_q)_+^(s_B - 1)
+                 (reverse pair ladder), s_B = z_B + 5/2 - omega_B,
+
+    with S fixed so that the equilibrium average reproduces k_f/K_eq, in
+    closed form from the Laplace transforms of N_F and D_B.  Computed from
+    the data files only.  The cap correction of Eq. (capnum) is not
+    included: it changes nothing unless the forward reaction is capped.
+
+    mean_p(Ttr, Trot, Tvib, Telec, cap) is the average of P_B (capped at
+    one if cap) over the collision ensemble of the reverse pair:
+    collision-weighted translation Gamma(5/2 - omega_B) at Ttr, continuum
+    rotation at Trot, and the vibrational and electronic ladders populated
+    at Tvib and Telec.  The reverse rate is k_coll,B(Ttr) mean_p."""
+
+    def __init__(self, D, fwd, vib="discrete", emax_ev=40.0, Tcal=10000.0,
+                 forward=False):
+        self.D, self.f, self.vib, self.forward = D, fwd, vib, forward
+        self.F, self.B = list(fwd["reac"]), list(fwd["prod"])
+        self.dH = -fwd["C5"]                       # positive: endothermic
+        self.EaB = max(fwd["Ea"] - self.dH, 0.0)
+        if forward:
+            # the forward reaction's own microcanonical probability, Eq.
+            # (microfactor): N_F/D_F of the forward pair, threshold Ea_F,
+            # calibrated to the Arrhenius rate; averaged over the forward
+            # pair's ensemble (self.B is the pair that is averaged over)
+            self.B, self.dH, self.EaB = list(fwd["reac"]), 0.0, fwd["Ea"]
+        self.zF, self.zB = pair_z(D, self.F, vib), pair_z(D, self.B, vib)
+        self.a = self.zF + fwd["eta"] + 0.5
+        self.omB = D.pair(*self.B)[1]
+        self.sB = self.zB + 2.5 - self.omB
+        self.emax = self.EaB + emax_ev * EV
+        evF, eeF, self.gF = pair_states(D, self.F, self.emax + self.dH, vib)
+        evB, eeB, self.gB = pair_states(D, self.B, self.emax, vib)
+        self.eF = evF + eeF
+        self.evB, self.eeB, self.eB = evB, eeB, evB + eeB
+        self.S = 1.0
+        self.S = self.calibration(Tcal)
+        # fine grid of P_B: geometric near zero, then uniform
+        g1 = np.geomspace(1e-7 * EV, 0.05 * EV, 600)
+        g2 = np.arange(0.05 * EV, 2.0 * EV, 2e-4 * EV)
+        g3 = np.arange(2.0 * EV, self.emax, 1e-3 * EV)
+        self.ug = np.concatenate([g1, g2[1:], g3[1:]])
+        self.pg = self.p_exact(self.ug)
+
+    def n_f(self, u):
+        return _ladder_sum(np.asarray(u) - self.EaB, self.eF, self.gF, self.a)
+
+    def d_b(self, u):
+        return _ladder_sum(u, self.eB, self.gB, self.sB - 1.0)
+
+    def p_exact(self, u):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            d = self.d_b(u)
+            return np.where(d > 0, self.S * self.n_f(u) / d, 0.0)
+
+    def p(self, u):
+        return np.interp(u, self.ug, self.pg, left=self.pg[0], right=np.nan)
+
+    def mean_unit(self, T):
+        """equilibrium average of N_F(u + dH0)/D_B(u), closed form"""
+        kT = KB * T
+        QF = np.sum(self.gF * np.exp(-self.eF / kT))
+        QB = np.sum(self.gB * np.exp(-self.eB / kT))
+        return (QF * math.exp(special.gammaln(self.a + 1.0) +
+                              (self.a + 1.0) * math.log(kT) - self.EaB / kT) /
+                (QB * math.exp(special.gammaln(self.sB) +
+                               self.sB * math.log(kT))))
+
+    def kb_target(self, T):
+        if self.forward:
+            return arrhenius(self.f, T)
+        return arrhenius(self.f, T) / self.D.keq(self.f, T)
+
+    def calibration(self, T):
+        """S such that k_coll,B(T) <P_B>_T = k_f(T)/K_eq(T)"""
+        return self.kb_target(T) / (self.D.kcoll(*self.B, T) *
+                                    self.mean_unit(T))
+
+    def mean_p(self, Ttr, Trot=None, Tvib=None, Telec=None, cap=True,
+               wmin=1e-13):
+        Trot = Ttr if Trot is None else Trot
+        Tvib = Ttr if Tvib is None else Tvib
+        Telec = Ttr if Telec is None else Telec
+        lw = (np.log(self.gB) - self.evB / (KB * Tvib) -
+              self.eeB / (KB * Telec))
+        w = np.exp(lw - lw.max())
+        keep = w > wmin * w.sum()
+        w, eq = w[keep] / w.sum(), self.eB[keep]
+        th1, th2 = KB * Ttr, KB * Trot
+        cmax = 40.0 * max(th1, th2)
+        t, wt = _graded_rule(cmax ** 0.5, npanel=64, norder=16, power=1.0)
+        c, wc = t * t, 2.0 * t * wt                     # c = t^2
+        rho = _cont_density(c, 2.5 - self.omB, th1, self.zB, th2)
+        uu = c[None, :] + eq[:, None]
+        pp = self.p(np.minimum(uu, self.ug[-1]))
+        if cap:
+            pp = np.minimum(pp, 1.0)
+        return float(w @ (pp @ (wc * rho)))
+
+    def rate(self, Ttr, **kw):
+        return self.D.kcoll(*self.B, Ttr) * self.mean_p(Ttr, **kw)
+
+
+class Recombination3:
+    """The derived recombination A + B + M -> AB + M, the reverse of the
+    dissociation fwd (AB + M -> A + B + M), Eq. (pr3) of the paper:
+
+        P_r = S n_M N_F(w + dH0) / (D_AB(u) c3 V3(w)),
+        w   = u + e_t3 + (third-body internal energy),
+
+    for an atomic third body: c3 = e_t3^(1/2), V3(w) = sum_m g_m (w - e_m)_+
+    over the electronic ladder of M (two flat variables, u and e_t3), N_F
+    the reactive density of states of the forward pair AB + M and D_AB that
+    of the pair A + B.  The sampling: u from the collision-weighted ensemble
+    of the pair (translation Gamma(5/2 - omega) at Ttr plus the electronic
+    ladders of A and B at Tel), e_t3 Maxwellian at Ttr (the third particle
+    is drawn uniformly, not by relative speed), the ladder of M at Tel.
+
+    ratio(Ttr, Tel) is <P_r>(Ttr, Tel)/<P_r>(Ttr, Ttr) without the cap, by
+    quadrature: with x = w, J(y) = int_y^inf e^{-x/kT} N_F(x + dH0)/V3(x) dx,
+
+        <P_r> ~ sum_q sum_m W_q W_m e^{(e_q + e_m)/kT}
+                int_{e_q}^inf (u - e_q)^(s-1) / D_AB(u) J(u + e_m) du.
+
+    cap_excess(Ttr, Tel, n_M) bounds the part of <P_r> above one (the
+    capped loss), which comes from soft collisions with A, B and M in their
+    ground states."""
+
+    def __init__(self, D, fwd):
+        self.D, self.f = D, fwd
+        AB, M = fwd["reac"]
+        A, B = fwd["prod"][0], fwd["prod"][1]
+        assert D.sp[M]["rotdof"] == 0 and D.sp[M]["vibdof"] == 0, \
+            "atomic third body only"
+        assert D.sp[A]["rotdof"] == 0 and D.sp[B]["rotdof"] == 0
+        self.AB, self.M, self.pair = AB, M, (A, B)
+        self.dH = -fwd["C5"]
+        self.EaB = max(fwd["Ea"] - self.dH, 0.0)
+        zF = pair_z(D, [AB, M])
+        self.a = zF + fwd["eta"] + 0.5
+        self.om = D.pair(A, B)[1]
+        self.s = 2.5 - self.om                    # z_p = 0 for two atoms
+        emax = 60.0 * EV
+        evF, eeF, self.gF = pair_states(D, [AB, M], emax + self.dH)
+        self.eF = evF + eeF
+        _, self.eq, self.gq = pair_states(D, [A, B], emax)
+        _, self.em, self.gm = pair_states(D, [M], emax)
+
+    def _G(self, x):
+        """N_F(x + dH0)/V3(x)"""
+        # N_F(E) = sum_p g_p (E - e_p - Ea_F)_+^a at E = x + dH0, i.e.
+        # sum_p g_p (x - e_p - Ea_B)_+^a with Ea_B = Ea_F - dH0
+        nf = _ladder_sum(np.asarray(x) - self.EaB, self.eF, self.gF, self.a)
+        v3 = _ladder_sum(x, self.em, self.gm, 1.0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(v3 > 0, nf / v3, 0.0)
+
+    def _grid(self, kT, top=45.0):
+        """graded grid in energy: geometric near zero, then fine uniform"""
+        g1 = np.geomspace(1e-9 * kT, 0.02 * kT, 400)
+        g2 = np.arange(0.02 * kT, top * kT, 0.002 * kT)
+        return np.concatenate([g1, g2[1:]])
+
+    def mean_unit(self, Ttr, Tel):
+        kT = KB * Ttr
+        x = self._grid(kT)
+        f = np.exp(-x / kT) * self._G(x)
+        # J(y) = int_y^inf f dx, cumulative trapezoid from the top
+        seg = 0.5 * (f[1:] + f[:-1]) * np.diff(x)
+        J = np.concatenate([np.cumsum(seg[::-1])[::-1], [0.0]])
+        # the 1/x singularity of f at x -> 0: J(y) ~ -c ln y, add the
+        # missing tail int_0^x0 analytically through the grid's first node
+        Jf = lambda y: np.interp(y, x, J, left=np.nan, right=0.0)
+        wq = self.gq * np.exp(-self.eq / (KB * Tel))
+        wq /= wq.sum()
+        wm = self.gm * np.exp(-self.em / (KB * Tel))
+        wm /= wm.sum()
+        keepq = wq > 1e-14
+        keepm = wm > 1e-14
+        tot = 0.0
+        t, wt = _graded_rule(30.0 ** 0.5, npanel=48, norder=16, power=1.0)
+        r, wr = t * t * kT, 2.0 * t * wt * kT    # u - e_q in J
+        for eq, w1 in zip(self.eq[keepq], wq[keepq]):
+            u = eq + r
+            dab = _ladder_sum(u, self.eq, self.gq, self.s - 1.0)
+            base = r ** (self.s - 1.0) / dab
+            for em, w2 in zip(self.em[keepm], wm[keepm]):
+                y = u + em
+                jy = np.where(y < x[0], J[0] + (f[0] * x[0]) *
+                              np.log(x[0] / np.maximum(y, 1e-300)), Jf(y))
+                tot += w1 * w2 * math.exp((eq + em) / kT) * np.sum(
+                    wr * base * jy)
+        return tot
+
+    def mean_unit_closed(self, T):
+        """equilibrium value of mean_unit(T, T) in closed form (the Laplace
+        transform of N_F; Eq. (pravg3) of the paper): a check of the
+        quadrature"""
+        kT = KB * T
+        QF = np.sum(self.gF * np.exp(-self.eF / kT))
+        Qp = np.sum(self.gq * np.exp(-self.eq / kT))
+        QM = np.sum(self.gm * np.exp(-self.em / kT))
+        return QF * math.exp(special.gammaln(self.a + 1.0) +
+                             (self.a + 1.0) * math.log(kT) -
+                             self.EaB / kT) / (Qp * QM)
+
+    def ratio(self, Ttr, Tel):
+        return self.mean_unit(Ttr, Tel) / self.mean_unit(Ttr, Ttr)

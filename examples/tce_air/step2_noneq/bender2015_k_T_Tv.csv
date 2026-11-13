@@ -1,0 +1,34 @@
+# k(T,Tv) for N2 + N2 dissociation, QCT with two-temperature (T = Ttrans = Trot, Tv) Boltzmann sampling.
+# Source: Bender et al., J. Chem. Phys. 143, 054304 (2015), doi:10.1063/1.4927571, Table IV
+# ("Dissociation rate constants k as a function of the translational-rotational temperature T and the vibrational temperature Tv").
+# k = k1 + 2*k2 (their Eq. 5: N2+N2->N2+2N plus twice N2+N2->4N), units cm^3 molecule^-1 s^-1.
+# unc_last_digits = one-standard-deviation statistical uncertainty in the last printed digit(s), as printed in parentheses.
+# ratio_to_thermal = k(T,Tv)/k(T,T), COMPUTED here from the same table (not printed in the paper).
+# how_obtained: read from the publisher HTML full text (pubs.aip.org) through two independent text-extraction passes that
+#   returned identical values; not digitized from a figure. Cross-check against the PDF before publication.
+source,reaction,table,T_K,Tv_K,k_cm3_per_molecule_s,unc_last_digits,ratio_to_thermal,how_obtained
+Bender2015_JCP143_054304,N2+N2,Table IV,8000,8000,4.6e-15,1,1,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,8000,10000,4.53e-14,7,9.848,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,8000,13000,3.72e-13,3,80.87,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,8000,20000,4.23e-12,1,919.6,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,8000,30000,1.650e-11,3,3587,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,10000,8000,1.00e-14,2,0.1408,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,10000,10000,7.1e-14,1,1,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,10000,13000,5.26e-13,3,7.408,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,10000,20000,5.37e-12,2,75.63,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,10000,30000,2.016e-11,4,283.9,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,13000,8000,5.30e-14,5,0.05805,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,13000,10000,1.86e-13,2,0.2037,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,13000,13000,9.13e-13,5,1,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,13000,20000,7.47e-12,2,8.182,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,13000,30000,2.621e-11,5,28.71,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,20000,8000,1.352e-12,2,0.08279,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,20000,10000,2.043e-12,5,0.1251,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,20000,13000,4.160e-12,9,0.2547,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,20000,20000,1.633e-11,3,1,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,20000,30000,4.457e-11,7,2.729,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,30000,8000,1.409e-11,1,0.1656,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,30000,10000,1.672e-11,2,0.1965,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,30000,13000,2.247e-11,2,0.264,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,30000,20000,4.445e-11,6,0.5223,publisher HTML text (2 passes)
+Bender2015_JCP143_054304,N2+N2,Table IV,30000,30000,8.51e-11,1,1,publisher HTML text (2 passes)

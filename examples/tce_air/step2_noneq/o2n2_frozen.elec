@@ -1,0 +1,8 @@
+# N2 and O2 electronic states with ZERO relaxation probability: the
+# electronic populations are frozen at their initialization (telec)
+# Boltzmann distribution for the whole run. Used by the noneq test to
+# probe the TCE coupling with a controlled non-equilibrium electronic
+# temperature (T_elec != T_trans) that cannot relax away.
+# Same level data as o2n2.elec, per-state TCE dof = 0.
+N2 5     0.0 0.0 9 1 0   71599.765 0.0 27 3 0   85293.075 0.0 135 3 0   97477.8 0.0 45 1 0   127997.63499999997 0.0 153 3 0
+O2 8   0.0 0.0 3 3 0   11337.596499999998 0.0 2 1 0   18880.5215 0.0 1 1 0   52220.25 0.0 10 3 0   69627.0 0.0 3 3 0   97477.8 0.0 19 3 0   115696.865 0.0 1 1 0   170586.15 0.0 3 3 0

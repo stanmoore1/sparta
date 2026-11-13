@@ -1,0 +1,41 @@
+# Nitrogen-rich dense reservoir (N 0.8, N2 0.2) for the response of
+# three-body recombination N + N + N -> N2 + N to the electronic
+# populations: translation, rotation and vibration at T, electronic states
+# of every species frozen at TELEC (air_frozen.elec: electronic relaxation
+# probability zero).  Dissociation N2 + N -> N + N + N and its derived
+# recombination are tallied but not performed (compute_chem_rates yes),
+# unboosted (rboost 1).
+#
+# Variables: DATA, SEED, T, TELEC, NRHO, NP, NSTEP (steps of 1 ns)
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 1.0e-4 0 1.0e-4 0 1.0e-4
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${DATA}/air.species N2 N rotfile ${DATA}/air.rot elecfile air_frozen.elec
+mixture             gas N2 N vstream 0.0 0.0 0.0 temp ${T} telec ${TELEC}
+mixture             gas N2 frac 0.2
+mixture             gas N  frac 0.8
+
+variable            fn equal ${NRHO}*1.0e-12/${NP}
+global              nrho ${NRHO}
+global              fnum ${fn}
+
+collide             vss gas ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce recomb_atom.tce
+react_modify        partial_energy no compute_chem_rates yes rboost 1.0
+
+create_particles    gas n ${NP} twopass
+compute             temp temp
+stats               500
+stats_style         step cpu np nattempt ncoll c_temp
+timestep            1.0e-9
+run                 ${NSTEP}

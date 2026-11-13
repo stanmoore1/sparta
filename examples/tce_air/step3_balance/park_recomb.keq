@@ -1,0 +1,5 @@
+# Park-form fit (react_modify keq_file) of the partition-function equilibrium
+# constant (m^-3) of N2 + N --> N + N + N from data/air.*, exact at
+# 8, 11, 14, 17 and 20 kK (tce_ref.park_fit)
+N2 + N --> N + N + N
+park -1.570224505 71.16354198 -4.328300898 -9.483195359 0.1850209127

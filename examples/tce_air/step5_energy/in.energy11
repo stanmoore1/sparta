@@ -1,0 +1,56 @@
+# Energy audit of a dense 11-species air reservoir with ions and electrons
+# (Sec. VII D): 9.6e26 m^-3, 15 000 K, the full mechanism of data/air.tce
+# with every derived reverse, unboosted recombination, electrons as an
+# ordinary species.  Same energy sum as in.energy, with the formation
+# energies of all 11 species.
+#
+# Variables: DATA, SEED, NP, NSTEP, NOUT, DT
+
+seed                ${SEED}
+dimension           3
+global              gridcut 1.0e-5 comm/sort yes
+boundary            rr rr rr
+create_box          0 2.75e-6 0 2.75e-6 0 2.75e-6
+create_grid         2 2 2
+balance_grid        rcb part
+
+species             ${DATA}/air.species N2 O2 NO N O N2+ O2+ NO+ N+ O+ e &
+                    rotfile ${DATA}/air.rot elecfile ${DATA}/air.elec
+mixture             air N2 O2 NO N O N2+ O2+ NO+ N+ O+ e vstream 0.0 0.0 0.0 temp 15000.0
+mixture             air N2  frac 0.30
+mixture             air O2  frac 0.10
+mixture             air NO  frac 0.10
+mixture             air N   frac 0.15
+mixture             air O   frac 0.15
+mixture             air N2+ frac 0.02
+mixture             air O2+ frac 0.02
+mixture             air NO+ frac 0.02
+mixture             air N+  frac 0.02
+mixture             air O+  frac 0.02
+mixture             air e   frac 0.10
+# one collision group per species (see step3_balance/in.mech)
+mixture             air group SELF
+
+variable            fn equal 9.6e26*(2.75e-6)^3/${NP}
+global              fnum ${fn}
+
+collide             vss air ${DATA}/air.vss relax constant
+collide_modify      rotate discrete vibrate discrete electronic discrete
+fix                 electronic elecmode
+collide_modify      remain no
+
+react               tce ${DATA}/air.tce
+react_modify        partial_energy no rboost 1.0
+
+create_particles    air n ${NP} twopass
+
+compute             spc count N2 O2 NO N O N2+ O2+ NO+ N+ O+ e
+compute             esum reduce sum ke erot evib p_eelec
+variable            eform equal c_spc[3]*1.50723e-19+c_spc[4]*7.81811e-19+c_spc[5]*4.09804e-19+c_spc[6]*2.49630e-18+c_spc[7]*1.93453e-18+c_spc[8]*1.63499e-18+c_spc[9]*3.11044e-18+c_spc[10]*2.59166e-18
+variable            etot equal c_esum[1]+c_esum[2]+c_esum[3]+c_esum[4]+v_eform
+compute             temp temp
+stats               ${NOUT}
+stats_style         step cpu np nreact c_temp v_eform v_etot
+stats_modify        format float %.15g
+timestep            ${DT}
+run                 ${NSTEP}

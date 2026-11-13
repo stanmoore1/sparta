@@ -1,0 +1,13 @@
+# The Zeldovich pair written the other way round: the forward reaction is
+# NO + N -> N2 + O with the fit of the legacy air set (barrierless,
+# A = 4.059e-12 m^3/s, eta = -1.359), with the reaction energy of
+# data/air.tce; its derived reverse N2 + O -> NO + N is barriered
+# (threshold 5.2273e-19 J), so its probability stays below one and its
+# response to the internal temperature is not limited by the cap.  This is
+# the configuration of the paper's Table XI.
+
+NO + N --> N2 + O
+E A 0.0 0.0 4.059e-12 -1.359 5.2273e-19
+
+N2 + O --> NO + N
+E B 0.0 0.0 0.0 0.0 0.0

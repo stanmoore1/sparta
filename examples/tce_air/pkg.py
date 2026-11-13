@@ -1,23 +1,25 @@
 """Helpers shared by the steps of the tce_air package.
 
-Every step defines a list of runs (Run objects) in its runs.py, in two
-sizes: "quick" (CPU, minutes; checks that everything works) and "paper"
-(the statistics the paper quotes; meant for GPU nodes).  The same run list
-is used to run locally, to write batch job scripts, and to analyze, so the
-analysis never depends on where a run happened.
+Every step defines its runs (Run objects) in runs.py.  The run list is
+used both to run and to analyze, so the analysis never depends on how or
+where a run happened.  Each step has one size, "quick", chosen so that the
+whole package runs on a 4-core machine in about an hour; set_size()
+registers other sizes (more particles, steps or seeds for the same decks)
+from outside the package.
 
-Executables and launch settings come from environment variables, or from
-bin/ as written by build.sh:
+Executables come from environment variables, or from bin/ as written by
+build.sh:
   SPARTA_EXE        executable of this branch (default bin/spa_release)
-  SPARTA_EXE_ARGS   extra arguments, e.g. "-k on g 1 -sf kk" for a GPU build
+  SPARTA_EXE_ARGS   extra arguments of that executable
   SPARTA_CMP_EXE    comparison build with the earlier TCE treatments
                     (react_modify vib_energy dof, elec_energy yes|no|micro);
                     optional (default bin/spa_compare)
   SPARTA_CMP_ARGS   extra arguments of the comparison build
-  SPARTA_NP         MPI ranks per run for local CPU runs (default 4)
-  SPARTA_MPIRUN     launcher for local runs (default "mpirun")
+  SPARTA_NP         MPI ranks per run (default 4)
+  SPARTA_MPIRUN     MPI launcher (default "mpirun"), e.g. "mpiexec"
   TCE_AIR_RESULTS   results directory (default ./results next to this file)
 """
+import json
 import math
 import os
 import re
@@ -32,6 +34,26 @@ DATA = os.path.normpath(os.path.join(HERE, "..", "..", "data"))
 
 def results_dir():
     return os.environ.get("TCE_AIR_RESULTS") or os.path.join(HERE, "results")
+
+
+# ------------------------------------------------------------------ sizes
+_EXTRA_SIZES = {}
+
+
+def set_size(step, name, params):
+    """register size 'name' of a step (a dict like the entries of the
+    step's SIZES) from outside the package"""
+    _EXTRA_SIZES.setdefault(step, {})[name] = dict(params)
+
+
+def size_params(step, sizes, name):
+    if name in _EXTRA_SIZES.get(step, {}):
+        return _EXTRA_SIZES[step][name]
+    if name in sizes:
+        return sizes[name]
+    raise KeyError("step %s has no size '%s' (it has: %s)"
+                   % (step, name, ", ".join(sorted(set(sizes) |
+                                            set(_EXTRA_SIZES.get(step, {}))))))
 
 
 # ------------------------------------------------------------------ runs
@@ -57,14 +79,30 @@ class Run:
     def log(self):
         return os.path.join(self.workdir, "log.sparta")
 
-    def done(self):
-        return os.path.exists(self.log) and "Loop time" in open(self.log).read()
+    def record(self):
+        """what defines the run: deck, variables, executable kind"""
+        return {"deck": self.deck, "kind": self.kind,
+                "variables": {k: str(v) for k, v in self.variables.items()}}
 
-    def command(self, launcher=None, exe_override=None):
-        """argument list of the SPARTA call (without the MPI launcher)"""
+    def done(self):
+        """the log finished, and run.json shows the run was made with the
+        current deck, variables and executable kind (a run whose definition
+        changed is run again)"""
+        rec = os.path.join(self.workdir, "run.json")
+        if not (os.path.exists(self.log) and os.path.exists(rec)):
+            return False
+        try:
+            same = json.load(open(rec)) == self.record()
+        except ValueError:
+            return False
+        return same and "Loop time" in open(self.log).read()
+
+    def command(self, exe=None, args=None):
+        """argument list of the SPARTA call (without the MPI launcher);
+        exe and args replace the executable of the run's kind"""
         e, extra = exe_and_args(self.kind)
-        if exe_override:
-            e = exe_override
+        if exe:
+            e, extra = exe, list(args or [])
         cmd = [e] + extra + ["-in", os.path.join(self.stepdir, self.deck),
                              "-log", self.log, "-screen", "none"]
         for k, v in self.variables.items():
@@ -94,6 +132,10 @@ def have(kind):
 
 def prepare(run):
     os.makedirs(run.workdir, exist_ok=True)
+    with open(os.path.join(run.workdir, "run.json"), "w") as fh:
+        json.dump(run.record(), fh, indent=1)
+    if os.path.exists(run.log):
+        os.remove(run.log)
     for f in run.files:
         src = f if os.path.isabs(f) else os.path.join(run.stepdir, f)
         dst = os.path.join(run.workdir, os.path.basename(f))
@@ -101,50 +143,32 @@ def prepare(run):
             os.symlink(os.path.abspath(src), dst)
 
 
-def run_local(run, np=None):
-    """run one Run on this machine; skip it if its log already finished"""
-    if run.done():
-        return run.log
+def start_cpu(run, np=None):
+    """start one run on the CPU with np MPI ranks, without waiting"""
     if not have(run.kind):
         raise FileNotFoundError("no '%s' executable: run ./build.sh first"
                                 % run.kind)
     prepare(run)
-    cmd = [os.environ.get("SPARTA_MPIRUN", "mpirun"), "-np",
-           str(np or int(os.environ.get("SPARTA_NP", "4")))] + run.command()
+    cmd = shlex.split(os.environ.get("SPARTA_MPIRUN", "mpirun")) + \
+        ["-np", str(np or int(os.environ.get("SPARTA_NP", "4")))] + \
+        run.command()
     env = dict(os.environ, OMPI_ALLOW_RUN_AS_ROOT="1",
                OMPI_ALLOW_RUN_AS_ROOT_CONFIRM="1")
-    r = subprocess.run(cmd, cwd=run.workdir, capture_output=True, text=True,
-                       env=env)
-    if r.returncode != 0 or not run.done():
-        sys.stderr.write("run failed: %s\n%s\n%s\n"
-                         % (" ".join(map(shlex.quote, cmd)),
-                            r.stdout[-2000:], r.stderr[-2000:]))
-        raise RuntimeError("SPARTA run failed: %s/%s" % (run.step, run.tag))
-    return run.log
-
-
-def start_gpu(run, gpu):
-    """start one run on GPU number gpu of this node, without waiting;
-    the launcher is $TCE_AIR_GPU_LAUNCH (default: run the executable
-    directly, as a single MPI rank), the GPU is selected through the
-    visible-device variables of CUDA and ROCm"""
-    prepare(run)
-    launch = shlex.split(os.environ.get("TCE_AIR_GPU_LAUNCH", ""))
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu),
-               ROCR_VISIBLE_DEVICES=str(gpu), HIP_VISIBLE_DEVICES=str(gpu))
     out = open(os.path.join(run.workdir, "stdout"), "w")
-    return subprocess.Popen(launch + run.command(), cwd=run.workdir, env=env,
-                            stdout=out, stderr=subprocess.STDOUT)
+    return subprocess.Popen(cmd, cwd=run.workdir, env=env, stdout=out,
+                            stderr=subprocess.STDOUT)
 
 
 # ------------------------------------------------------------ log parsing
 def tallies(log):
-    """reaction tallies printed at the end of a run: {label: count}"""
+    """reaction tallies printed at the end of a run: {label: count}.
+    SPARTA prints counts of a million and more in %g format (1.0273e+06,
+    six significant digits), so the count is parsed as a float."""
     out = {}
     for line in open(log):
-        m = re.match(r"\s*reaction (.*): (\d+)\s*$", line)
+        m = re.match(r"\s*reaction (.*): ([0-9.eE+-]+)\s*$", line)
         if m:
-            out[" ".join(m.group(1).split())] = int(m.group(2))
+            out[" ".join(m.group(1).split())] = int(round(float(m.group(2))))
     return out
 
 

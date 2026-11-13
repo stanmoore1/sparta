@@ -21,7 +21,9 @@ sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 import pkg                 # noqa: E402
 import tce_ref as R        # noqa: E402
+sys.modules.pop("runs", None)  # this step's runs.py, not another step's
 from runs import runs, SIZES, STEP  # noqa: E402
+from pkg import size_params  # noqa: E402
 
 V = 1.0e-12                 # box volume (m^3)
 NRHO = 7.07043e22           # total number density (m^-3)
@@ -112,7 +114,7 @@ def analyze(size="quick"):
                                   Tpop=TE),
             "excl": 1.0}
     chan = {}
-    NPs, NST = SIZES[size]["NP"], SIZES[size]["NSTEP"]
+    NPs, NST = (size_params(STEP, SIZES, size)[k] for k in ("NP", "NSTEP"))
     fnum = NRHO * V / NPs
     count_per_k = (0.5 * NRHO) ** 2 * V * NST * DT / fnum
     for tr in ("excl", "dof1", "micro", "incl"):

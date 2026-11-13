@@ -1,0 +1,9 @@
+# Dissociation of N2 by N2 and its derived reverse, three-body
+# recombination with the molecular third body N2.
+# Lines copied from data/air.tce; analyze.py checks they still agree.
+
+N2 + N2 --> N + N + N2
+D A 1.0 1.56362e-18 1.162e-8 -1.6 -1.56362e-18
+
+N + N --> N2 + N2
+R B 0.0 0.0 0.0 0.0 0.0
