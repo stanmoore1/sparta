@@ -207,8 +207,11 @@ class Report:
     """PASS/FAIL lines of one step, written to results/<step>/results.txt"""
 
     def __init__(self, step):
+        """step: the step's directory name, optionally followed by a
+        label such as "(quick)" for the report's first line"""
         self.step, self.lines, self.nfail = step, [], 0
-        self.path = os.path.join(results_dir(), step, "results.txt")
+        self.path = os.path.join(results_dir(), step.split()[0],
+                                 "results.txt")
 
     def info(self, text):
         self.lines.append("  " + text)

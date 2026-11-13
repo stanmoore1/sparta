@@ -81,6 +81,35 @@ The quick size of the package resolves the claims at the few-percent
 level.  The paper's numbers come from the same decks at larger sizes,
 run on GPUs (the `paper-runs` branch of the paper's repository).
 
+## What to expect
+
+With this branch at the quick size all checks pass except one, in
+`step7_cap`.  The forward rates of NO + O and NO + N dissociation, whose
+Arrhenius fits exceed the collision rate so that most reacting
+collisions are capped at probability one, run 0.4-3% below the capped
+fraction computed by `tce_ref.py`, for both reactions and at every
+temperature; the NO + N check at 10 000 K (-3.1%) falls outside the 2%
+allowance.  A build from before the latest code changes gives identical
+tallies, so this is not a regression; the cause (the sampling of the
+fastest collisions, or the reference's treatment of NO rotation as a
+continuum) is open.  The reactors of the same step reach the
+partition-function equilibrium to 1-2%.
+
+Two limitations are known and documented in the paper:
+
+- A barrierless reverse reaction (here NO + N -> N2 + O) has
+  probabilities above one at low collision energy; their cap lowers the
+  reverse rate slightly (0.6% at 8000 K), and this is not carried back
+  into the forward reaction.  `step3_balance` checks against the capped
+  expectation.
+- Dissociation produces three particles, and SPARTA scatters them with
+  the usual DSMC convention (two of them leave together), which is not
+  the state distribution assumed by the derived recombination.  In a
+  dense reactor where only dissociation and recombination act, the
+  realized equilibrium constant then depends on the number of particles
+  per cell (a few percent at 1000-5000 per cell); the GPU runs measure
+  this.
+
 ## How the references are computed
 
 `tce_ref.py` reads the data files (`data/air.*`) and implements the
