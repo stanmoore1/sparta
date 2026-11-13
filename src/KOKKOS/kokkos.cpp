@@ -18,6 +18,7 @@
 #include "ctype.h"
 #include "kokkos.h"
 #include "sparta.h"
+#include "sparta_masks.h"
 #include "error.h"
 #include "memory_kokkos.h"
 
@@ -40,6 +41,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 {
   kokkos_exists = 1;
   sparta->kokkos = this;
+  sync_mask_for_output = EMPTY_MASK;
 
   delete memory;
   memory = new MemoryKokkos(sparta);
@@ -69,6 +71,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 #endif
       if (iarg+2 > narg) error->all(FLERR,"Invalid Kokkos command-line args");
       ngpus = atoi(arg[iarg+1]);
+      if (ngpus <= 0) error->all(FLERR,"Invalid Kokkos command-line args");
 
       int skip_gpu = 9999;
       if (iarg+2 < narg && isdigit(arg[iarg+2][0])) {
@@ -122,6 +125,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
     } else if (strcmp(arg[iarg],"t") == 0 ||
                strcmp(arg[iarg],"threads") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Invalid Kokkos command-line args");
       nthreads = atoi(arg[iarg+1]);
       iarg += 2;
 
@@ -181,9 +185,9 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
     comm_serial = 0;
 
     // SPARTA_KOKKOS_REDUCE_ARCH (kokkos_type.h) is the single definition of
-    //  which architectures UpdateKokkos::move() dispatches the
-    //  ATOMIC_REDUCTION = -1 (parallel_reduce) kernel for; the counters are
-    //  read back from the reduction result only when atomic_reduction is 0
+    //  which architectures use the ATOMIC_REDUCTION = -1 (parallel_reduce)
+    //  kernels.  UpdateKokkos::move() sums its counters from both the
+    //  reduction result and the device scalars, so it does not read this
 
 #if SPARTA_KOKKOS_REDUCE_ARCH
     atomic_reduction = 0;

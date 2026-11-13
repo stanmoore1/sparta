@@ -30,11 +30,13 @@ class DumpParticle : public Dump {
   DumpParticle(class SPARTA *, int, char **);
   virtual ~DumpParticle();
   bigint memory_usage();
+  unsigned int sync_mask() const override;
 
  protected:
   int imix;                  // index of mixture to be dumped
   int nevery;                // dump frequency to check Fix against
   int iregion;               // -1 if no region, else which region
+  char *idregion;            // region ID, re-resolved in init_style()
   int nthresh;               // # of defined threshholds
   int *thresh_array;         // array to threshhhold on for each nthresh
   int *thresh_op;            // threshhold operation for each nthresh

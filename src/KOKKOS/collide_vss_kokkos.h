@@ -223,6 +223,12 @@ class CollideVSSKokkos : public CollideVSS {
   int nglist_coll_tally,nglist_react_tally;
   DAT::t_int_scalar d_tally_overflow;
   HAT::t_int_scalar h_tally_overflow;
+
+  // aliased into ReactBirdKokkos::d_prob_warn so the TCE invalid-probability
+  //   flag rides on the per-pass h_scalars read-back, no extra sync
+
+  DAT::t_int_scalar d_prob_warn;
+  HAT::t_int_scalar h_prob_warn;
   void grow_gas_tally_computes();
   void rewind_gas_tally_computes(int);
   void setup_gas_tally();
@@ -231,7 +237,7 @@ class CollideVSSKokkos : public CollideVSS {
 
   t_particle_1d d_particles;
   t_species_1d_const d_species;
-  DAT::t_int_2d d_plist;
+  DAT::t_int_2d_lr d_plist;
 
   // group collision scratch (ngroups > 1)
   DAT::t_int_1d d_species2group;
@@ -318,7 +324,7 @@ class CollideVSSKokkos : public CollideVSS {
   // bigint scalars = per-step statistics counters, can exceed 2^31
   //   in one step at large per-proc particle counts
 
-  typedef Kokkos::DualView<int[9], DeviceType::array_layout, DeviceType> tdual_int_8;
+  typedef Kokkos::DualView<int[10], DeviceType::array_layout, DeviceType> tdual_int_8;
   typedef tdual_int_8::t_dev t_int_8;
   typedef tdual_int_8::t_host t_host_int_8;
   t_int_8 d_scalars;
@@ -368,7 +374,7 @@ class CollideVSSKokkos : public CollideVSS {
 
   DAT::t_float_2d d_recomb_ijflag;
 
-  DAT::t_int_2d d_nn_last_partner;
+  DAT::t_int_2d_lr d_nn_last_partner;
 
   template < int NEARCP, int GASTALLY > void collisions_one(COLLIDE_REDUCE&);
   template < int DIM, int GASTALLY > void collisions_one_subcell(COLLIDE_REDUCE&);
@@ -459,12 +465,13 @@ class CollideVSSKokkos : public CollideVSS {
   void restore();
 
   t_particle_1d d_particles_backup;
-  DAT::t_int_2d d_plist_backup;
+  DAT::t_int_2d_lr d_plist_backup;
   DAT::t_float_3d d_vremax_backup;
   DAT::t_float_3d d_remain_backup;
-  DAT::t_int_2d d_nn_last_partner_backup;
+  DAT::t_int_2d_lr d_nn_last_partner_backup;
   DAT::t_int_1d d_ionambi_backup;
   DAT::t_float_2d_lr d_velambi_backup;
+  DAT::t_int_2d_lr d_vibmode_backup;
   RanKnuth* random_backup;
 };
 

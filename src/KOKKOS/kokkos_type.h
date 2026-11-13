@@ -62,12 +62,11 @@ typedef int crs_size_type;
 #define KOKKOS_MAX_TOT_SURF_REACT 4
 #endif
 
-// architectures where the move kernel is dispatched with ATOMIC_REDUCTION = -1
+// architectures where the kernels are dispatched with ATOMIC_REDUCTION = -1
 //   (parallel_reduce) rather than atomics.  KokkosSPARTA::accelerator() clears
-//   atomic_reduction for exactly these, and UpdateKokkos::move() reads the
-//   per-step counters back from the reduction result only when it is clear.
-//   The two decisions must agree or the counters come from the wrong place, so
-//   the condition is spelled out once here instead of in both files.
+//   atomic_reduction for exactly these.  UpdateKokkos::move() does not depend
+//   on it: on every GPU it may dispatch the -1 kernel, and it sums the
+//   per-step counters from both the reduction result and the device scalars.
 
 #if defined(KOKKOS_ARCH_AMD_GFX940) || defined(KOKKOS_ARCH_AMD_GFX942) || \
     defined(KOKKOS_ARCH_AMD_GFX942_APU)
@@ -189,12 +188,12 @@ struct ExecutionSpaceFromDevice<Kokkos::Cuda> {
 };
 #elif defined(KOKKOS_ENABLE_HIP)
 template<>
-struct ExecutionSpaceFromDevice<Kokkos::Experimental::HIP> {
+struct ExecutionSpaceFromDevice<Kokkos::HIP> {
   static const SPARTA_NS::ExecutionSpace space = SPARTA_NS::Device;
 };
 #elif defined(KOKKOS_ENABLE_SYCL)
 template<>
-struct ExecutionSpaceFromDevice<Kokkos::Experimental::SYCL> {
+struct ExecutionSpaceFromDevice<Kokkos::SYCL> {
   static const SPARTA_NS::ExecutionSpace space = SPARTA_NS::Device;
 };
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
@@ -208,9 +207,9 @@ struct ExecutionSpaceFromDevice<Kokkos::Experimental::OpenMPTarget> {
 #if defined(KOKKOS_ENABLE_CUDA)
 typedef Kokkos::CudaHostPinnedSpace SPAPinnedHostType;
 #elif defined(KOKKOS_ENABLE_HIP)
-typedef Kokkos::Experimental::HIPHostPinnedSpace SPAPinnedHostType;
+typedef Kokkos::HIPHostPinnedSpace SPAPinnedHostType;
 #elif defined(KOKKOS_ENABLE_SYCL)
-typedef Kokkos::Experimental::SYCLHostUSMSpace SPAPinnedHostType;
+typedef Kokkos::SYCLHostUSMSpace SPAPinnedHostType;
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
 typedef Kokkos::Serial SPAPinnedHostType;
 #endif
@@ -250,22 +249,22 @@ struct AtomicDup<-1,Kokkos::Cuda> {
 };
 #elif defined(KOKKOS_ENABLE_HIP)
 template<>
-struct AtomicDup<1,Kokkos::Experimental::HIP> {
+struct AtomicDup<1,Kokkos::HIP> {
   using value = Kokkos::Experimental::ScatterAtomic;
 };
 
 template<>
-struct AtomicDup<-1,Kokkos::Experimental::HIP> {
+struct AtomicDup<-1,Kokkos::HIP> {
   using value = Kokkos::Experimental::ScatterAtomic;
 };
 #elif defined(KOKKOS_ENABLE_SYCL)
 template<>
-struct AtomicDup<1,Kokkos::Experimental::SYCL> {
+struct AtomicDup<1,Kokkos::SYCL> {
   using value = Kokkos::Experimental::ScatterAtomic;
 };
 
 template<>
-struct AtomicDup<-1,Kokkos::Experimental::SYCL> {
+struct AtomicDup<-1,Kokkos::SYCL> {
   using value = Kokkos::Experimental::ScatterAtomic;
 };
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
@@ -493,8 +492,8 @@ namespace SPARTA_NS {
 
   typedef Kokkos::
     DualView<Grid::ParentLevel*, DeviceType::array_layout, DeviceType> tdual_plevel_1d;
-  typedef tdual_pcell_1d::t_dev t_plevel_1d;
-  typedef tdual_pcell_1d::t_host t_host_plevel_1d;
+  typedef tdual_plevel_1d::t_dev t_plevel_1d;
+  typedef tdual_plevel_1d::t_host t_host_plevel_1d;
 
   typedef Kokkos::
     DualView<Surf::Line*, DeviceType::array_layout, DeviceType> tdual_line_1d;
