@@ -228,6 +228,28 @@ class Report:
         return self.nfail
 
 
+def mean_err_corr(x):
+    """mean of a correlated time series and its standard error, from the
+    integrated autocorrelation time (Sokal's window: sum the
+    autocorrelation up to the first lag M >= 5 tau)"""
+    import numpy as np
+    x = np.asarray(x, float)
+    n = len(x)
+    if n < 4:
+        return float(x.mean()), float("inf")
+    d = x - x.mean()
+    var = d.dot(d) / n
+    if var == 0.0:
+        return float(x.mean()), 0.0
+    tau = 0.5
+    for m in range(1, n // 2):
+        tau += d[:-m].dot(d[m:]) / ((n - m) * var)
+        if m >= 5 * tau:
+            break
+    tau = max(tau, 0.5)
+    return float(x.mean()), float(np.sqrt(2.0 * tau * var / n))
+
+
 def mean_sd(xs):
     n = len(xs)
     m = sum(xs) / n

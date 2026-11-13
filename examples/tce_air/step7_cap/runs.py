@@ -10,8 +10,9 @@ dissociation and their derived recombinations.
   rx    adiabatic reactors at 1e25 m^-3 relaxing to the NO = N + O
         equilibrium (about 5630 K): the realized equilibrium constant
         relative to the partition-function value, for three seeds (cap),
-        a tenth of the density (lown), rates divided by 30 (slow, no cap),
-        and relaxation of NO at every collision (fast); and, with the
+        a tenth of the density (lown), rates divided by 30 (slow, no cap;
+        paper size only), and relaxation of NO at every collision (fast);
+        and, with the
         build before the cap correction (kind 'precap', optional), the
         forward-only cap
 """
@@ -24,8 +25,14 @@ from pkg import Run, DATA, size_params  # noqa: E402
 STEP = "step7_cap"
 # NPF/NSTF: frozen reservoirs; NPR/NSTR: reactors (steps of 5e-11 s; the
 # low-density reactor uses steps of 5e-10 s and NSTL steps)
+# NPS/NSTS: the reactor without cap (rates divided by 30).  It relaxes 15
+# times more slowly than the capped reactors, so its composition
+# fluctuations (about 9% in the ratio for 10 000 particles) average out
+# only over a long run of many particles: 0 leaves it out (the package;
+# the closed box of step 4 tests the uncapped balance), the paper size
+# runs it with 200 000 particles.
 SIZES = {"quick": dict(seeds=3, NPF=20000, NSTF=4000, NPR=10000,
-                       NSTR=150000, NSTL=150000)}
+                       NSTR=150000, NSTL=150000, NPS=0, NSTS=0)}
 FILES = ("cap.tce", "cap_slow.tce", "nofast.species")
 NRHO = 1.0e25
 X_EQ = dict(XNO=0.3326, XO=0.3348, XN=0.3326)     # frozen reservoirs
@@ -55,9 +62,11 @@ def runs(size="quick"):
     out.append(Run(STEP, "rx_lown_s0", "in.cap",
                    dict(base, SEED=73345, NRHO=NRHO / 10, DT=5.0e-10,
                         NSTEP=sz["NSTL"]), files=FILES))
-    out.append(Run(STEP, "rx_slow_s0", "in.cap",
-                   dict(base, SEED=73345, TCE="cap_slow.tce", T=5600.0,
-                        **X_SLOW), files=FILES))
+    if sz["NPS"]:
+        out.append(Run(STEP, "rx_slow_s0", "in.cap",
+                       dict(base, SEED=73345, TCE="cap_slow.tce", T=5600.0,
+                            NP=sz["NPS"], NSTEP=sz["NSTS"], **X_SLOW),
+                       files=FILES))
     out.append(Run(STEP, "rx_fast_s0", "in.cap",
                    dict(base, SEED=73345, SPFILE="nofast.species"),
                    files=FILES))

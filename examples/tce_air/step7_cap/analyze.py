@@ -152,32 +152,49 @@ def analyze(size="quick"):
                 rep.info("forward-only cap: not run (needs the 'precap' "
                          "build, see README)")
             continue
-        ratios = []
+        ratios, errs = [], []
         for r in sel:
             st = stats_array(r)
             steps = st["Step"]
-            keep = steps >= 0.5 * steps[-1]
+            keep = np.where(steps >= 0.5 * steps[-1])[0]
             fnum = r.variables["NRHO"] * V / r.variables["NP"]
-            N = {"O": st["c_spc[1]"][keep].mean(),
-                 "N": st["c_spc[2]"][keep].mean(),
-                 "NO": st["c_spc[3]"][keep].mean()}
             E = st["v_etot"][0]
             drift = abs(st["v_etot"][-1] / E - 1)
-            T = equilibrium_T(D, N, E)
-            K = (N["N"] * N["O"] / N["NO"]) * fnum / V
-            ratio = K / D.keq(D.reaction("NO + O --> N + O + O"), T)
+            # the ratio at every snapshot of the second half, from the
+            # composition and the temperature that the conserved energy
+            # implies for it: near equilibrium the composition fluctuates,
+            # and one net dissociation in 10 000 particles moves the ratio
+            # by about 1% (through the temperature it implies); the error
+            # of the mean follows from the autocorrelation time of the
+            # series, which is long when the reactions are slow
+            rs, Ts = [], []
+            for i in keep:
+                N = {"O": st["c_spc[1]"][i], "N": st["c_spc[2]"][i],
+                     "NO": st["c_spc[3]"][i]}
+                T = equilibrium_T(D, N, E)
+                K = (N["N"] * N["O"] / N["NO"]) * fnum / V
+                rs.append(K / D.keq(D.reaction("NO + O --> N + O + O"), T))
+                Ts.append(T)
+            ratio, err = pkg.mean_err_corr(rs)
             ratios.append(ratio)
-            num["rx_%s" % r.tag[3:]] = dict(ratio=ratio, T=T, N=N,
-                                           energy_drift=drift,
-                                           T_tr=float(st["c_temp"][keep].mean()))
+            errs.append(err)
+            num["rx_%s" % r.tag[3:]] = dict(
+                ratio=ratio, err=err, T=float(np.mean(Ts)),
+                energy_drift=drift,
+                T_tr=float(st["c_temp"][keep].mean()))
             rep.info("%-18s T %.0f K (translational %.0f K), K_eq realized/"
-                     "partition function %.3f, energy drift %.1e"
-                     % (r.tag, T, st["c_temp"][keep].mean(), ratio, drift))
+                     "partition function %.3f +/- %.3f, energy drift %.1e"
+                     % (r.tag, np.mean(Ts), st["c_temp"][keep].mean(), ratio,
+                        2 * err, drift))
         m = float(np.mean(ratios))
+        e = math.sqrt(sum(x * x for x in errs)) / len(errs)
+        if len(ratios) > 1:
+            e = max(e, float(np.std(ratios, ddof=1)) / math.sqrt(len(ratios)))
         tab.append((lab, m, ratios))
         if key in ("cap", "lown", "slow", "fast"):
-            rep.check(abs(m - 1) <= 0.05, "%s: realized/partition-function "
-                      "K_eq %.3f (within 5%%)" % (lab, m))
+            rep.check(abs(m - 1) <= 3 * e + 0.02,
+                      "%s: realized/partition-function K_eq %.3f +/- %.3f "
+                      "(2 sd)" % (lab, m, 2 * e))
     _table(out, tab)
     with open(os.path.join(out, "numbers.json"), "w") as fh:
         json.dump(num, fh, indent=1, default=float)
