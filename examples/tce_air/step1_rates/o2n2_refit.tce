@@ -1,0 +1,10 @@
+# O2 + N2 dissociation of o2n2.tce refit for the model with electronic
+# energy added to the collision energy and one DOF per excited electronic
+# state (o2n2_dof1.elec).  Least-squares Arrhenius fit over 5-40 kK by
+# tce_ref.refit_inclusion, with the model re-evaluated at the refit
+# coefficients and the activation energy not below the bond energy
+# (SPARTA gates a reaction at its endothermicity): this model's equilibrium
+# rate then follows the input rate of o2n2.tce as closely as an Arrhenius
+# input allows (residual -16.7% to +13.8% over 5-40 kK)
+O2 + N2 --> O + O + N2
+D A 1.0 8.197000e-19 4.950429e-10 -1.323158 -8.197e-19

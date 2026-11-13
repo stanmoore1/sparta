@@ -243,6 +243,18 @@ def run(exe, deck, varz, tag, extra_args=None, subs=None, extra_files=None):
         raise RuntimeError("run failed (%s):\n%s" % (tag, tail))
     return os.path.join(wd,"log.sparta")
 
+PARITY = "exact"
+
+def tallies_agree(t1, t2):
+    """two binaries' tallies agree: identical in exact mode, within 4
+    Poisson standard deviations of the difference in statistical mode"""
+    if not t1 or set(t1) != set(t2):
+        return False
+    if PARITY == "exact":
+        return t1 == t2
+    return all(abs(t1[k] - t2[k]) <= 4.0*math.sqrt(max(t1[k] + t2[k], 1))
+               for k in t1)
+
 def tallies(log):
     t = {}
     for line in open(log):
@@ -277,10 +289,18 @@ def main():
     p.add_argument("--exe2", default=None,
                    help="second binary (e.g. KOKKOS) for the keq parity check")
     p.add_argument("--exe2-args", default="")
+    p.add_argument("--parity", default="exact",
+                   choices=("exact", "statistical"),
+                   help="exact: the second binary must give identical tallies "
+                        "(CPU vs KOKKOS built with SPARTA_KOKKOS_EXACT); "
+                        "statistical: every tally must agree within 4 "
+                        "standard deviations (e.g. CPU vs GPU)")
     args = p.parse_args()
     exe = os.path.abspath(args.exe)
     extra = args.exe_args.split() if args.exe_args else []
     exe2 = os.path.abspath(args.exe2) if args.exe2 else None
+    global PARITY
+    PARITY = args.parity
     extra2 = args.exe2_args.split() if args.exe2_args else []
 
     FNUM, NRHO, V = 1.767e6, 7.07043e22, 1.0e-12
@@ -608,8 +628,9 @@ def main():
         tk = tallies(run(exe2,"in.reverse_rate",
                      {"T":T,"RB":1.0,"NRHO":NRHO_HI,"FNUM":FNUM_HI},
                      "molrecomb_kk",extra2,subs=molsub))
-        check("molecular third body: CPU/second-binary tallies identical",
-              t == tk and bool(t))
+        check("molecular third body: CPU/second-binary tallies %s"
+              % ("identical" if PARITY == "exact" else "agree within 4 sd"),
+              tallies_agree(t, tk))
 
     print("check 14: non-equilibrium reverse rate (two-temperature reservoir)")
     # The per-collision reverse probability is a temperature-free function of
@@ -1050,11 +1071,13 @@ def main():
         vz = {"T":15000.,"RB":1000.,"NRHO":NRHO,"FNUM":FNUM}
         t1 = tallies(run(exe ,"in.reverse_rate",vz,"keqpar1",extra ,sub,xf))
         t2 = tallies(run(exe2,"in.reverse_rate",vz,"keqpar2",extra2,sub,xf))
-        same = t1 == t2 and t1
-        check("CPU and second-binary keq tallies identical (%s)" %
-              (",".join("%s=%g"%(k.split("-->")[0].strip(),v)
-                        for k,v in sorted(t1.items())) if t1 else "no tallies"),
-              same)
+        same = tallies_agree(t1, t2)
+        listing = (",".join("%s=%g" % (k.split("-->")[0].strip(), v)
+                            for k, v in sorted(t1.items()))
+                   if t1 else "no tallies")
+        check("CPU and second-binary keq tallies %s (%s)"
+              % ("identical" if PARITY == "exact" else "agree within 4 sd",
+                 listing), same)
 
     print("%d failures" % FAIL)
     sys.exit(FAIL)

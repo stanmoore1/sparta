@@ -1,0 +1,6 @@
+bin/
+build/
+results/
+jobs/
+hpc/env.sh
+__pycache__/

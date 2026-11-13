@@ -272,19 +272,24 @@ def avgP_quad(eps, zP, z0, om, eta, ea):
     return val
 
 
-def R_inclusion(T, ladA, ladB, z0, om, eta, Ea, dofA=None, dofB=None):
+def R_inclusion(T, ladA, ladB, z0, om, eta, Ea, dofA=None, dofB=None,
+                Tpop=None):
     """equilibrium rate / input rate when the pair's discrete (electronic)
     energy is added to the collision energy and P keeps its standard form,
     Eq. (5) of the paper.  dofA/dofB: per-state DOF added to z inside P
-    (zP = z0 + (dA+dB)/2); None means zero."""
+    (zP = z0 + (dA+dB)/2); None means zero.  Tpop: the discrete states are
+    populated at Tpop instead of T (frozen populations); the result is still
+    relative to the input rate at T."""
     ea = Ea / (KB * T)
-    QA = sum(g * math.exp(-t / T) for t, g in ladA)
-    QB = sum(g * math.exp(-t / T) for t, g in ladB)
+    Tp = T if Tpop is None else Tpop
+    QA = sum(g * math.exp(-t / Tp) for t, g in ladA)
+    QB = sum(g * math.exp(-t / Tp) for t, g in ladB)
     eps, gg, zz = [], [], []
     for i, (ta, ga) in enumerate(ladA):
         for j, (tb, gb) in enumerate(ladB):
             eps.append((ta + tb) / T)
-            gg.append(ga * gb)
+            # population weight at Tp times e^{+eps} (applied with J below)
+            gg.append(ga * gb * math.exp((ta + tb) * (1.0 / T - 1.0 / Tp)))
             zz.append(z0 + 0.5 * ((dofA[i] if dofA else 0.0) +
                                   (dofB[j] if dofB else 0.0)))
     J = avgP_scaled(np.array(eps), np.array(zz), z0, om, eta, ea)
@@ -396,3 +401,36 @@ if __name__ == "__main__":
         jq = avgP_quad(0.0, z0, z0, om, eta, ea)
         print("identity z0=%g om=%g eta=%g ea=%g : GL %.10f quad %.10f"
               % (z0, om, eta, ea, j, jq))
+
+
+# ------------------------------------------- Arrhenius refit of a biased model
+def refit_inclusion(lad, z0, om, eta, Ea, A, dofA, dofB, Tmin=5000.0,
+                    Tmax=40000.0, n=71, Ea_min=None):
+    """best Arrhenius input (A', eta', Ea') for the inclusion model with
+    per-state DOF, such that the model's equilibrium rate
+    A' T^eta' e^{-Ea'/kT} R(T; eta', Ea') reproduces the target
+    A T^eta e^{-Ea/kT} in least squares of the logarithm over Tmin..Tmax.
+    The model is re-evaluated with the refit coefficients (R depends on
+    eta and Ea), not only rescaled.  lad = (ladA, ladB).  Ea_min bounds the
+    refit activation energy from below (a dissociation threshold cannot lie
+    below the bond energy; SPARTA gates a reaction at its endothermicity).
+    Returns (A', eta', Ea', Ts, residual ratio model/target)."""
+    from scipy.optimize import least_squares
+    ladA, ladB = lad
+    Ts = np.linspace(Tmin, Tmax, n)
+
+    def ratio(p, T):
+        a, b, c = p
+        e2, E2 = eta + b, Ea + c * KB
+        R = R_inclusion(T, ladA, ladB, z0, om, e2, E2, dofA, dofB)
+        return R * math.exp(a) * T ** b * math.exp(-c / T)
+
+    cmin = -np.inf if Ea_min is None else (Ea_min - Ea) / KB
+    res = least_squares(lambda p: [math.log(ratio(p, T)) for T in Ts],
+                        x0=[0.0, 0.0, max(0.0, cmin) + 100.0],
+                        x_scale=[1.0, 0.1, 1000.0],
+                        bounds=([-np.inf, -np.inf, cmin],
+                                [np.inf, np.inf, np.inf]))
+    a, b, c = res.x
+    return (A * math.exp(a), eta + b, Ea + c * KB, Ts,
+            np.array([ratio(res.x, T) for T in Ts]))

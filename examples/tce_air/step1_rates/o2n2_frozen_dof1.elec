@@ -1,0 +1,4 @@
+# o2n2_frozen.elec (zero relaxation probability: populations stay at the
+# initial telec distribution) with one DOF per excited state
+N2 5 0.0 0.0 9 1 0 71599.765 0.0 27 3 1 85293.075 0.0 135 3 1 97477.8 0.0 45 1 1 127997.63499999997 0.0 153 3 1
+O2 8 0.0 0.0 3 3 0 11337.596499999998 0.0 2 1 1 18880.5215 0.0 1 1 1 52220.25 0.0 10 3 1 69627.0 0.0 3 3 1 97477.8 0.0 19 3 1 115696.865 0.0 1 1 1 170586.15 0.0 3 3 1
