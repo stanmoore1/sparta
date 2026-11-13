@@ -167,7 +167,7 @@ for t in free3ds axir chemnn3; do
     $RUN "$(exe "$v")" $KKARGS $extra -in in.$t -log none > "$log" 2>&1
     st=$?
     set -e
-    last=$(awk '/^ *Step/ {h=1; next} /^Loop time/ {h=0} h && NF {row=$0} END {print row}' "$log")
+    last=$(awk '/^ *Step/ {h=1; next} /^Loop time/ {h=0} h && $1 ~ /^[0-9]+$/ {row=$0} END {print row}' "$log")
     printf "%-8s %-6s exit=%-3s %s\n" "$t" "$v" "$st" "$last"
   done
 done
@@ -187,8 +187,9 @@ for b in free collide sphere; do
       for r in $(seq "$REPEAT"); do
         log=$OUT/bench.$b.$s.$v.$r.log
         $RUN "$(exe "$v")" $KKARGS -var x "$s" -var y "$s" -var z "$s" \
-          -in in.$b -log none > "$log" 2>&1 || { best=FAIL; break; }
+          -in in.$b -log none > "$log" 2>&1 || true   # pr aborts at exit (status 134) after the run
         t=$(grep "Loop time of" "$log" | tail -1 | awk '{printf "%.4f", $4/$9*1000}')
+        [ -n "$t" ] || { best=FAIL; break; }
         if [ -z "$best" ] || awk "BEGIN{exit !($t < $best)}"; then best=$t; fi
       done
       printf " %10s" "$best"

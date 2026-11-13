@@ -118,10 +118,12 @@ needs it. Each build is a full SPARTA + Kokkos build; expect several minutes eac
   is a valid reference for the magnitudes (it never runs the two-pass code).
 - **C2 axisymmetry** (`in.axir`): `c_ry` (average radius) for `fix*` must match `base` up to
   statistical noise; `pr` is expected to stay stuck near its step-0 value.
-- **C3 nearcp + retry** (`in.chemnn3`, run with `react/retry yes react/extra 1.0`): must finish with
-  exit 0 on `fix*`. A bounds-checked build (`-DKokkos_ENABLE_DEBUG_BOUNDS_CHECK=ON`) of `pr` reports
-  `out of bounds ... collide:nn_last_partner`; optional to repeat.
-- **Exit status**: every `pr` run is expected to exit 134; every `fix*` run must exit 0.
+- **C3 nearcp + retry** (`in.chemnn3`, run with `react/retry yes react/extra 1.0`): must reach step
+  30 with exit 0 on `fix*`. On CPU, a normal release build of `pr` dies right after step 1, the step
+  where the retry widens the plist; a bounds-checked build (`-DKokkos_ENABLE_DEBUG_BOUNDS_CHECK=ON`)
+  reports `out of bounds ... collide:nn_last_partner`.
+- **Exit status**: every `pr` run is expected to exit 134; every `fix*` run must exit 0. The script
+  still times `pr`, because its abort happens after the run.
 - **C4 two-pass actually engages** (not in the script). The first pass only runs when
   `nlocal >= concurrency` (about 270K-300K threads on H100/B200) and keeps running only while
   >= 90% of particles stay in their cell. Confirm with Nsight Systems that `TagUpdateMoveFirstPass`
@@ -157,6 +159,11 @@ The script prints ms/step (min of `REPEAT` runs) for `bench/in.free`, `in.collid
   clearly faster than `base` on `in.free`, two-pass or the fence removal is not engaging (go to C4).
 
 ## 5. What was already verified on CPU (do not redo)
+
+The script itself was run end to end on this CPU machine (`PRESET=kokkos_omp`, 4 MPI ranks):
+all variants build, `fixvol` applies, and the correctness rows come out as described in C1-C3.
+CPU timings cannot settle P2: `collide` at 270K particles gave `fix` 4.07-5.22 and `fixvol`
+3.54-5.03 ms/step over 4 runs each.
 
 Environment: 4 cores, g++ 13, OpenMPI 4.1.6, Kokkos OpenMP (`cmake/presets/kokkos_omp.cmake`).
 The GPU move code was run on CPU with a test-only patch, `pr683_force_gpu_path.sh <source dir>`.
