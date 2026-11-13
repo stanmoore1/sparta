@@ -38,6 +38,7 @@ target_include_directories(${TARGET_SPARTA_LIB} PRIVATE ${SPA_INCLUDE_DIRS})
 target_link_libraries(${TARGET_SPARTA_LIB} LINK_PUBLIC
                       ${TARGET_SPARTA_BUILD_TPLS})
 target_link_libraries(${TARGET_SPARTA_LIB} LINK_PUBLIC ${TARGET_SPARTA_PKGS})
+sparta_kokkos_host_only_sources(${TARGET_SPARTA_LIB})
 
 include(${SPARTA_CMAKE_COMMON_DIR}/set/style_file_glob.cmake)
 
@@ -58,6 +59,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_SPARTA_LIB_LINK}
 
 add_executable(${TARGET_SPARTA} main.cpp)
 target_link_libraries(${TARGET_SPARTA} LINK_PRIVATE ${TARGET_SPARTA_LIB})
+sparta_kokkos_host_only_sources(${TARGET_SPARTA})
 # print the binary size after linking (informational). Skip when cross-
 # compiling: the command uses the bare target name, but on Windows the file is
 # spa_.exe, so `size spa_` fails the build during a MinGW64 cross-compile.

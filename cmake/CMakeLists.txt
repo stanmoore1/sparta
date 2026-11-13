@@ -204,6 +204,7 @@ endif()
 
 # ######### BEGIN PROCESS SPARTA OPTIONS ##########
 include(${SPARTA_CMAKE_COMMON_DIR}/process/sparta_build_options.cmake)
+include(${SPARTA_CMAKE_COMMON_DIR}/process/kokkos_host_only.cmake)
 # ######### END   PROCESS SPARTA OPTIONS ##########
 
 # ######### BEGIN PRINT SPARTA OPTIONS ##########
