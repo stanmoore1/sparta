@@ -105,9 +105,39 @@ All reproduced on CPU by forcing the GPU dispatch (section 5); none have been ru
 Risk to look for on GPU: the `RangePolicy` block size Kokkos picks for the big `moveOne` reduce
 kernel may differ from the old 128-thread teams. Task P1 measures that.
 
+## 3a. Compatibility with sparta/sparta#700 (bug-fix PR)
+
+#700 ("Bug fixes from an AI line-by-line review of `src`", 272 files) is expected to merge too.
+Merging it into the review branch conflicts in five files. The resolved merge is `b48f7c2f`
+(parents `9ff7c43d` and `4863e6ec`), also merged into `claude/great-allen-5wm0fz`. Resolution:
+
+- **Move counters, `update_kokkos.cpp`.** #700 fixes the counter readback with a `use_reduce`
+  flag that mirrors master's kernel dispatch. #683 changes that dispatch (the reduce kernel on
+  every GPU), so taking #700's version would bring back finding 1: counters 0 on CUDA. The merge
+  keeps the review branch's version, which sums both sources and does not depend on the dispatch.
+  **Whichever PR merges second has to keep this.**
+- **`sync()` in Particle/Grid/SurfKokkos.** #700 makes `auto_sync` refresh the host before marking
+  it modified (a DualView modified on both sides aborts). The merge puts that block in the shared
+  `sync_device_views()`, so `sync_device_async()` gets it too. (Inside `move()` `auto_sync` is off,
+  so the move path does not change.)
+- **Particle/grid syncs in `move()`.** #700 moved them to the top of the loop, before the device
+  handles are taken; the merge keeps that placement with #683's async copies.
+- **`collide_vss_kokkos.cpp`.** Both sides contain the same `d_nn_last_partner` retry fix
+  (finding 3); took #700's.
+- Checked for semantic overlap in the files that merged cleanly (`kokkos.cpp`, `kokkos_type.h`,
+  tally computes, `output.cpp`, `stats.cpp`, `dump_particle.cpp`, the move kernel): none. #700's
+  new `PDISCARD` early exit in `moveOne()` is reached only through flags the first pass already
+  passes on.
+
+CPU results for `mrg` (4 ranks x 1 thread): 17 examples identical to `pr700` and, with the forced
+GPU path, identical to its own CPU path; the only example that differs from `fix` is `ambi`,
+which differs the same way between master and `pr700` (a #700 fix). Targeted inputs: forced GPU
+== CPU == `pr700`, counters non-zero, two-pass on all 400 steps of `in.free3dsmall`. Recheck
+trace and the output-mask test (10 dump files identical to `pr700`) pass. All runs exit 0.
+
 ## 4. Tasks, in priority order
 
-`pr683_gpu_check.sh` does C1-C3 and P1-P2 in one go. It builds these variants (one worktree and
+`pr683_gpu_check.sh` does C1-C3, C6 and P1-P2 in one go. It builds these variants (one worktree and
 build dir each under `$WORK`):
 
 | variant | commit | meaning |
@@ -117,6 +147,8 @@ build dir each under `$WORK`):
 | `fix1` | `e7151f27` | first round of fixes |
 | `fix` | `9ff7c43d` | **candidate** |
 | `fixvol` | `9ff7c43d` + the `volume` line restored | for finding 13 |
+| `mrg` | `b48f7c2f` | `fix` merged with #700 (section 3a) |
+| `pr700` | `4863e6ec` | #700 alone (`git fetch https://github.com/sparta/sparta pull/700/head:pr700`) |
 
 ```bash
 PRESET=kokkos_cuda EXTRA_CMAKE="-DKokkos_ARCH_HOPPER90=ON" ./pr683_gpu_check.sh 2>&1 | tee check.log
@@ -156,6 +188,12 @@ needs it. Each build is a full SPARTA + Kokkos build; expect several minutes eac
 - **C5 MI300 (gfx942), if available.** That path (`SPARTA_KOKKOS_REDUCE_ARCH`) never runs the
   two-pass code; it has never been run at all in this review. Just check counters non-zero and
   exit 0 on C1-C3.
+- **C6 #700 compatibility.** `mrg` must pass C1-C3 exactly like `fix` (non-zero counters in
+  particular: section 3a explains why). `in.customgrow` (particles created between runs with a
+  custom attribute) is #700's positive control for the `auto_sync` fix: `pr700` and `mrg` must
+  exit 0; `base`, `pr` and `fix` may abort with a DualView "modified on both sides" error. It
+  could not be reproduced on CPU (OpenMP shares one memory space, so nothing aborts there).
+  Also run P1 on `mrg` vs `fix`: the merge should cost nothing.
 
 ### Performance (P)
 

@@ -10,6 +10,8 @@
 #                       verified cleanups (9ff7c43d) -- the candidate
 #   fixvol  9ff7c43d with the per-branch "volume" reload in the collision kernel
 #           put back.  This checks whether removing it (finding 13) costs anything.
+#   mrg     b48f7c2f  9ff7c43d merged with sparta/sparta#700 (bug fixes)
+#   pr700   4863e6ec  #700 alone (needs: git fetch https://github.com/sparta/sparta pull/700/head:pr700)
 #
 # Usage, from the top of a sparta clone that has the branches fetched:
 #   git fetch https://github.com/sparta/sparta pull/683/head:pr683
@@ -23,7 +25,7 @@
 #   KKARGS       SPARTA Kokkos args (default "-k on g 1 -sf kk")
 #   SIZES        bench grid edge lengths (default "50 100": 1.25M and 10M particles)
 #   REPEAT       timing repeats per case, the minimum is reported (default 3)
-#   VARIANTS     subset to build and run (default "base pr fix1 fix fixvol")
+#   VARIANTS     subset to build and run (default "base pr fix1 fix fixvol mrg pr700")
 #   WORK         scratch dir (default ./pr683_check)
 
 set -euo pipefail
@@ -35,11 +37,11 @@ RUN=${RUN:-}
 KKARGS=${KKARGS:-"-k on g 1 -sf kk"}
 SIZES=${SIZES:-"50 100"}
 REPEAT=${REPEAT:-3}
-VARIANTS=${VARIANTS:-"base pr fix1 fix fixvol"}
+VARIANTS=${VARIANTS:-"base pr fix1 fix fixvol mrg pr700"}
 WORK=${WORK:-$PWD/pr683_check}
 JOBS=${JOBS:-$(nproc --all)}  # nproc alone honours OMP_NUM_THREADS
 
-declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=9ff7c43d [fixvol]=9ff7c43d)
+declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=9ff7c43d [fixvol]=9ff7c43d [mrg]=b48f7c2f [pr700]=4863e6ec)
 
 mkdir -p "$WORK"
 
@@ -151,6 +153,34 @@ timestep 3.0E-8
 run 30
 EOF
 
+# #700 positive control: particles grow between runs with a custom attribute
+#   defined; on GPU, master and #683 can abort ("DualView claimed on both
+#   sides") in sync(Device,CUSTOM_MASK); pr700 and mrg must not
+cat > "$IN/in.customgrow" <<'EOF'
+seed 12345
+dimension 3
+global gridcut 0.0 comm/sort yes
+boundary pp pp pp
+create_box 0 1 0 1 0 1
+create_grid 10 10 10
+balance_grid rcb cell
+species ar.species Ar
+mixture air Ar temp 273.15
+global nrho 1.0 fnum 0.0001
+create_particles air n 20000
+timestep 0.00001
+variable pdvec particle id/100000+3.5
+custom particle create dvec float 0 set dvec v_pdvec all NULL
+compute s reduce sum p_dvec
+stats 10
+stats_style step np ntouch c_s
+run 20
+create_particles air n 60000
+run 20
+create_particles air n 120000
+run 20
+EOF
+
 # ---------------------------------------------------------------- correctness
 
 OUT=$WORK/out
@@ -159,7 +189,7 @@ cd "$IN"
 
 echo
 echo "== correctness (compare last stats rows across variants; exit status must be 0)"
-for t in free3ds axir chemnn3; do
+for t in free3ds axir chemnn3 customgrow; do
   extra=""
   [ "$t" = chemnn3 ] && extra="-pk kokkos react/retry yes react/extra 1.0"
   for v in $VARIANTS; do
