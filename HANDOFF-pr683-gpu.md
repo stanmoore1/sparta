@@ -235,9 +235,11 @@ Results for `e7151f27`, 4 MPI ranks x 1 thread unless noted:
 - **Forced GPU path == CPU path, bit-identical stats**, with two-pass on all 400 steps
   (`in.free3dsmall`), with gridcut and multi-iteration moves (`in.free3dcut`), and axisymmetric.
 - **EXACT** (`-DSPARTA_KOKKOS_EXACT=ON`, 1 rank, 1 thread): Kokkos on the forced two-pass path is
-  bit-identical to the non-Kokkos CPU code for free flow. Inputs with `fix emit/face` differ, but
-  that difference is already on master (EXACT `base` Kokkos == EXACT `fix` Kokkos != plain CPU):
-  a separate pre-existing gap, not caused by #683.
+  bit-identical to the non-Kokkos CPU code for free flow. Inputs with `fix emit/face` match only
+  with its `twopass` keyword: the Kokkos version draws every task's insertion count before any
+  particle (it must, to size its arrays), which is the host's `twopass` order; the default
+  one-pass host loop draws them interleaved. With `twopass`, `in.free3dsmall` matches bit for
+  bit on master, `fix` and #700. Not a bug.
 - **17 examples** (collide, optmove, tally computes, chem, surf_collide, ambi, circle,
   surf_react_adsorb, axi): stats identical for `base`, `pr`, `fix1`, and `fix1` with the forced GPU
   path. `ambi/in.ambi` needs `-pk kokkos react/retry yes` on every build.
@@ -269,8 +271,9 @@ Results for `57cb662c` and `9ff7c43d` (`fix`), same setup:
   allocation ("fixed copy in resize sort list"); the review reverted that. Ask why.
 - Findings 8, 9 and 11 are now done on the branch (`57cb662c`, `9ff7c43d`); the author should
   agree with them.
-- Pre-existing, not from #683: with `SPARTA_KOKKOS_EXACT`, inputs using `fix emit/face` do not
-  match the non-Kokkos code (master shows the same). Worth its own issue.
+- Optional, not from #683: `fix emit/face/file/kk` stops with an error under
+  `SPARTA_KOKKOS_EXACT` when `twopass` is missing; `fix emit/face/kk` (and probably
+  `fix emit/surf/kk`) do not, so an EXACT comparison without `twopass` silently differs.
 - The `d_plist` LayoutRight change measured as noise in the author's table; keep it only if it
   shows a gain somewhere.
 
