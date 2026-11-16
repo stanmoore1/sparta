@@ -142,6 +142,15 @@ Repeated for `8ad6db82` against #700 at `d2406b05`: same results (17 examples id
 `pr700` and to `b48f7c2f`; targeted inputs including `in.customgrow` identical across forced
 GPU, CPU and `pr700`; recheck and output-mask tests pass; all runs exit 0).
 
+### #702 (faster KOKKOS GPU CMake builds)
+
+`a29f04d9` merges sparta/sparta#702 (head `3dd5c6dd`) into `8ad6db82`, with no conflicts; it adds
+exactly #702's changes. It is also merged into `claude/great-allen-5wm0fz`. #702 compiles the
+sources that do not include a Kokkos header host-only on CUDA/HIP, so a file that uses Kokkos
+through some other header would fail to compile there. Its build is being checked separately;
+nothing in the tasks below depends on it. The `mrg` variant stays `8ad6db82`, so all variants are
+built the same way.
+
 ## 4. Tasks, in priority order
 
 `pr683_gpu_check.sh` does C1-C3, C6 and P1-P2 in one go. It builds these variants (one worktree and
