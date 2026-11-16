@@ -213,11 +213,10 @@ if _requested_builder(None) == 'spelling':
     spelling_show_suggestions = True
     spelling_ignore_pypi_package_names = False
     spelling_ignore_acronyms = True
-    # Section_errors quotes SPARTA's error and warning messages verbatim
-    # from the source, typos included -- a reader searching for the text
-    # they were shown needs it to match.  Those are fixed in src/, and the
-    # page follows.
-    spelling_exclude_patterns = ['Section_errors.rst']
+    # Section_errors quotes SPARTA's error and warning messages, and their
+    # explanations, from the ERROR/WARNING blocks in the src/ headers.  A
+    # misspelling there has to be fixed in src/ as well, so the page keeps
+    # matching the text a user is shown.
 
 
 # -- Bibliography -------------------------------------------------------------
