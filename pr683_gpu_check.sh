@@ -10,8 +10,8 @@
 #                       verified cleanups (9ff7c43d) -- the candidate
 #   fixvol  9ff7c43d with the per-branch "volume" reload in the collision kernel
 #           put back.  This checks whether removing it (finding 13) costs anything.
-#   mrg     b48f7c2f  9ff7c43d merged with sparta/sparta#700 (bug fixes)
-#   pr700   4863e6ec  #700 alone (needs: git fetch https://github.com/sparta/sparta pull/700/head:pr700)
+#   mrg     8ad6db82  9ff7c43d merged with sparta/sparta#700 at d2406b05 (bug fixes)
+#   pr700   d2406b05  #700 alone (needs: git fetch https://github.com/sparta/sparta pull/700/head:pr700)
 #
 # Usage, from the top of a sparta clone that has the branches fetched:
 #   git fetch https://github.com/sparta/sparta pull/683/head:pr683
@@ -41,7 +41,7 @@ VARIANTS=${VARIANTS:-"base pr fix1 fix fixvol mrg pr700"}
 WORK=${WORK:-$PWD/pr683_check}
 JOBS=${JOBS:-$(nproc --all)}  # nproc alone honours OMP_NUM_THREADS
 
-declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=9ff7c43d [fixvol]=9ff7c43d [mrg]=b48f7c2f [pr700]=4863e6ec)
+declare -A REV=([base]=e071055f [pr]=21763d55 [fix1]=e7151f27 [fix]=9ff7c43d [fixvol]=9ff7c43d [mrg]=8ad6db82 [pr700]=d2406b05)
 
 mkdir -p "$WORK"
 

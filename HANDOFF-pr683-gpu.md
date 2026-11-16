@@ -108,8 +108,12 @@ kernel may differ from the old 128-thread teams. Task P1 measures that.
 ## 3a. Compatibility with sparta/sparta#700 (bug-fix PR)
 
 #700 ("Bug fixes from an AI line-by-line review of `src`", 272 files) is expected to merge too.
-Merging it into the review branch conflicts in five files. The resolved merge is `b48f7c2f`
-(parents `9ff7c43d` and `4863e6ec`), also merged into `claude/great-allen-5wm0fz`. Resolution:
+Merging it into the review branch conflicts in five files. The resolved merge was `b48f7c2f`
+(parents `9ff7c43d` and #700 at `4863e6ec`). #700 has since gained `cba4a3e0` (EXACT builds of
+`fix emit/face/kk` and `emit/surf/kk` require `twopass`) and a merge of upstream master
+(`d2406b05`, the Sphinx manual). `8ad6db82` merges that into `b48f7c2f` with no conflicts and
+adds the same #683 changes, line for line; it is also merged into `claude/great-allen-5wm0fz`.
+Use `8ad6db82`. Resolution of the five conflicts:
 
 - **Move counters, `update_kokkos.cpp`.** #700 fixes the counter readback with a `use_reduce`
   flag that mirrors master's kernel dispatch. #683 changes that dispatch (the reduce kernel on
@@ -134,6 +138,9 @@ GPU path, identical to its own CPU path; the only example that differs from `fix
 which differs the same way between master and `pr700` (a #700 fix). Targeted inputs: forced GPU
 == CPU == `pr700`, counters non-zero, two-pass on all 400 steps of `in.free3dsmall`. Recheck
 trace and the output-mask test (10 dump files identical to `pr700`) pass. All runs exit 0.
+Repeated for `8ad6db82` against #700 at `d2406b05`: same results (17 examples identical to
+`pr700` and to `b48f7c2f`; targeted inputs including `in.customgrow` identical across forced
+GPU, CPU and `pr700`; recheck and output-mask tests pass; all runs exit 0).
 
 ## 4. Tasks, in priority order
 
@@ -147,8 +154,8 @@ build dir each under `$WORK`):
 | `fix1` | `e7151f27` | first round of fixes |
 | `fix` | `9ff7c43d` | **candidate** |
 | `fixvol` | `9ff7c43d` + the `volume` line restored | for finding 13 |
-| `mrg` | `b48f7c2f` | `fix` merged with #700 (section 3a) |
-| `pr700` | `4863e6ec` | #700 alone (`git fetch https://github.com/sparta/sparta pull/700/head:pr700`) |
+| `mrg` | `8ad6db82` | `fix` merged with #700 at `d2406b05` (section 3a) |
+| `pr700` | `d2406b05` | #700 alone (`git fetch https://github.com/sparta/sparta pull/700/head:pr700`) |
 
 ```bash
 PRESET=kokkos_cuda EXTRA_CMAKE="-DKokkos_ARCH_HOPPER90=ON" ./pr683_gpu_check.sh 2>&1 | tee check.log
