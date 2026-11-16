@@ -24,6 +24,7 @@ ComputeStyle(grid/kk,ComputeGridKokkos)
 #include "compute_grid.h"
 #include "kokkos_base.h"
 #include "kokkos_type.h"
+#include "cell_plist_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -116,7 +117,7 @@ class ComputeGridKokkos : public ComputeGrid, public KokkosBase {
   DAT::t_int_2d d_s2g;
 
   DAT::t_int_1d d_cellcount;
-  DAT::t_int_2d d_plist;
+  CellPList d_plist;
 
   DAT::tdual_int_1d k_unique;
   DAT::t_int_1d d_unique;

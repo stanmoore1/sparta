@@ -17,6 +17,7 @@
 
 #include "grid.h"
 #include "kokkos_type.h"
+#include "cell_plist_kokkos.h"
 #include <Kokkos_UnorderedMap.hpp>
 
 namespace SPARTA_NS {
@@ -176,7 +177,7 @@ class GridKokkos : public Grid {
   Kokkos::Crs<int, DeviceType, void, crs_size_type> d_csubs;
 
   DAT::t_int_1d d_cellcount;
-  DAT::t_int_2d d_plist;
+  CellPList d_plist;          // per-cell particle list, see cell_plist_kokkos.h
 
   // hash for all cell IDs (owned,ghost,parent).  The _d postfix refers to the
   // fact that this hash lives on "device"

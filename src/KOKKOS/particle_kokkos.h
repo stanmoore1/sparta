@@ -18,6 +18,7 @@
 #include "stdio.h"
 #include "particle.h"
 #include "kokkos_type.h"
+#include "cell_plist_kokkos.h"
 #include "Kokkos_Random.hpp"
 #include "rand_pool_wrap.h"
 
@@ -34,6 +35,11 @@ struct TagSetDPlistNewStyle{};
 
 template<int NEED_ATOMICS, int REORDER_FLAG>
 struct TagParticleSort{};
+
+template<int NEED_ATOMICS>
+struct TagParticleCount{};
+template<int REORDER_FLAG>
+struct TagParticleFillFlat{};
 
 
 // map entry used by post_weight(): source particle index, the new particle
@@ -125,6 +131,14 @@ class ParticleKokkos : public Particle {
   KOKKOS_INLINE_FUNCTION
   void operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, const int&) const;
 
+  template<int NEED_ATOMICS>
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagParticleCount<NEED_ATOMICS>, const int&) const;
+
+  template<int REORDER_FLAG>
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagParticleFillFlat<REORDER_FLAG>, const int&) const;
+
   KOKKOS_INLINE_FUNCTION
   void operator()(TagParticleReorder_COPYPARTICLELIST1, const int, int&, const bool&) const;
 
@@ -174,6 +188,8 @@ class ParticleKokkos : public Particle {
   t_particle_1d d_sorted;
   DAT::t_int_1d d_sorted_id;
   DAT::t_int_1d d_offsets_part;
+  DAT::t_int_1d d_slot;         // flat sort: index of each particle in its cell
+  DAT::t_int_1d d_pcell;        // flat sort: cell of each particle, contiguous
   int nParticlesWksp;
   DAT::tdual_int_scalar k_reorder_pass;
   DAT::t_int_scalar d_reorder_pass;
@@ -184,7 +200,7 @@ class ParticleKokkos : public Particle {
   int collide_rot,vibstyle;
   double boltz;
 
-  DAT::t_int_2d d_plist;
+  CellPList d_plist;
   DAT::t_int_1d d_cellcount;
 
   DAT::t_int_2d_lr d_lists;

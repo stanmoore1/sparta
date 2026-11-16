@@ -528,7 +528,7 @@ bigint GridKokkos::memory_usage()
   bytes += MemKK::memory_usage(d_csubs.row_map);
 
   bytes += MemKK::memory_usage(d_cellcount);
-  bytes += MemKK::memory_usage(d_plist);
+  bytes += d_plist.memory_usage();
   bytes += MemKK::memory_usage(d_halo_index);
 
   return bytes;
