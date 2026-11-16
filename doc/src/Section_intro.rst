@@ -25,7 +25,7 @@ the funding and people who have contributed to SPARTA.
 1.1 What is SPARTA
 ------------------
 
-SPARTA is a Direct Simulation Montel Carlo code that models rarefied
+SPARTA is a Direct Simulation Monte Carlo code that models rarefied
 gases, using collision, chemistry, and boundary condition models.  It
 uses a hierarchical Cartesian grid to track and group particles for 3d
 or 2d or axisymmetric models.  Objects embedded in the gas are
