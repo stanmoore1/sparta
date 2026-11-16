@@ -359,7 +359,7 @@ consider this function loaded with two global variables defined
 outside the function:
 
 
-.. parsed-literal::
+.. code-block:: python
 
    nsteplast = -1
    nvaluelast = 0
@@ -446,7 +446,7 @@ Python a pointer to SPARTA.  The mechanism for doing this in your
 Python function is as follows:
 
 
-.. parsed-literal::
+.. code-block:: python
 
    def foo(handle,...):
       from SPARTA import SPARTA
@@ -526,7 +526,7 @@ the examples/python/in.circle.pyvar input script for more details.
 Assume the file truncate.py includes this Python code:
 
 
-.. parsed-literal::
+.. code-block:: python
 
    def truncate(x):
      return int(x)
@@ -586,7 +586,7 @@ variable formula or by *input* keyword to the *python command*\ .
 Assume the file mixedargs.py includes this Python code:
 
 
-.. parsed-literal::
+.. code-block:: python
 
    def mixedargs(a,b,x,y,z,flag):
      ...
@@ -672,7 +672,7 @@ If you put one (or more) statements inside a "try" statement,
 like this:
 
 
-.. parsed-literal::
+.. code-block:: python
 
    import exceptions
    print("Inside simple function")
