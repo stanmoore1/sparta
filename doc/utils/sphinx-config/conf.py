@@ -160,6 +160,9 @@ latex_elements = {
 \sloppy
 ''',
 }
+# The SPARTA logo on the title page, as the LAMMPS PDF has its own.
+latex_logo = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          '_static', 'sparta-logo.png')
 # Sphinx repeats the whole toctree as a "domain index" the manual has no use
 # for, and its module index is empty because there are no Python modules.
 latex_domain_indices = False
