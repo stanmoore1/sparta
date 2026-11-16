@@ -9,11 +9,14 @@ advection
 al
 Alexeenko
 aliceblue
+allocators
 ambi
 Ambipolar
 ambipolar
 amd
 antiquewhite
+arccos
+arcsin
 aren
 arg
 argN
@@ -22,6 +25,7 @@ ARMV
 armv
 asin
 atan
+atomfile
 atomics
 avalue
 avesq
@@ -66,6 +70,7 @@ cdecide
 cdist
 Ceil
 ceil
+Cellint
 centroid
 Cercignani
 Ceyer
@@ -90,6 +95,7 @@ cornflowerblue
 cornsilk
 cp
 cpp
+cpu
 csh
 cshrc
 Csq
@@ -164,6 +170,7 @@ dodgerblue
 Dof
 dof
 DOI
+donut
 dsmc
 DSPARTA
 dt
@@ -359,6 +366,7 @@ Makefile
 makefile
 Makefiles
 makefiles
+malloc
 Masstotal
 Matsumoto
 maxlevel
@@ -416,6 +424,7 @@ myMPI
 myTemp
 myValue
 namespace
+NaN
 Nattempt
 navajowhite
 Navier
@@ -472,6 +481,7 @@ Ntotal
 ntotal
 Ntypes
 numa
+numerics
 Numpy
 numpy
 Nv
@@ -516,6 +526,7 @@ pcolor
 pdf
 pdiam
 peachpuff
+peratom
 perspecies
 peru
 pflux
@@ -618,6 +629,8 @@ slategray
 sline
 slinecolor
 slinetrans
+Smallint
+smallint
 Sonine
 sonine
 sparta
@@ -715,6 +728,7 @@ twopass
 txt
 typeadd
 ul
+uloop
 un
 unclipped
 unclumped
