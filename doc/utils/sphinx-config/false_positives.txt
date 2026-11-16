@@ -200,6 +200,7 @@ et
 etot
 Evib
 evib
+executables
 ey
 ez
 FFmpeg
@@ -501,6 +502,7 @@ omp
 oneAPI
 oneMKL
 OPENMP
+openmpi
 optionABC
 optmove
 orangered
