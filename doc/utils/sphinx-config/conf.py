@@ -52,6 +52,14 @@ extensions = [
 # straight quotes throughout, so leave the characters as written.
 smartquotes = False
 
+# Blocks that do not name a language are not highlighted.  Sphinx's default
+# is to colour them as Python, so the hundreds of syntax descriptions and
+# file excerpts in "parsed-literal" blocks had words like "for", "with" and
+# "or" coloured as Python keywords.  Input scripts are marked
+# ".. code-block:: SPARTA" and real Python ".. code-block:: python" (or
+# pycon for interactive sessions), and only those are coloured.
+highlight_language = 'none'
+
 source_suffix = '.rst'
 master_doc = 'Manual'
 exclude_patterns = ['_build']
