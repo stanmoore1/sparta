@@ -1,0 +1,28 @@
+{#- The version menu at the bottom of the sidebar, as the LAMMPS manual has.
+    sphinx_rtd_theme 3 leaves this template empty -- on readthedocs.org the
+    menu now comes from their hosted add-ons -- but still styles it and opens
+    it on click.  SPARTA publishes one manual, for the current release, so
+    instead of a list of branches it links to every release on GitHub. -#}
+{%- if sparta_versions %}
+  <div class="rst-versions" data-toggle="rst-versions" role="note" aria-label="{{ _('Versions') }}">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      <span class="fa fa-book"> SPARTA</span>
+      {{ release }}
+      <span class="fa fa-caret-down"></span>
+    </span>
+    <div class="rst-other-versions">
+      <dl>
+        <dt>Versions</dt>
+        {%- for label, url in sparta_versions %}
+          <dd><a href="{{ url }}">{{ label }}</a></dd>
+        {%- endfor %}
+      </dl>
+      <dl>
+        <dt>Downloads</dt>
+        {%- for label, url in sparta_downloads %}
+          <dd><a href="{{ url }}">{{ label }}</a></dd>
+        {%- endfor %}
+      </dl>
+    </div>
+  </div>
+{%- endif %}

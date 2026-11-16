@@ -95,9 +95,37 @@ html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     'collapse_navigation': False,
     'navigation_depth': 3,
+    # the logo stands in for the project name at the top of the sidebar
+    'logo_only': True,
 }
 # what the sidebar shows under the title
 html_context = {'display_version': True}
+
+# The SPARTA logo, as the LAMMPS manual has its own: at the top of the
+# sidebar on every page, small at the right of the breadcrumbs beside a
+# link to the command list (_templates/breadcrumbs.html), and as the
+# favicon.
+html_logo = '_static/sparta-logo.png'
+html_favicon = '_static/sparta.ico'
+templates_path = [os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               '_templates')]
+html_css_files = ['sparta.css']
+
+# The version menu at the bottom of the sidebar (_templates/versions.html).
+# Only one manual is published, for the current release, so it links to
+# every release on GitHub rather than to other copies of the manual.  The
+# release tags are the version date without spaces, e.g. 27Aug2026.
+html_context['sparta_versions'] = [
+    ('Current release (online manual)', 'https://sparta.github.io/doc/Manual.html'),
+    ('All releases', 'https://github.com/sparta/sparta/releases'),
+    ('Development version (GitHub)', 'https://github.com/sparta/sparta'),
+]
+html_context['sparta_downloads'] = [('PDF of this manual', 'Manual.pdf')]
+if version != 'unknown':
+    html_context['sparta_downloads'].append(
+        ('Source of this release',
+         'https://github.com/sparta/sparta/archive/refs/tags/%s.tar.gz'
+         % version.replace(' ', '')))
 html_title = f'SPARTA Documentation ({release})'
 html_short_title = 'SPARTA'
 html_static_path = ['_static']
