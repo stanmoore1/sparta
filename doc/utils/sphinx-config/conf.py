@@ -236,8 +236,9 @@ if _requested_builder(None) == 'spelling':
 #     **(Bird94)** G. A. Bird, Molecular Gas Dynamics ...
 #
 # Copies that differ only in punctuation are one work.  A key used for two
-# different works (Bird09 is) gives two entries, each linking to the pages
-# that mean it.
+# different works gives two entries, each linking to the pages that mean
+# it -- but should be split into two keys, as Bird09 was into Bird09a and
+# Bird09b.
 BIB_MARKER = '.. sparta-bibliography-entries'
 BIB_LABEL = re.compile(r'^\.\. _([A-Z][A-Za-z-]*\d\d(?:\d\d)?[a-z]?):', re.M)
 BIB_ENTRY = re.compile(
