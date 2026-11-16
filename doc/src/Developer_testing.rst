@@ -111,10 +111,12 @@ requests to master, three of which run the test suite:
        ``-k on -sf kk`` against the *same* reference logs as the non-KOKKOS
        build. See :doc:`Developer_kokkos`.
    * - ``bigbig``
-     - Compile only: a KOKKOS build (the ``kokkos_omp`` preset) with
-       ``-DSPARTA_BIGBIG``, covering the wide integer variant, which the
-       other jobs do not build.  Despite its name, the preset does not
-       enable Kokkos' OpenMP backend, so this build uses Serial.
+     - Compile only: a KOKKOS/OpenMP build (the ``kokkos_omp`` preset)
+       with ``-DSPARTA_BIGBIG``, covering the wide integer variant and the
+       OpenMP backend, neither of which the other jobs build.  The OpenMP
+       backend is switched on by ``cmake/common/set/kokkos_cmake_defaults.cmake``,
+       which ``src/KOKKOS/CMakeLists.txt`` includes, not by the preset
+       itself.
 
 A fifth job, ``doc``, builds this manual with warnings treated as errors on
 Python 3.9 and 3.11, then checks its links, checks the command and style
