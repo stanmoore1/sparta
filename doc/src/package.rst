@@ -133,7 +133,10 @@ the device is synchronized, and the message is sent with a blocking
 MPI_Send before the next one is packed.  With *yes*\ , all messages are
 packed by a single kernel into one buffer, the device is synchronized
 once, and every message is then posted with a non-blocking MPI_Isend,
-so that their latencies overlap.  This can reduce communication time
+so that their latencies overlap.  For particle migration, the
+per-message particle counts are also exchanged only with neighboring
+processors using non-blocking calls, which removes the global
+MPI_Barrier otherwise done every timestep.  This can reduce communication time
 when a processor sends to many other processors, particularly over
 networks with higher latency.  It uses extra device memory (and host
 memory if *gpu/aware* is *no*\ ) to hold all outgoing messages at once.

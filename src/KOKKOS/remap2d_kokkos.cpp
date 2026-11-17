@@ -114,11 +114,23 @@ void RemapKokkos2d<DeviceType>::remap_2d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
 
   // post all recvs into scratch space
 
-  FFT_SCALAR* v_scratch = d_scratch.data();
+  // not GPU-aware: pinned host buffers, allocated on first use and only
+  //   grown after that, so no host allocation happens per remap
+  // d_scratch may be the caller's d_buf, so size h_scratch from it here
+
   if (!plan->usegpu_aware) {
-    plan->h_scratch = Kokkos::create_mirror_view(d_scratch);
-    v_scratch = plan->h_scratch.data();
+    if (plan->h_scratch.extent(0) < d_scratch.extent(0))
+      plan->h_scratch = Kokkos::View<FFT_SCALAR*,SPAPinnedHostSpace>(
+        Kokkos::view_alloc("remap:scratch:host",Kokkos::WithoutInitializing),
+        d_scratch.extent(0));
+    if (plan->h_sendbuf.extent(0) < plan->d_sendbuf.extent(0))
+      plan->h_sendbuf = Kokkos::View<FFT_SCALAR*,SPAPinnedHostSpace>(
+        Kokkos::view_alloc("remap:sendbuf:host",Kokkos::WithoutInitializing),
+        plan->d_sendbuf.extent(0));
   }
+
+  FFT_SCALAR* v_scratch = d_scratch.data();
+  if (!plan->usegpu_aware) v_scratch = plan->h_scratch.data();
 
   for (irecv = 0; irecv < plan->nrecv; irecv++) {
     FFT_SCALAR* scratch = v_scratch + plan->recv_bufloc[irecv];
@@ -128,10 +140,7 @@ void RemapKokkos2d<DeviceType>::remap_2d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
   }
 
   FFT_SCALAR* v_sendbuf = plan->d_sendbuf.data();
-  if (!plan->usegpu_aware) {
-    plan->h_sendbuf = Kokkos::create_mirror_view(plan->d_sendbuf);
-    v_sendbuf = plan->h_sendbuf.data();
-  }
+  if (!plan->usegpu_aware) v_sendbuf = plan->h_sendbuf.data();
 
   // send all messages to other procs
 
@@ -140,8 +149,13 @@ void RemapKokkos2d<DeviceType>::remap_2d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
     plan->pack(d_in,in_offset,
                plan->d_sendbuf,0,&plan->packplan[isend]);
 
-    if (!plan->usegpu_aware)
-      Kokkos::deep_copy(plan->h_sendbuf,plan->d_sendbuf);
+    // copy only this message; pack() fences, so d_sendbuf is ready
+
+    if (!plan->usegpu_aware) {
+      const std::pair<size_t,size_t> range(0,plan->send_size[isend]);
+      Kokkos::deep_copy(Kokkos::subview(plan->h_sendbuf,range),
+                        Kokkos::subview(plan->d_sendbuf,range));
+    }
 
     MPI_Send(v_sendbuf,plan->send_size[isend],MPI_FFT_SCALAR,
              plan->send_proc[isend],0,plan->comm);
@@ -172,8 +186,14 @@ void RemapKokkos2d<DeviceType>::remap_2d_kokkos(typename FFT_AT::t_FFT_SCALAR_1d
     int scratch_offset = plan->recv_bufloc[irecv];
     int out_offset = plan->recv_offset[irecv];
 
-    if (!plan->usegpu_aware)
-      Kokkos::deep_copy(d_scratch,plan->h_scratch);
+    // copy only the message that just arrived, not all of scratch
+
+    if (!plan->usegpu_aware) {
+      const std::pair<size_t,size_t> range(scratch_offset,
+                                           scratch_offset+plan->recv_size[irecv]);
+      Kokkos::deep_copy(Kokkos::subview(d_scratch,range),
+                        Kokkos::subview(plan->h_scratch,range));
+    }
 
     plan->unpack(d_scratch,scratch_offset,
                  d_out,out_offset,&plan->unpackplan[irecv]);

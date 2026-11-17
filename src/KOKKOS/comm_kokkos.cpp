@@ -31,6 +31,8 @@ using namespace SPARTA_NS;
 
 enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
 
+#define BUFFACTOR 1.5
+
 /* ---------------------------------------------------------------------- */
 
 CommKokkos::CommKokkos(SPARTA *sparta) : Comm(sparta),
@@ -68,7 +70,6 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   particle_kk->update_class_variables();
   particle_kk_copy.copy(particle_kk);
 
-  const int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
   const int need_atomics = sparta->kokkos->need_atomics;
 
   if (sparta->kokkos->comm_serial) {
@@ -105,20 +106,22 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   //  loop over nrecv to unpack buffer
   // atomic variables: ?
 
-  // grow pproc and sbuf if necessary
+  // grow pproc and sbuf if necessary, with headroom and never shrinking,
+  //   so device (and pinned host) allocations do not happen every step
+  // sbuf no longer needs its exact size when not GPU-aware:
+  //   IrregularKokkos::exchange_uniform() only copies the bytes it sends
 
   if (nmigrate > maxpproc) {
-    maxpproc = nmigrate;
+    maxpproc = static_cast<int>(BUFFACTOR*nmigrate);
     d_pproc = DAT::t_int_1d(Kokkos::view_alloc("comm:pproc",Kokkos::WithoutInitializing),maxpproc);
-    h_pproc = HAT::t_int_1d(Kokkos::view_alloc("comm:pproc_mirror",Kokkos::WithoutInitializing),maxpproc);
+    h_pproc = t_int_1d_pinned(Kokkos::view_alloc("comm:pproc:host",Kokkos::WithoutInitializing),maxpproc);
     pproc = h_pproc.data();
   }
-  //if (maxsendbuf == 0 || nmigrate*nbytes_total > maxsendbuf) { // this doesn't work, not sure why
 
-    bigint maxsendbuf = (bigint)nmigrate*nbytes_total;
-    if (maxsendbuf > bigint(d_sbuf.extent(0)) || !gpu_aware_flag)
-      d_sbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:sbuf",Kokkos::WithoutInitializing),maxsendbuf);
-  //}
+  bigint maxsendbuf = (bigint)nmigrate*nbytes_total;
+  if (maxsendbuf > bigint(d_sbuf.extent(0)))
+    d_sbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:sbuf",Kokkos::WithoutInitializing),
+                            (bigint)(BUFFACTOR*maxsendbuf));
 
   // fill proclist with procs to send to
   // pack sbuf with particles to migrate
@@ -163,13 +166,17 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   particle_kk->modify(Device,PARTICLE_MASK);
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
 
-  // deep_copy() fences, so the pack kernel is done before pproc is read
-
-  Kokkos::deep_copy(h_pproc,d_pproc);
+  // sync_host() of nsend fences, so the pack kernel is done
+  // then copy only the nsend entries of pproc that were filled
 
   k_nsend.modify_device();
   k_nsend.sync_host();
   nsend = h_nsend();
+
+  if (nsend) {
+    const std::pair<int,int> range(0,nsend);
+    Kokkos::deep_copy(Kokkos::subview(h_pproc,range),Kokkos::subview(d_pproc,range));
+  }
 
   // compress my list of particles
 
@@ -182,8 +189,12 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   IrregularKokkos* iparticle_kk = (IrregularKokkos*) iparticle;
 
   int nrecv;
-  if (neighflag)
-    nrecv = iparticle_kk->augment_data_uniform(nsend,pproc);
+  if (neighflag) {
+    if (sparta->kokkos->comm_batch_flag)
+      nrecv = iparticle_kk->augment_data_uniform_batch(nsend,pproc);
+    else
+      nrecv = iparticle_kk->augment_data_uniform(nsend,pproc);
+  }
   else
     nrecv = iparticle_kk->create_data_uniform(nsend,pproc,commsortflag);
 
@@ -198,47 +209,41 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
   particle_kk->sync(Device,PARTICLE_MASK);
   d_particles = particle_kk->k_particles.view_device();
 
-  if (gpu_aware_flag && !ncustom) {
+  if (!ncustom) {
 
-    // received particles land straight in the particle list, past nlocal.
-    // exchange_uniform() also copies the self datums itself, into the view it
-    // is handed, so that view has to describe the same buffer the receives
-    // target.  d_rbuf is only allocated in the branch below, so passing it
-    // here handed the self copy a default constructed view -- extent 0, null
-    // data -- to index.  It goes unnoticed because migrate_particles never
-    // produces a self datum: a particle is on the migrate list precisely
-    // because its new cell belongs to another proc, so the destination list
-    // never contains me.  Describe the real destination instead, the way every
-    // other caller of exchange_uniform already does.
+    // received particles land straight in the particle list, past nlocal,
+    //   either from MPI directly (GPU-aware) or by one copy from the host
+    //   buffer exchange_uniform() received into, so no rbuf and no unpack
+    //   kernel are needed in either case.
+    // the view handed to exchange_uniform() must describe the same buffer
+    //   the receives target, since self datums (never produced here: a
+    //   migrating particle's new cell is on another proc) and the host copy
+    //   are written through it
 
     char *d_pdest = (char *) (d_particles.data()+particle->nlocal);
     DAT::t_char_1d d_pbuf(d_pdest,(size_t)nrecv*nbytes_total);
     iparticle_kk->exchange_uniform(d_sbuf,nbytes_total,d_pdest,d_pbuf);
   } else {
 
-    // allocate exact buffer size to reduce GPU <--> CPU memory transfer
+    // custom attributes: receive into rbuf, then unpack particle by particle
+    // grow rbuf with headroom, never shrink it
+    // exchange_uniform() only copies the received bytes, so rbuf may be larger
 
     bigint maxrecvbuf = (bigint)nrecv*nbytes_total;
-    d_rbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:rbuf",Kokkos::WithoutInitializing),maxrecvbuf);
+    if (maxrecvbuf > bigint(d_rbuf.extent(0)))
+      d_rbuf = DAT::t_char_1d(Kokkos::view_alloc("comm:rbuf",Kokkos::WithoutInitializing),
+                              (bigint)(BUFFACTOR*maxrecvbuf));
 
     nlocal = particle->nlocal;
     iparticle_kk->exchange_uniform(d_sbuf,nbytes_total,(char *)d_rbuf.data(),d_rbuf);
 
     // no fence after the unpack: later kernels are ordered after it,
     //   host access to particles goes through a DualView sync, which fences,
-    //   and d_rbuf is only reallocated after the next call's deep_copy()
+    //   and d_rbuf is only reallocated after the next call's fencing sync
 
     copymode = 1;
-    if (!ncustom) {
-
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<0> >(0,nrecv),*this);
-      copymode = 0;
-
-    } else {
-
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1> >(0,nrecv),*this);
-      copymode = 0;
-    }
+    Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1> >(0,nrecv),*this);
+    copymode = 0;
 
   }
 

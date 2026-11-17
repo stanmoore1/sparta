@@ -29,9 +29,9 @@ struct remap_plan_3d_kokkos {
   typedef DeviceType device_type;
   typedef FFTArrayTypes<DeviceType> FFT_AT;
   typename FFT_AT::t_FFT_SCALAR_1d d_sendbuf;                  // buffer for MPI sends
-  FFT_HAT::t_FFT_SCALAR_1d h_sendbuf;                          // host buffer for MPI sends
+  Kokkos::View<FFT_SCALAR*,SPAPinnedHostSpace> h_sendbuf;     // pinned host buffer for MPI sends
   typename FFT_AT::t_FFT_SCALAR_1d d_scratch;                  // scratch buffer for MPI recvs
-  FFT_HAT::t_FFT_SCALAR_1d h_scratch;                          // host scratch buffer for MPI recvs
+  Kokkos::View<FFT_SCALAR*,SPAPinnedHostSpace> h_scratch;     // pinned host buffer for MPI recvs
   void (*pack)(typename FFT_AT::t_FFT_SCALAR_1d_um, int, typename FFT_AT::t_FFT_SCALAR_1d_um, int, struct pack_plan_3d *);
                                     // which pack function to use
   void (*unpack)(typename FFT_AT::t_FFT_SCALAR_1d_um, int, typename FFT_AT::t_FFT_SCALAR_1d_um, int, struct pack_plan_3d *);

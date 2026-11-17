@@ -42,6 +42,15 @@ int compare_standalone(const void *, const void *);
 #define BUFMIN 1000
 #define BUFEXTRA 1000
 
+// MPI tags for comm/batch yes
+// distinct from tags 0 and 1, the only tags any MPI_ANY_SOURCE receive in
+//   SPARTA uses, and every batched receive names its source, so a message
+//   that arrives early can only be matched by the receive meant for it:
+//   MPI keeps messages between one pair of procs with the same tag in order
+// this is what lets augment_data_uniform_batch() drop the MPI_Barrier
+
+enum{TAG_BATCH_COUNT=2,TAG_BATCH_DATA=3};
+
 /* ---------------------------------------------------------------------- */
 
 IrregularKokkos::IrregularKokkos(SPARTA *sparta) : Irregular(sparta)
@@ -250,6 +259,50 @@ int IrregularKokkos::create_data_uniform(int n, int *proclist, int sort)
 
 int IrregularKokkos::augment_data_uniform(int n, int *proclist)
 {
+  int i,m,iproc;
+
+  augment_plan_uniform(n,proclist);
+
+  // tell receivers how many datums I send them
+  // sendmax = largest # of datums I send in a single message
+
+  sendmax = 0;
+  for (i = 0; i < nsend; i++) {
+    MPI_Send(&num_send[i],1,MPI_INT,proc_send[i],0,world);
+    sendmax = MAX(sendmax,num_send[i]);
+  }
+
+  // receive incoming messages
+  // num_recv = # of datums each proc sends me
+  // nrecvdatum = total # of datums I recv
+
+  nrecvdatum = 0;
+  for (i = 0; i < nrecv; i++) {
+    MPI_Recv(&m,1,MPI_INT,MPI_ANY_SOURCE,0,world,status);
+    iproc = status->MPI_SOURCE;
+    num_recv[proc2recv[iproc]] = m;
+    nrecvdatum += m;
+  }
+  nrecvdatum += num_self;
+
+  // barrier to insure all MPI_ANY_SOURCE messages are received
+  // else another proc could proceed to exchange_data() and send to me
+
+  MPI_Barrier(world);
+
+  // return # of datums I will receive
+
+  return nrecvdatum;
+}
+
+/* ----------------------------------------------------------------------
+   tally datums per message and build index_send and index_self for
+     augment_data_uniform() and augment_data_uniform_batch()
+   uses the procs of the plan created by create_procs()
+------------------------------------------------------------------------- */
+
+void IrregularKokkos::augment_plan_uniform(int n, int *proclist)
+{
   int i,m,iproc,isend;
 
   // tally count of messages to each proc in num_send and num_self
@@ -307,36 +360,47 @@ int IrregularKokkos::augment_data_uniform(int n, int *proclist)
     }
     k_index_send.modify_host();
   }
+}
 
-  // tell receivers how many datums I send them
+/* ----------------------------------------------------------------------
+   same as augment_data_uniform(), for package kokkos comm/batch yes
+   counts are exchanged only with the known neighbors of the plan,
+     using non-blocking calls and a dedicated tag, with no MPI_ANY_SOURCE
+     and so no MPI_Barrier, see TAG_BATCH_COUNT
+   must be paired with IrregularKokkos::exchange_uniform() with comm/batch
+     yes, which also uses dedicated tags; other callers (comm serial,
+     Comm::irregular_uniform_neighs()) pair the plan with
+     Irregular::exchange_uniform(), which uses tag 0 and needs the barrier,
+     so they keep using augment_data_uniform()
+   return total # of datums I will recv
+------------------------------------------------------------------------- */
+
+int IrregularKokkos::augment_data_uniform_batch(int n, int *proclist)
+{
+  int i;
+
+  augment_plan_uniform(n,proclist);
+
+  // num_recv[i] = # of datums proc_recv[i] sends me
+
+  for (i = 0; i < nrecv; i++)
+    MPI_Irecv(&num_recv[i],1,MPI_INT,proc_recv[i],TAG_BATCH_COUNT,
+              world,&request[i]);
+
   // sendmax = largest # of datums I send in a single message
 
   sendmax = 0;
   for (i = 0; i < nsend; i++) {
-    MPI_Send(&num_send[i],1,MPI_INT,proc_send[i],0,world);
+    MPI_Isend(&num_send[i],1,MPI_INT,proc_send[i],TAG_BATCH_COUNT,
+              world,&request_send[i]);
     sendmax = MAX(sendmax,num_send[i]);
   }
 
-  // receive incoming messages
-  // num_recv = # of datums each proc sends me
-  // nrecvdatum = total # of datums I recv
+  if (nrecv) MPI_Waitall(nrecv,request,MPI_STATUSES_IGNORE);
+  if (nsend) MPI_Waitall(nsend,request_send,MPI_STATUSES_IGNORE);
 
-  nrecvdatum = 0;
-  for (i = 0; i < nrecv; i++) {
-    MPI_Recv(&m,1,MPI_INT,MPI_ANY_SOURCE,0,world,status);
-    iproc = status->MPI_SOURCE;
-    num_recv[proc2recv[iproc]] = m;
-    nrecvdatum += m;
-  }
-  nrecvdatum += num_self;
-
-  // barrier to insure all MPI_ANY_SOURCE messages are received
-  // else another proc could proceed to exchange_data() and send to me
-
-  MPI_Barrier(world);
-
-  // return # of datums I will receive
-
+  nrecvdatum = num_self;
+  for (i = 0; i < nrecv; i++) nrecvdatum += num_recv[i];
   return nrecvdatum;
 }
 
@@ -356,11 +420,13 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
 
   const int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
   const int batch_flag = sparta->kokkos->comm_batch_flag;
+  const int tag = batch_flag ? TAG_BATCH_DATA : 0;
 
-  if (!gpu_aware_flag &&
-      h_recvbuf.extent(0) != d_recvbuf.extent(0)) {
-    h_recvbuf = HAT::t_char_1d(Kokkos::view_alloc("irregular:d_recvbuf:mirror",Kokkos::WithoutInitializing),d_recvbuf.extent(0));
-  }
+  // received datums occupy bytes [selfbytes,recvbytes) of recvbuf,
+  //   self datums occupy [0,selfbytes)
+
+  const bigint selfbytes = (bigint)num_self*nbytes;
+  const bigint recvbytes = (bigint)nrecvdatum*nbytes;
 
   // datum_type = MPI datatype for one datum of nbytes
   // all message sizes become datum counts < 2^31,
@@ -371,34 +437,38 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
 
   MPI_Datatype datum_type = uniform_datum_type(nbytes);
 
-  // with GPU-aware MPI, receives land directly in device memory and MPI is
-  //   not ordered with the Kokkos execution space, so every kernel that
+  // MPI is not ordered with the Kokkos execution space, so device work that
   //   still touches the receive buffer must finish before receives are posted
-  //   e.g. migrate_particles() posts receives into the tail of the particle
+  // GPU-aware: receives land in device memory, e.g. the tail of the particle
   //   array, which ParticleKokkos::compress_migrate() may still be reading
+  // not GPU-aware: receives land in h_recvbuf, which the previous call's
+  //   asynchronous host -> device copy may still be reading
   // batched path: pack all messages first, so the one fence after the pack
   //   also covers this, then post receives and send
   // per-message path: fence here
+  // either way GPU-aware or not has the same fences, the only extra work
+  //   when not GPU-aware is the host <--> device copies themselves
 
   if (batch_flag) pack_batch();
-  else if (gpu_aware_flag) DeviceType().fence();
+  else DeviceType().fence();
+
+  // not GPU-aware: receive into a pinned host buffer, grown only as needed
+  // after the fence, so no pending copy reads the buffer being replaced
+
+  if (!gpu_aware_flag && recvbytes > (bigint)h_recvbuf.extent(0))
+    h_recvbuf = t_char_1d_pinned(Kokkos::view_alloc("irregular:recvbuf:host",
+                                                    Kokkos::WithoutInitializing),
+                                 (bigint)(BUFFACTOR*recvbytes));
 
   // post all receives, starting after self copies
 
-  bigint offset = (bigint)num_self*nbytes;
+  char *recvptr = gpu_aware_flag ? d_recvbuf_ptr : h_recvbuf.data();
+  bigint offset = selfbytes;
   for (int irecv = 0; irecv < nrecv; irecv++) {
-    if (gpu_aware_flag) {
-      MPI_Irecv(&d_recvbuf_ptr[offset],num_recv[irecv],datum_type,
-                proc_recv[irecv],0,world,&request[irecv]);
-    } else {
-      MPI_Irecv(h_recvbuf.data() + offset,num_recv[irecv],datum_type,
-                proc_recv[irecv],0,world,&request[irecv]);
-    }
+    MPI_Irecv(recvptr+offset,num_recv[irecv],datum_type,
+              proc_recv[irecv],tag,world,&request[irecv]);
     offset += (bigint)num_recv[irecv]*nbytes;
   }
-
-  if (gpu_aware_flag)
-    k_index_self.sync_device();
 
   if (batch_flag) {
 
@@ -407,24 +477,23 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
     bigint offset_bytes = 0;
     for (int isend = 0; isend < nsend; isend++) {
       MPI_Isend(batch_sendptr+offset_bytes,num_send[isend],datum_type,
-                proc_send[isend],0,world,&request_send[isend]);
+                proc_send[isend],tag,world,&request_send[isend]);
       offset_bytes += (bigint)num_send[isend]*nbytes;
     }
 
   } else {
 
-    // reallocate buf for largest send if necessary
+    // grow buf to hold the largest send, never shrink it
     // bufmax is bigint since largest send message can exceed 2 GB
 
-    if (gpu_aware_flag) {
-      bigint sendbytes = (bigint)sendmax*nbytes;
-      if (sendbytes > bufmax) {
-        bufmax = sendbytes;
-        d_buf = DAT::t_char_1d("Irregular:buf",bufmax);
-      } else if ((bigint)d_buf.extent(0) < bufmax) {
-        d_buf = DAT::t_char_1d("Irregular:buf",bufmax);
-      }
-    }
+    const bigint sendbytes = (bigint)sendmax*nbytes;
+    if (sendbytes > bufmax) bufmax = sendbytes;
+    if ((bigint)d_buf.extent(0) < bufmax)
+      d_buf = DAT::t_char_1d(Kokkos::view_alloc("irregular:buf",
+                                                Kokkos::WithoutInitializing),bufmax);
+    if (!gpu_aware_flag && (bigint)h_buf.extent(0) < bufmax)
+      h_buf = t_char_1d_pinned(Kokkos::view_alloc("irregular:buf:host",
+                                                  Kokkos::WithoutInitializing),bufmax);
 
     // send each message
     // pack buf with list of datums
@@ -436,56 +505,39 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
     for (int isend = 0; isend < nsend; isend++) {
       const int count = num_send[isend];
 
-      if (!gpu_aware_flag) {
-
-        // allocate exact buffer size to reduce GPU <--> CPU memory transfer
-
-        bigint sendbytes = (bigint)count*nbytes;
-        if (bufmax != sendbytes) {
-          bufmax = sendbytes;
-          d_buf = DAT::t_char_1d(Kokkos::view_alloc("irregular:buf",Kokkos::WithoutInitializing),bufmax);
-          h_buf = HAT::t_char_1d(Kokkos::view_alloc("irregular:buf:mirror",Kokkos::WithoutInitializing),bufmax);
-        }
-      }
-
       copymode = 1;
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagIrregularPackBuffer>(0,count),*this);
       copymode = 0;
 
-      // GPU-aware MPI reads d_buf directly, so the pack must finish first
-      // otherwise deep_copy() fences before copying
+      // not GPU-aware: queue the copy of just this message to the host
+      //   behind the pack kernel
+      // one fence either way, then MPI reads d_buf or h_buf
 
-      if (gpu_aware_flag) {
-        DeviceType().fence();
-        MPI_Send(d_buf.data(),count,datum_type,proc_send[isend],0,world);
-      } else {
-        Kokkos::deep_copy(h_buf,d_buf);
-        MPI_Send(h_buf.data(),count,datum_type,proc_send[isend],0,world);
+      if (!gpu_aware_flag) {
+        const std::pair<size_t,size_t> range(0,(size_t)count*nbytes);
+        Kokkos::deep_copy(DeviceType(),Kokkos::subview(h_buf,range),
+                          Kokkos::subview(d_buf,range));
       }
+      DeviceType().fence();
+
+      char *sendptr = gpu_aware_flag ? d_buf.data() : h_buf.data();
+      MPI_Send(sendptr,count,datum_type,proc_send[isend],tag,world);
       offset_send += count;
     }
   }
 
-  // copy datums to self, put at beginning of recvbuf
-  // device copy needs no fence: receives write a disjoint part of recvbuf,
-  //   later kernels are ordered after it, and host access goes through
-  //   deep_copy() or a DualView sync, which fence
+  // copy datums to self, on the device, into the start of recvbuf
+  // done on the device for GPU-aware or not: the self datums never need
+  //   to visit the host
+  // no fence: receives write a disjoint part of recvbuf, later kernels are
+  //   ordered after it, and host access goes through deep_copy() or a
+  //   DualView sync, which fence
 
   if (num_self) {
-    if (gpu_aware_flag) {
-      copymode = 1;
-      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagIrregularUnpackBufferSelf>(0,num_self),*this);
-      copymode = 0;
-    } else { // unpack on host
-      auto h_sendbuf = Kokkos::create_mirror_view_and_copy(SPAHostType(),d_sendbuf);
-
-      k_index_self.sync_host();
-
-      for (int i = 0; i < num_self; i++) {
-        const int m = k_index_self.view_host()[i];
-        memcpy(&h_recvbuf[(bigint)i*nbytes],&h_sendbuf[(bigint)m*nbytes],nbytes);
-      }
-    }
+    k_index_self.sync_device();
+    copymode = 1;
+    Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagIrregularUnpackBufferSelf>(0,num_self),*this);
+    copymode = 0;
   }
 
   // wait on all incoming messages
@@ -498,9 +550,15 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
   if (batch_flag && nsend)
     MPI_Waitall(nsend,request_send,MPI_STATUSES_IGNORE);
 
-  if (!gpu_aware_flag)
-    if (nrecv || num_self)
-      Kokkos::deep_copy(d_recvbuf,h_recvbuf);
+  // not GPU-aware: queue the copy of only the received bytes to the device
+  // no fence: later kernels are ordered after it, host access goes through
+  //   a fencing sync, and the next call fences before reusing h_recvbuf
+
+  if (!gpu_aware_flag && recvbytes > selfbytes) {
+    const std::pair<size_t,size_t> range((size_t)selfbytes,(size_t)recvbytes);
+    Kokkos::deep_copy(DeviceType(),Kokkos::subview(d_recvbuf,range),
+                      Kokkos::subview(h_recvbuf,range));
+  }
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -522,7 +580,7 @@ void IrregularKokkos::operator()(TagIrregularPackBufferBatch, const int &i) cons
      so a single kernel over all of them packs every message into its own
      contiguous slice of d_batchbuf, the same layout the per-message loop
      produces one message at a time
-   one fence covers the whole pack (deep_copy() fences when not GPU-aware),
+   one fence covers the whole pack and, when not GPU-aware, its host copy,
      then exchange_uniform() posts all messages with MPI_Isend so their
      latencies overlap instead of adding up
    sets batch_sendptr to the buffer MPI sends from
@@ -547,7 +605,7 @@ void IrregularKokkos::pack_batch()
                                                    Kokkos::WithoutInitializing),newbytes);
   }
   if (!gpu_aware_flag && h_batchbuf.extent(0) < d_batchbuf.extent(0))
-    h_batchbuf = HAT::t_char_1d(Kokkos::view_alloc("irregular:batchbuf:mirror",
+    h_batchbuf = t_char_1d_pinned(Kokkos::view_alloc("irregular:batchbuf:host",
                                                    Kokkos::WithoutInitializing),
                                 d_batchbuf.extent(0));
 
@@ -558,20 +616,18 @@ void IrregularKokkos::pack_batch()
     copymode = 0;
   }
 
-  // GPU-aware: always fence, even with nothing to send,
-  //   since exchange_uniform() relies on it before posting receives
+  // not GPU-aware: queue the copy of the packed bytes to the host
+  // then always fence, even with nothing to send, since exchange_uniform()
+  //   relies on it before posting receives
 
-  if (gpu_aware_flag) {
-    DeviceType().fence();
-    batch_sendptr = d_batchbuf.data();
-  } else {
-    if (nsenddatum) {
-      const std::pair<size_t,size_t> range(0,(size_t)sendbytes);
-      Kokkos::deep_copy(Kokkos::subview(h_batchbuf,range),
-                        Kokkos::subview(d_batchbuf,range));
-    }
-    batch_sendptr = h_batchbuf.data();
+  if (!gpu_aware_flag && nsenddatum) {
+    const std::pair<size_t,size_t> range(0,(size_t)sendbytes);
+    Kokkos::deep_copy(DeviceType(),Kokkos::subview(h_batchbuf,range),
+                      Kokkos::subview(d_batchbuf,range));
   }
+  DeviceType().fence();
+
+  batch_sendptr = gpu_aware_flag ? d_batchbuf.data() : h_batchbuf.data();
 }
 
 /* ---------------------------------------------------------------------- */
