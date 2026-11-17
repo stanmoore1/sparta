@@ -23,6 +23,7 @@ FixStyle(temp/rescale/kk,FixTempRescaleKokkos)
 
 #include "fix_temp_rescale.h"
 #include "kokkos_type.h"
+#include "cell_plist_kokkos.h"
 
 namespace SPARTA_NS {
 
@@ -71,7 +72,7 @@ class FixTempRescaleKokkos : public FixTempRescale {
   t_species_1d d_species;
 
   DAT::t_int_1d d_cellcount;
-  DAT::t_int_2d_lr d_plist;
+  CellPList d_plist;
   t_cell_1d d_cells;
 
   void end_of_step_no_average(double);

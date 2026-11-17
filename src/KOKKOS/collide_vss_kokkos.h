@@ -25,6 +25,7 @@ CollideStyle(vss/kk,CollideVSSKokkos)
 #include "collide_vss_kokkos.h"
 #include "particle_kokkos.h"
 #include "grid_kokkos.h"
+#include "cell_plist_kokkos.h"
 #include "react_tce_kokkos.h"
 #include "react_qk_kokkos.h"
 #include "react_tce_qk_kokkos.h"
@@ -237,26 +238,26 @@ class CollideVSSKokkos : public CollideVSS {
 
   t_particle_1d d_particles;
   t_species_1d_const d_species;
-  DAT::t_int_2d_lr d_plist;
+  CellPList d_plist;
 
   // group collision scratch (ngroups > 1)
   DAT::t_int_1d d_species2group;
   // reacting group collisions mutate group membership inside the kernel, so
   //   the per-group lists cannot be one group-contiguous row per cell as they
   //   were when only the non-reacting case was supported.  Each group gets its
-  //   own region of capacity d_plist.extent(1) -- a group can never hold more
+  //   own region of capacity d_plist.capacity(icell) -- a group can never hold more
   //   than the cell does -- and d_p2g is the reverse map the host keeps in
   //   Collide::p2g, needed so a swap-remove can fix the moved entry's owner.
 
-  Kokkos::View<int***,DeviceType> d_glist;   // (cell, group, k) -> plist index
-  Kokkos::View<int***,DeviceType> d_p2g;     // (cell, plist index) -> group, k
+  CellGroupSlots d_glist;   // (cell, group, k) -> plist index
+  CellSlots2 d_p2g;         // (cell, plist index) -> group, k
 
   // per-group counters, formerly per-thread stack arrays dimensioned by a
   //   compile-time MAXGROUP.  Both group kernels are one work item per grid
   //   cell (RangePolicy over 0..nglocal indexed by icell), so icell is already
   //   a unique, deterministic, contention-free row index -- no UniqueToken
   //   needed.  Sized (nglocal, ngroups) alongside d_glist, which they cost
-  //   1/d_plist.extent(1) as much as.
+  //   1/d_plist.capacity(icell) as much as.
   //   both group kernels build their lists with addgroup_kk(), which keeps
   //   d_gcount and d_p2g in step, so no separate fill cursor is needed.
 
@@ -265,8 +266,8 @@ class CollideVSSKokkos : public CollideVSS {
   // near-neighbor partner history for the two groups of the current pair;
   //   the host reallocates these per pair via set_nn_group()
 
-  DAT::t_int_2d d_nn_igroup;
-  DAT::t_int_2d d_nn_jgroup;
+  CellSlots<int> d_nn_igroup;
+  CellSlots<int> d_nn_jgroup;
 
  public:
 
@@ -311,7 +312,8 @@ class CollideVSSKokkos : public CollideVSS {
   DAT::t_int_1d d_ionambi;
   DAT::t_int_1d d_ions;
   DAT::t_float_2d_lr d_velambi;
-  t_particle_2d d_elist;
+  CellSlots<Particle::OnePart> d_elist;
+  int elist_extra;     // flat layout: extra electron slots per cell
 
   DAT::tdual_float_2d k_vremax_initial;
   DAT::t_float_2d d_vremax_initial;
@@ -374,7 +376,7 @@ class CollideVSSKokkos : public CollideVSS {
 
   DAT::t_float_2d d_recomb_ijflag;
 
-  DAT::t_int_2d_lr d_nn_last_partner;
+  CellSlots<int,Kokkos::LayoutRight> d_nn_last_partner;
 
   template < int NEARCP, int GASTALLY > void collisions_one(COLLIDE_REDUCE&);
   template < int DIM, int GASTALLY > void collisions_one_subcell(COLLIDE_REDUCE&);
@@ -385,11 +387,13 @@ class CollideVSSKokkos : public CollideVSS {
 
   // transient subcell method, per-cell scratch indexed by (icell,index)
   // subcell_id/next indexed by particle; count/first/ring indexed by subcell
+  // count/first/ring are sized (nglocal, maxsub) with maxsub = subcell_bound()
+  //   of the widest cell, see grow_subcell_views()
 
-  DAT::t_int_2d d_subcell_id;
+  CellSlots<int> d_subcell_id;
   DAT::t_int_2d d_subcell_count;
   DAT::t_int_2d d_subcell_first;
-  DAT::t_int_2d d_subcell_next;
+  CellSlots<int> d_subcell_next;
   DAT::t_int_2d d_subcell_ring;
 
   template < int DIM >
@@ -407,7 +411,8 @@ class CollideVSSKokkos : public CollideVSS {
   KOKKOS_INLINE_FUNCTION
   int find_nn_subcell(rand_type &, int, int, int, int, int) const;
 
-  void grow_subcell_views(int, int);
+  void grow_subcell_views();
+  int subcell_bound(int) const;
 
   // VSS specific
 
@@ -457,6 +462,7 @@ class CollideVSSKokkos : public CollideVSS {
   int find_nn(rand_type &, int, int, int) const;
 
   void grow_group_lists();
+  void regrow_flat_plist();
 
   KOKKOS_INLINE_FUNCTION
   int find_nn_group(rand_type &, int, int, int, int, int, int) const;
@@ -465,10 +471,9 @@ class CollideVSSKokkos : public CollideVSS {
   void restore();
 
   t_particle_1d d_particles_backup;
-  DAT::t_int_2d_lr d_plist_backup;
+  CellPList d_plist_backup;
   DAT::t_float_3d d_vremax_backup;
   DAT::t_float_3d d_remain_backup;
-  DAT::t_int_2d_lr d_nn_last_partner_backup;
   DAT::t_int_1d d_ionambi_backup;
   DAT::t_float_2d_lr d_velambi_backup;
   DAT::t_int_2d_lr d_vibmode_backup;
