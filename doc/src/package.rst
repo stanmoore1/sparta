@@ -17,7 +17,7 @@ package command
   
        kokkos args = keyword value ...
          zero or more keyword/value pairs may be appended
-         keywords = comm or react/extra or react/retry or gpu/aware or plist
+         keywords = comm or react/extra or react/retry or gpu/aware or plist or comm/batch
            comm value = threaded or serial
              threaded = perform pack/unpack using KOKKOS (e.g. on GPU or using OpenMP) (default for GPUs)
              serial = perform communication pack/unpack in non-KOKKOS mode (default for CPUs)
@@ -33,6 +33,9 @@ package command
              dense = store per-cell particle lists in a 2d array (default)
              flat = store per-cell particle lists back to back in a 1d array
              sliced = store per-cell particle lists in a 1d array, interleaved in blocks of 32 cells
+           comm/batch = yes or no
+             yes = pack all irregular messages in one kernel and send them with MPI_Isend
+             no = pack and send irregular messages one at a time (default)
 
 
 
@@ -45,6 +48,7 @@ package command
    package kokkos comm threaded react/retry yes
    package kokkos gpu/aware no
    package kokkos plist flat
+   package kokkos comm/batch yes
 
 **Description:**
 
@@ -154,6 +158,21 @@ cell's list in the *flat* and *sliced* layouts is padded by the
 *react/extra* factor plus a few slots, and the padding is increased
 automatically if a cell overflows and *react/retry* is set to *yes*\ .
 
+The *comm/batch* keyword changes how irregular communication, such as
+particle migration, sends its messages.  With the default *no*\ , the
+messages are sent one at a time: each one is packed by its own kernel,
+the device is synchronized, and the message is sent with a blocking
+MPI_Send before the next one is packed.  With *yes*\ , all messages are
+packed by a single kernel into one buffer, the device is synchronized
+once, and every message is then posted with a non-blocking MPI_Isend,
+so that their latencies overlap.  For particle migration, the
+per-message particle counts are also exchanged only with neighboring
+processors using non-blocking calls, which removes the global
+MPI_Barrier otherwise done every timestep.  This can reduce communication time
+when a processor sends to many other processors, particularly over
+networks with higher latency.  It uses extra device memory (and host
+memory if *gpu/aware* is *no*\ ) to hold all outgoing messages at once.
+
 
 ----------
 
@@ -173,7 +192,7 @@ with the KOKKOS package.  See the `Making SPARTA <Section_start.html#start_3>`_ 
 **Default:**
 
 For the KOKKOS package, the option defaults are react/extra = 1.1,
-react/retry = no, gpu/aware yes, and plist = dense. For CPUs: comm = serial, and for
+react/retry = no, gpu/aware yes, plist = dense, and comm/batch no. For CPUs: comm = serial, and for
 GPUs: comm = threaded.  These settings are made automatically by the
 required "-k on" `command-line switch <Section_start.html#start_7>`_. You
 can change them by using the package kokkos command in your input script
