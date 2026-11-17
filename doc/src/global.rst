@@ -11,7 +11,7 @@ global command
    global keyword values ...
 
 * one or more keyword/value pairs
-* keyword = *fnum* or *nrho* or *vstream* or *temp* or *field* or *surfs* or *surfgrid* or *surfmax* or *splitmax* or *surftally* or *gridcut* or *comm/sort* or *comm/style* or *weight* or *particle/reorder* or *mem/limit*
+* keyword = *fnum* or *nrho* or *vstream* or *temp* or *field* or *surfs* or *surfgrid* or *surfmax* or *splitmax* or *surftally* or *gridcut* or *comm/sort* or *comm/style* or *weight* or *particle/reorder* or *mem/limit* or *optmove* or *timer/rank* or *timer/file*
   
   .. parsed-literal::
   
@@ -69,6 +69,10 @@ global command
          bytes = limit extra particle memory to this amount (in MBytes)
        optmove value = yes or no
          yes/no = use optimized particle move if yes, else use regular move
+       timer/rank value = yes or no
+         yes/no = also print the slowest and fastest MPI rank and its host for each timing section
+       timer/file value = filename or none
+         filename = write every MPI rank's timing section times and host to this file
 
 
 
@@ -477,6 +481,40 @@ measure of how often the optimized move was not applicable, not of how
 far particles moved. A value near zero means it was used for nearly
 every particle.
 
+If the *timer/rank* keyword is set to *yes* then the MPI task timing
+breakdown printed at the end of each run (see the :doc:`run <run>`
+command) is followed by a second table. For each timing section it
+lists the MPI rank with the largest time and the MPI rank with the
+smallest time, together with the host name each of those ranks ran on,
+as returned by MPI\_Get\_processor\_name(). This is a debugging aid for
+load imbalance at large processor counts. The min/avg/max table shows
+that some rank is slow in a section, but not which one; this table
+shows whether it is the same rank or the same host from run to run,
+which distinguishes a slow node from an effect that moves between
+ranks. The host names of all ranks are gathered to rank 0 once at the
+end of the run, which costs nothing measurable.
+
+If the *timer/file* keyword is set to a filename, then at the end of
+each run the timing section times of every MPI rank are written to that
+file, one line per rank, as
+
+
+.. parsed-literal::
+
+   rank host move coll sort comm modify output sync loop
+
+where host is the name returned by MPI\_Get\_processor\_name() and the
+times are in seconds, the same values summarized by the MPI task timing
+breakdown. Two comment lines precede each run's block, giving the step
+the run ended on, the number of steps, and the number of processors.
+The first run after the keyword is set creates the file; later runs
+append to it. This gives the full per-rank distribution rather than only
+its extremes, so that every slow host in a large run can be found from a
+single run, e.g. by sorting the file on the move or sort column. The
+*none* value turns the file off. Writing the file gathers a few values
+per rank to rank 0 once at the end of the run, which costs nothing
+measurable, and it can be used with or without *timer/rank*\ .
+
 **Restrictions:**
 
 The global surfmax command must be used before surface elements are
@@ -492,7 +530,7 @@ The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
 gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
-none, particle/reorder = 0, mem/limit = 0, optmove = no.
+none, particle/reorder = 0, mem/limit = 0, optmove = no, timer/rank = no, timer/file = none.
 
 
 .. _sws: https://sparta.github.io
