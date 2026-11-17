@@ -22,6 +22,8 @@ namespace SPARTA_NS {
 
 struct TagIrregularPackBuffer{};
 
+struct TagIrregularPackBufferBatch{};
+
 struct TagIrregularUnpackBufferSelf{};
 
 class IrregularKokkos : public Irregular {
@@ -35,6 +37,9 @@ class IrregularKokkos : public Irregular {
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagIrregularPackBuffer, const int&) const;
+
+  KOKKOS_INLINE_FUNCTION
+  void operator()(TagIrregularPackBufferBatch, const int&) const;
 
   KOKKOS_INLINE_FUNCTION
   void operator()(TagIrregularUnpackBufferSelf, const int&) const;
@@ -58,6 +63,18 @@ class IrregularKokkos : public Irregular {
   HAT::t_char_1d h_recvbuf;
   HAT::t_char_1d h_buf;
   int nbytes;
+
+  // batched send path (package kokkos comm/batch yes)
+  // all outgoing messages are packed by one kernel into d_batchbuf,
+  //   message isend occupying a contiguous slice in index_send order,
+  //   then every message is posted with MPI_Isend
+
+  DAT::t_char_1d d_batchbuf;
+  HAT::t_char_1d h_batchbuf;
+  MPI_Request *request_send;   // requests for the batched sends
+  char *batch_sendptr;         // d_batchbuf, or h_batchbuf if not GPU-aware
+
+  void pack_batch();
 };
 
 }

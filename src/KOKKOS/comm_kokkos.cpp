@@ -158,11 +158,12 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateParticles<0,1> >(0,nmigrate),*this);
 
   }
-  DeviceType().fence();
   copymode = 0;
 
   particle_kk->modify(Device,PARTICLE_MASK);
   d_particles = t_particle_1d(); // destroy reference to reduce memory use
+
+  // deep_copy() fences, so the pack kernel is done before pproc is read
 
   Kokkos::deep_copy(h_pproc,d_pproc);
 
@@ -223,17 +224,19 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
     nlocal = particle->nlocal;
     iparticle_kk->exchange_uniform(d_sbuf,nbytes_total,(char *)d_rbuf.data(),d_rbuf);
 
+    // no fence after the unpack: later kernels are ordered after it,
+    //   host access to particles goes through a DualView sync, which fences,
+    //   and d_rbuf is only reallocated after the next call's deep_copy()
+
     copymode = 1;
     if (!ncustom) {
 
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<0> >(0,nrecv),*this);
-      DeviceType().fence();
       copymode = 0;
 
     } else {
 
       Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCommMigrateUnpackParticles<1> >(0,nrecv),*this);
-      DeviceType().fence();
       copymode = 0;
     }
 
