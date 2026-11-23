@@ -210,7 +210,7 @@ int CommKokkos::migrate_particles(int nmigrate, int *plist, const DAT::t_int_1d 
 
   int nrecv;
   if (neighflag) {
-    if (sparta->kokkos->comm_batch_flag)
+    if (commbatchflag)
       nrecv = iparticle_kk->augment_data_uniform_batch(nsend,pproc);
     else
       nrecv = iparticle_kk->augment_data_uniform(nsend,pproc);

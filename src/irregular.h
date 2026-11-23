@@ -33,12 +33,23 @@ class Irregular : protected Pointers {
   int create_data_uniform_grouped(int, int *, int sort = 0);
   int create_data_variable(int, int *, int *, bigint &, int sort = 0);
   virtual int augment_data_uniform(int, int *);
+  int augment_data_uniform_batch(int, int *);
   void exchange_uniform(char *, int, char *);
   void exchange_variable(char *, int *, char *);
   void reverse(int, int *);
 
  protected:
   int me,nprocs;
+
+  // MPI tags for batched irregular comm (global comm/batch yes)
+  // distinct from tags 0 and 1, the only tags SPARTA's other point-to-point
+  //   messages use, including every MPI_ANY_SOURCE receive, and every
+  //   batched receive names its source, so a message that arrives early can
+  //   only be matched by the receive meant for it: MPI keeps messages between
+  //   one pair of procs with the same tag in order
+  // this is what lets augment_data_uniform_batch() drop the MPI_Barrier
+
+  enum{TAG_BATCH_COUNT=2,TAG_BATCH_DATA=3};
 
   // plan for irregular communication of datums
   // same for uniform or variable sized datums
@@ -60,14 +71,18 @@ class Irregular : protected Pointers {
   int *proc2recv;            // mapping from proc IDs to recv list
   int *work1,*work2;         // work vectors
   MPI_Request *request;      // MPI requests for posted recvs
+  MPI_Request *request_send; // MPI requests for batched sends
   MPI_Status *status;        // MPI statuses for WaitAll
   MPI_Datatype datum_type;   // committed MPI type for one uniform datum
   int datum_nbytes;          // nbytes datum_type was built for, -1 = none yet
   char *buf;                 // buffer for largest single send message
+  char *bufbatch;            // batched sends: buffer for all send messages
+  bigint bufbatchmax;        // current size of bufbatch in bytes
   int copymode;              // 1 if copy of class (prevents deallocation of
                              //   base class when child copy is destroyed)
 
   MPI_Datatype uniform_datum_type(int);
+  virtual void augment_plan_uniform(int, int *);
 
   // only defined for variable sized datums
 

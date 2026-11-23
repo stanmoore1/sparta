@@ -30,7 +30,6 @@ class KokkosSPARTA : protected Pointers {
   int nthreads,ngpus;
   int need_atomics;
   int gpu_aware_flag;
-  int comm_batch_flag;
   int react_retry_flag;
   double react_extra;
 

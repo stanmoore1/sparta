@@ -45,6 +45,7 @@ Comm::Comm(SPARTA *sparta) : Pointers(sparta)
   ncomm = 0;
   commsortflag = 0;
   commpartstyle = 1;
+  commbatchflag = 1;
 
   neighflag = 0;
   neighlist = NULL;
@@ -210,9 +211,12 @@ int Comm::migrate_particles(int nmigrate, int *plist)
   // nrecv = # of incoming particles
 
   int nrecv;
-  if (neighflag)
-    nrecv = iparticle->augment_data_uniform(nsend,pproc);
-  else
+  if (neighflag) {
+    if (commbatchflag)
+      nrecv = iparticle->augment_data_uniform_batch(nsend,pproc);
+    else
+      nrecv = iparticle->augment_data_uniform(nsend,pproc);
+  } else
     nrecv = iparticle->create_data_uniform(nsend,pproc,commsortflag);
 
   // extend particle list if necessary
@@ -626,9 +630,12 @@ int Comm::irregular_uniform_neighs(int nsend, int *procsend,
   if (!neighflag && !iuniform) iuniform = new Irregular(sparta);
 
   int nrecv;
-  if (neighflag)
-    nrecv = iparticle->augment_data_uniform(nsend,procsend);
-  else
+  if (neighflag) {
+    if (commbatchflag)
+      nrecv = iparticle->augment_data_uniform_batch(nsend,procsend);
+    else
+      nrecv = iparticle->augment_data_uniform(nsend,procsend);
+  } else
     nrecv = iuniform->create_data_uniform(nsend,procsend,commsortflag);
 
   // reallocate rbuf as needed

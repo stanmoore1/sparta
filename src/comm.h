@@ -28,6 +28,7 @@ class Comm : protected Pointers {
                                     //   useful for debugging to insure
                                     //   reproducible ordering of recv datums
   int commpartstyle;                // 1 for neighbor, 0 for all
+  int commbatchflag;                // 1 to batch irregular messages (default)
                                     //   changes how irregular comm for
                                     //   particles is performed
 

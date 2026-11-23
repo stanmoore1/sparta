@@ -11,7 +11,7 @@ global command
    global keyword values ...
 
 * one or more keyword/value pairs
-* keyword = *fnum* or *nrho* or *vstream* or *temp* or *field* or *surfs* or *surfgrid* or *surfmax* or *splitmax* or *surftally* or *gridcut* or *comm/sort* or *comm/style* or *weight* or *particle/reorder* or *mem/limit* or *optmove* or *timer/rank* or *timer/file*
+* keyword = *fnum* or *nrho* or *vstream* or *temp* or *field* or *surfs* or *surfgrid* or *surfmax* or *splitmax* or *surftally* or *gridcut* or *comm/sort* or *comm/style* or *comm/batch* or *weight* or *particle/reorder* or *mem/limit* or *optmove* or *timer/rank* or *timer/file*
   
   .. parsed-literal::
   
@@ -59,6 +59,9 @@ global command
        comm/style value = neigh or all
          neigh = setup particle comm with subset of near-neighbor processor
          all = allow particle comm with potentially any processor
+       comm/batch value = yes or no
+         yes = pack all irregular messages first and send them with non-blocking MPI_Isend
+         no = pack and send irregular messages one at a time with blocking MPI_Send
        weight value = wstyle mode
          wstyle = cell
          mode = none or volume or radius or radius/only
@@ -297,6 +300,23 @@ same number of processors.  Without sorting, messages may arrive in a
 randomized order, which means lists of particles and grid cells end up
 in a different order leading to statistical differences between runs.
 
+The *comm/batch* keyword changes how irregular communication, such as
+particle migration, sends its messages.  With the default *yes*\ , all
+outgoing messages are packed into one buffer first and every message is
+then posted with a non-blocking MPI\_Isend, so that their latencies
+overlap.  For particle migration with *comm/style neigh*, the
+per-message particle counts are also exchanged only with neighboring
+processors using non-blocking calls, which removes the global
+MPI\_Barrier otherwise done every timestep.  This can reduce
+communication time when a processor sends to many other processors,
+particularly over networks with higher latency.  It uses extra memory to
+hold all outgoing messages at once.  With *no*\ , each message is packed
+and sent with a blocking MPI\_Send before the next one is packed.  The
+keyword applies with and without the KOKKOS package.  With KOKKOS, the
+packing is done by one kernel on the device, which is then synchronized
+once rather than once per message.  The results do not depend on the
+setting.
+
 The *comm/style* keyword determines the style of particle
 communication that is performed to migrate particles every step.  The
 most efficient method is typically for each processor to exchange
@@ -529,7 +549,7 @@ defined, e.g. via the :doc:`read\_surf <read_surf>` command.
 The keyword defaults are fnum = 1.0, nrho = 1.0, vstream = 0.0 0.0
 0.0, temp = 273.15, field = none, surfs = explicit, surfgrid = auto,
 surfmax = 100, splitmax = 10, surftally = auto,
-gridcut = -1.0, comm/sort = no, comm/style = neigh, weight = cell
+gridcut = -1.0, comm/sort = no, comm/style = neigh, comm/batch = yes, weight = cell
 none, particle/reorder = 0, mem/limit = 0, optmove = no, timer/rank = no, timer/file = none.
 
 

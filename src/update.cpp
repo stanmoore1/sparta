@@ -2183,6 +2183,12 @@ void Update::global(int narg, char **arg)
       else if (strcmp(arg[iarg+1],"no") == 0) comm->commsortflag = 0;
       else error->all(FLERR,"Illegal global command");
       iarg += 2;
+    } else if (strcmp(arg[iarg],"comm/batch") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
+      if (strcmp(arg[iarg+1],"yes") == 0) comm->commbatchflag = 1;
+      else if (strcmp(arg[iarg+1],"no") == 0) comm->commbatchflag = 0;
+      else error->all(FLERR,"Illegal global command");
+      iarg += 2;
     } else if (strcmp(arg[iarg],"comm/style") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal global command");
       if (strcmp(arg[iarg+1],"neigh") == 0) comm->commpartstyle = 1;

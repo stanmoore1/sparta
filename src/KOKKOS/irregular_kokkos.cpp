@@ -42,20 +42,10 @@ int compare_standalone(const void *, const void *);
 #define BUFMIN 1000
 #define BUFEXTRA 1000
 
-// MPI tags for comm/batch yes
-// distinct from tags 0 and 1, the only tags any MPI_ANY_SOURCE receive in
-//   SPARTA uses, and every batched receive names its source, so a message
-//   that arrives early can only be matched by the receive meant for it:
-//   MPI keeps messages between one pair of procs with the same tag in order
-// this is what lets augment_data_uniform_batch() drop the MPI_Barrier
-
-enum{TAG_BATCH_COUNT=2,TAG_BATCH_DATA=3};
-
 /* ---------------------------------------------------------------------- */
 
 IrregularKokkos::IrregularKokkos(SPARTA *sparta) : Irregular(sparta)
 {
-  request_send = new MPI_Request[nprocs];
   batch_sendptr = NULL;
 }
 
@@ -64,8 +54,6 @@ IrregularKokkos::IrregularKokkos(SPARTA *sparta) : Irregular(sparta)
 IrregularKokkos::~IrregularKokkos()
 {
   if (copymode) return;
-
-  delete [] request_send;
 
   memoryKK->destroy_kokkos(k_index_send,index_send);
   index_send = NULL;
@@ -250,52 +238,6 @@ int IrregularKokkos::create_data_uniform(int n, int *proclist, int sort)
 }
 
 /* ----------------------------------------------------------------------
-   augment communication plan with new datums of uniform size
-   called after create_procs() created initial plan
-   n = # of datums to send
-   proclist = proc to send each datum to, can include self
-   return total # of datums I will recv
-------------------------------------------------------------------------- */
-
-int IrregularKokkos::augment_data_uniform(int n, int *proclist)
-{
-  int i,m,iproc;
-
-  augment_plan_uniform(n,proclist);
-
-  // tell receivers how many datums I send them
-  // sendmax = largest # of datums I send in a single message
-
-  sendmax = 0;
-  for (i = 0; i < nsend; i++) {
-    MPI_Send(&num_send[i],1,MPI_INT,proc_send[i],0,world);
-    sendmax = MAX(sendmax,num_send[i]);
-  }
-
-  // receive incoming messages
-  // num_recv = # of datums each proc sends me
-  // nrecvdatum = total # of datums I recv
-
-  nrecvdatum = 0;
-  for (i = 0; i < nrecv; i++) {
-    MPI_Recv(&m,1,MPI_INT,MPI_ANY_SOURCE,0,world,status);
-    iproc = status->MPI_SOURCE;
-    num_recv[proc2recv[iproc]] = m;
-    nrecvdatum += m;
-  }
-  nrecvdatum += num_self;
-
-  // barrier to insure all MPI_ANY_SOURCE messages are received
-  // else another proc could proceed to exchange_data() and send to me
-
-  MPI_Barrier(world);
-
-  // return # of datums I will receive
-
-  return nrecvdatum;
-}
-
-/* ----------------------------------------------------------------------
    tally datums per message and build index_send and index_self for
      augment_data_uniform() and augment_data_uniform_batch()
    uses the procs of the plan created by create_procs()
@@ -363,48 +305,6 @@ void IrregularKokkos::augment_plan_uniform(int n, int *proclist)
 }
 
 /* ----------------------------------------------------------------------
-   same as augment_data_uniform(), for package kokkos comm/batch yes
-   counts are exchanged only with the known neighbors of the plan,
-     using non-blocking calls and a dedicated tag, with no MPI_ANY_SOURCE
-     and so no MPI_Barrier, see TAG_BATCH_COUNT
-   must be paired with IrregularKokkos::exchange_uniform() with comm/batch
-     yes, which also uses dedicated tags; other callers (comm serial,
-     Comm::irregular_uniform_neighs()) pair the plan with
-     Irregular::exchange_uniform(), which uses tag 0 and needs the barrier,
-     so they keep using augment_data_uniform()
-   return total # of datums I will recv
-------------------------------------------------------------------------- */
-
-int IrregularKokkos::augment_data_uniform_batch(int n, int *proclist)
-{
-  int i;
-
-  augment_plan_uniform(n,proclist);
-
-  // num_recv[i] = # of datums proc_recv[i] sends me
-
-  for (i = 0; i < nrecv; i++)
-    MPI_Irecv(&num_recv[i],1,MPI_INT,proc_recv[i],TAG_BATCH_COUNT,
-              world,&request[i]);
-
-  // sendmax = largest # of datums I send in a single message
-
-  sendmax = 0;
-  for (i = 0; i < nsend; i++) {
-    MPI_Isend(&num_send[i],1,MPI_INT,proc_send[i],TAG_BATCH_COUNT,
-              world,&request_send[i]);
-    sendmax = MAX(sendmax,num_send[i]);
-  }
-
-  if (nrecv) MPI_Waitall(nrecv,request,MPI_STATUSES_IGNORE);
-  if (nsend) MPI_Waitall(nsend,request_send,MPI_STATUSES_IGNORE);
-
-  nrecvdatum = num_self;
-  for (i = 0; i < nrecv; i++) nrecvdatum += num_recv[i];
-  return nrecvdatum;
-}
-
-/* ----------------------------------------------------------------------
    communicate uniform-size datums via existing plan
    sendbuf = list of datums to send
    nbytes = size of each datum
@@ -419,7 +319,7 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
   d_recvbuf = d_recvbuf_in;
 
   const int gpu_aware_flag = sparta->kokkos->gpu_aware_flag;
-  const int batch_flag = sparta->kokkos->comm_batch_flag;
+  const int batch_flag = comm->commbatchflag;
   const int tag = batch_flag ? TAG_BATCH_DATA : 0;
 
   // received datums occupy bytes [selfbytes,recvbytes) of recvbuf,
@@ -548,7 +448,7 @@ void IrregularKokkos::exchange_uniform(DAT::t_char_1d d_sendbuf_in, int nbytes_i
   // batched sends must complete before d_batchbuf or h_batchbuf is reused
 
   if (batch_flag && nsend)
-    MPI_Waitall(nsend,request_send,MPI_STATUSES_IGNORE);
+    MPI_Waitall(nsend,request_send,status);
 
   // not GPU-aware: queue the copy of only the received bytes to the device
   // no fence: later kernels are ordered after it, host access goes through

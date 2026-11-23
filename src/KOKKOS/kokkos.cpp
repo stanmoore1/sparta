@@ -178,7 +178,6 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   prewrap = 1;
   auto_sync = 1;
   gpu_aware_flag = 1;
-  comm_batch_flag = 1;
 
   if (ngpus > 0) {
     comm_serial = 0;
@@ -281,14 +280,6 @@ void KokkosSPARTA::accelerator(int narg, char **arg)
         gpu_aware_flag = 1;
       } else if (strcmp(arg[iarg+1],"no") == 0) {
         gpu_aware_flag = 0;
-      } else error->all(FLERR,"Illegal package kokkos command");
-      iarg += 2;
-    } else if (strcmp(arg[iarg],"comm/batch") == 0) {
-      if (iarg+2 > narg) error->all(FLERR,"Illegal package kokkos command");
-      if (strcmp(arg[iarg+1],"yes") == 0) {
-        comm_batch_flag = 1;
-      } else if (strcmp(arg[iarg+1],"no") == 0) {
-        comm_batch_flag = 0;
       } else error->all(FLERR,"Illegal package kokkos command");
       iarg += 2;
     } else error->all(FLERR,"Illegal package kokkos command");

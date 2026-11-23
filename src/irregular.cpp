@@ -51,6 +51,7 @@ Irregular::Irregular(SPARTA *sparta) : Pointers(sparta)
   memory->create(proc2recv,nprocs,"irregular:proc2recv");
 
   request = new MPI_Request[nprocs];
+  request_send = new MPI_Request[nprocs];
   status = new MPI_Status[nprocs];
 
   size_send = NULL;
@@ -69,6 +70,8 @@ Irregular::Irregular(SPARTA *sparta) : Pointers(sparta)
   offset_send = NULL;
   bufmax = 0;
   buf = NULL;
+  bufbatchmax = 0;
+  bufbatch = NULL;
 
   copymode = 0;
 }
@@ -85,6 +88,7 @@ Irregular::~Irregular()
   memory->destroy(num_recv);
   memory->destroy(proc2recv);
   delete [] request;
+  delete [] request_send;
   delete [] status;
   memory->destroy(size_send);
   memory->destroy(size_recv);
@@ -94,6 +98,7 @@ Irregular::~Irregular()
   memory->destroy(index_self);
   memory->destroy(offset_send);
   memory->destroy(buf);
+  memory->sfree(bufbatch);
 
   if (datum_nbytes >= 0) MPI_Type_free(&datum_type);
 }
@@ -693,6 +698,51 @@ int Irregular::create_data_variable(int n, int *proclist, int *sizes,
 
 int Irregular::augment_data_uniform(int n, int *proclist)
 {
+  int i,m,iproc;
+
+  augment_plan_uniform(n,proclist);
+
+  // tell receivers how many datums I send them
+  // sendmax = largest # of datums I send in a single message
+
+  sendmax = 0;
+  for (i = 0; i < nsend; i++) {
+    MPI_Send(&num_send[i],1,MPI_INT,proc_send[i],0,world);
+    sendmax = MAX(sendmax,num_send[i]);
+  }
+
+  // receive incoming messages
+  // num_recv = # of datums each proc sends me
+  // nrecvdatum = total # of datums I recv
+
+  nrecvdatum = 0;
+  for (i = 0; i < nrecv; i++) {
+    MPI_Recv(&m,1,MPI_INT,MPI_ANY_SOURCE,0,world,status);
+    iproc = status->MPI_SOURCE;
+    num_recv[proc2recv[iproc]] = m;
+    nrecvdatum += m;
+  }
+  nrecvdatum += num_self;
+
+  // barrier to insure all MPI_ANY_SOURCE messages are received
+  // else another proc could proceed to exchange_data() and send to me
+
+  MPI_Barrier(world);
+
+  // return # of datums I will receive
+
+  return nrecvdatum;
+}
+
+/* ----------------------------------------------------------------------
+   set up the send side of an augmented plan for N datums:
+     num_send, num_self, index_send, index_self
+   shared by augment_data_uniform() and augment_data_uniform_batch()
+   virtual: IrregularKokkos keeps index_send/index_self in DualViews
+------------------------------------------------------------------------- */
+
+void Irregular::augment_plan_uniform(int n, int *proclist)
+{
   int i,m,iproc,isend;
 
   // tally count of messages to each proc in num_send and num_self
@@ -745,36 +795,47 @@ int Irregular::augment_data_uniform(int n, int *proclist)
       index_send[work2[isend]++] = i;
     }
   }
+}
 
-  // tell receivers how many datums I send them
+/* ----------------------------------------------------------------------
+   same as augment_data_uniform(), for global comm/batch yes
+   counts are exchanged only with the known neighbors of the plan,
+     using non-blocking calls and a dedicated tag, with no MPI_ANY_SOURCE
+     and so no MPI_Barrier, see TAG_BATCH_COUNT
+   the data must then also be exchanged with comm/batch yes, which uses a
+     dedicated tag too: tag 0 data from a proc that has run ahead could be
+     matched by an MPI_ANY_SOURCE receive with tag 0
+   return total # of datums I will recv
+------------------------------------------------------------------------- */
+
+int Irregular::augment_data_uniform_batch(int n, int *proclist)
+{
+  int i;
+
+  augment_plan_uniform(n,proclist);
+
+  // num_recv[i] = # of datums proc_recv[i] sends me
+
+  for (i = 0; i < nrecv; i++)
+    MPI_Irecv(&num_recv[i],1,MPI_INT,proc_recv[i],TAG_BATCH_COUNT,
+              world,&request[i]);
+
   // sendmax = largest # of datums I send in a single message
 
   sendmax = 0;
   for (i = 0; i < nsend; i++) {
-    MPI_Send(&num_send[i],1,MPI_INT,proc_send[i],0,world);
+    MPI_Isend(&num_send[i],1,MPI_INT,proc_send[i],TAG_BATCH_COUNT,
+              world,&request_send[i]);
     sendmax = MAX(sendmax,num_send[i]);
   }
 
-  // receive incoming messages
-  // num_recv = # of datums each proc sends me
-  // nrecvdatum = total # of datums I recv
+  // status, not MPI_STATUSES_IGNORE, which the MPI STUBS do not define
 
-  nrecvdatum = 0;
-  for (i = 0; i < nrecv; i++) {
-    MPI_Recv(&m,1,MPI_INT,MPI_ANY_SOURCE,0,world,status);
-    iproc = status->MPI_SOURCE;
-    num_recv[proc2recv[iproc]] = m;
-    nrecvdatum += m;
-  }
-  nrecvdatum += num_self;
+  if (nrecv) MPI_Waitall(nrecv,request,status);
+  if (nsend) MPI_Waitall(nsend,request_send,status);
 
-  // barrier to insure all MPI_ANY_SOURCE messages are received
-  // else another proc could proceed to exchange_data() and send to me
-
-  MPI_Barrier(world);
-
-  // return # of datums I will receive
-
+  nrecvdatum = num_self;
+  for (i = 0; i < nrecv; i++) nrecvdatum += num_recv[i];
   return nrecvdatum;
 }
 
@@ -815,6 +876,11 @@ void Irregular::exchange_uniform(char *sendbuf, int nbytes, char *recvbuf)
 
   MPI_Datatype datum_type = uniform_datum_type(nbytes);
 
+  // global comm/batch yes: dedicated tag, see TAG_BATCH_DATA
+
+  const int batch = comm->commbatchflag;
+  const int tag = batch ? TAG_BATCH_DATA : 0;
+
   // enable send/recv buf to be larger than 2 GB
 
   bigint offset;
@@ -824,8 +890,47 @@ void Irregular::exchange_uniform(char *sendbuf, int nbytes, char *recvbuf)
   offset = (bigint)num_self*nbytes;
   for (int irecv = 0; irecv < nrecv; irecv++) {
     MPI_Irecv(&recvbuf[offset],num_recv[irecv],datum_type,
-              proc_recv[irecv],0,world,&request[irecv]);
+              proc_recv[irecv],tag,world,&request[irecv]);
     offset += (bigint)num_recv[irecv]*nbytes;
+  }
+
+  // batched: pack every message into bufbatch, each one a contiguous slice
+  //   in index_send order, and post them all with MPI_Isend, so their
+  //   latencies overlap instead of one blocking MPI_Send after another
+  // bufbatch only grows, with headroom, so it is not reallocated every step
+
+  if (batch) {
+    bigint nsendtotal = 0;
+    for (int isend = 0; isend < nsend; isend++) nsendtotal += num_send[isend];
+    bigint batchbytes = nsendtotal*nbytes;
+    if (batchbytes > bufbatchmax) {
+      memory->sfree(bufbatch);
+      bufbatchmax = static_cast<bigint> (BUFFACTOR*batchbytes);
+      bufbatch = (char *) memory->smalloc(bufbatchmax,"irregular:bufbatch");
+    }
+
+    n = 0;
+    bigint boffset = 0;
+    for (int isend = 0; isend < nsend; isend++) {
+      count = num_send[isend];
+      char *msg = &bufbatch[boffset];
+      for (i = 0; i < count; i++) {
+        m = index_send[n++];
+        memcpy(&msg[(bigint)i*nbytes],&sendbuf[(bigint)m*nbytes],nbytes);
+      }
+      MPI_Isend(msg,count,datum_type,proc_send[isend],tag,world,
+                &request_send[isend]);
+      boffset += (bigint)count*nbytes;
+    }
+
+    for (i = 0; i < num_self; i++) {
+      m = index_self[i];
+      memcpy(&recvbuf[(bigint)i*nbytes],&sendbuf[(bigint)m*nbytes],nbytes);
+    }
+
+    if (nrecv) MPI_Waitall(nrecv,request,status);
+    if (nsend) MPI_Waitall(nsend,request_send,status);
+    return;
   }
 
   // reallocate buf for largest send if necessary
@@ -849,7 +954,7 @@ void Irregular::exchange_uniform(char *sendbuf, int nbytes, char *recvbuf)
       m = index_send[n++];
       memcpy(&buf[(bigint)i*nbytes],&sendbuf[(bigint)m*nbytes],nbytes);
     }
-    MPI_Send(buf,count,datum_type,proc_send[isend],0,world);
+    MPI_Send(buf,count,datum_type,proc_send[isend],tag,world);
   }
 
   // copy datums to self, put at beginning of recvbuf
