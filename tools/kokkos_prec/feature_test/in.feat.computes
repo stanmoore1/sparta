@@ -1,0 +1,30 @@
+# per grid cell computes reduced to global values (compute_per_grid paths)
+seed               12345
+dimension          3
+global             gridcut 1.0e-5 comm/sort yes
+boundary           rr rr rr
+create_box         0 0.0001 0 0.0001 0 0.0001
+create_grid        10 10 10
+balance_grid       rcb part
+species            6SpeciesAir.species N2 O2 NO N O Ar
+mixture            air N2 O2 NO N O Ar vstream 100.0 50.0 0.0 temp 1000.0 trot 1000.0 tvib 1000.0
+global             nrho 7.07043E22 fnum 7.07043E6
+collide            vss air 6SpeciesAirII.vss
+collide_modify     rotate smooth vibrate smooth
+create_particles   air n 20000 twopass
+compute            g grid all air n nrho mass massrho u v w usq vsq wsq ke temp erot trot evib tvib pxrho pyrho pzrho
+compute            th thermal/grid all air temp press
+compute            ef eflux/grid all air heatx heaty heatz
+compute            pf pflux/grid all air momxx momyy momzz
+compute            so sonine/grid all air a x 3 b xy 3
+compute            tv tvib/grid all air
+compute            pr property/grid all xc yc zc
+compute            rg reduce ave c_g[1] c_g[2] c_g[3] c_g[4] c_g[5] c_g[6] c_g[7] c_g[8] c_g[9] c_g[10] c_g[11] c_g[12] c_g[13] c_g[14] c_g[15] c_g[16] c_g[17] c_g[18] c_g[19] 
+compute            rt reduce ave c_th[1] c_th[2] c_ef[1] c_ef[2] c_ef[3] c_pf[1] c_pf[2] c_pf[3]
+compute            rs reduce ave c_so[1] c_so[2] c_so[3] c_so[4] c_so[5] c_so[6]
+compute            rv reduce ave c_tv[1]
+compute            rp reduce ave c_pr[1] c_pr[2] c_pr[3]
+stats              20
+stats_style        step np ncoll c_rg[1] c_rg[2] c_rg[3] c_rg[4] c_rg[5] c_rg[6] c_rg[7] c_rg[8] c_rg[9] c_rg[10] c_rg[11] c_rg[12] c_rg[13] c_rg[14] c_rg[15] c_rg[16] c_rg[17] c_rg[18] c_rg[19]  c_rt[1] c_rt[2] c_rt[3] c_rt[4] c_rt[5] c_rt[6] c_rt[7] c_rt[8]  c_rs[1] c_rs[2] c_rs[3] c_rs[4] c_rs[5] c_rs[6]  c_rv c_rp[1] c_rp[2] c_rp[3]
+timestep           7.00E-9
+run                400

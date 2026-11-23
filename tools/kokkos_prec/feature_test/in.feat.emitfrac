@@ -1,0 +1,39 @@
+# fix emit/surf with perspecies no and custom per-surf species fractions
+#   (custom fractions s_name): the KOKKOS version crashed here, it never
+#   allocated the fractions on the device.  Emits N 0.8 / O 0.2 from a circle
+#   into an empty box; the gas fractions must match the non-KOKKOS code
+seed                12345
+dimension           2
+global              gridcut 0.0 comm/sort yes
+
+boundary            o r p
+
+create_box          0 10 0 10 -0.5 0.5
+create_grid         10 10 1
+balance_grid        rcb cell
+
+global              nrho 1.0 fnum 0.001
+
+species             air.species N O
+mixture             air N O vstream 10.0 0 0 temp 10.0
+
+read_surf           data.circle
+surf_collide        1 diffuse 300.0 0.0
+surf_modify         all collide 1
+
+collide             vss air air_emit.vss
+
+variable            fracN equal 0.8
+variable            fracO equal 0.2
+custom              surf create frac float 2 set frac[1] v_fracN all NULL set frac[2] v_fracO all NULL
+
+fix                 in emit/surf air all normal yes perspecies no custom fractions s_frac twopass
+
+compute             cnt count N O
+variable            fN equal c_cnt[1]/(np+1.0e-30)
+variable            fO equal c_cnt[2]/(np+1.0e-30)
+
+timestep            0.0001
+stats               50
+stats_style         step cpu np nattempt ncoll nscoll c_cnt[1] c_cnt[2] v_fN v_fO
+run                 1000

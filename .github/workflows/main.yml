@@ -222,6 +222,14 @@ jobs:
         python3 ../tools/kokkos_prec/conservation_test/run_conservation.py \
           --spa "mpirun -np 2 $PWD/src/spa_kokkos_mpi_only -k on -sf kk" \
           --prec ${{ matrix.prec }} --out conservation_${{ matrix.prec }}
+
+    - name: Feature tests
+      # KOKKOS device code that no example exercises, compared with the
+      # non-KOKKOS code (e.g. fix emit/surf custom fractions)
+      run: |
+        cd build
+        python3 ../tools/kokkos_prec/feature_test/run_features.py \
+          --spa "$PWD/src/spa_kokkos_mpi_only" --out features_${{ matrix.prec }}
   bigbig:
     runs-on: ubuntu-24.04
     steps:

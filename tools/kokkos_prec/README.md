@@ -56,6 +56,9 @@ parameters (`CollideVSS::Params`) have KK precision device copies
 | `run_examples.py`     | runs a list of example inputs (default `ci_examples.txt`) and collects their logs, used by the CI job |
 | `conversion_test/`    | exact check of the host/device precision conversion of particle data (`check_conversion.py`) |
 | `conservation_test/`  | conservation of mass, momentum and energy, and the seed command reaching the KOKKOS random pools (`run_conservation.py`) |
+| `feature_test/`       | inputs for KOKKOS device code no example exercises (e.g. `fix emit/surf` custom fractions), each compared with the non-KOKKOS code (`run_features.py`) |
+| `restart_test/`       | restart files written in each precision and read in each (`run_restart.py`) |
+| `ensemble_test/`      | seed ensembles of 16 example cases, reduced precision means t-tested against double (`run_ensembles.py`, a few hours, not in CI) |
 | `transformview_test/` | unit test of the TransformView sync state machine (ctest `KokkosTransformView`) |
 | `kkprec.py`           | shared lexer: comments/strings, brace matching, device regions |
 
@@ -168,6 +171,24 @@ reach the KOKKOS random pools (same seed reproduces a run, a different one
 changes it).  The CI `kokkos-precision` job runs it:
 
     run_conservation.py --spa "mpirun -np 2 spa_kokkos -k on -sf kk" --prec mixed
+
+Device code that no example exercises is compared with the non-KOKKOS
+code by `feature_test/`, any precision:
+
+    run_features.py --spa spa_kokkos [--np 4]
+
+Restart files are always double precision; `restart_test/` writes one in
+each precision and reads it in each, checking that every continuation
+agrees with an uninterrupted run:
+
+    run_restart.py --spa double=spa_double --spa mixed=spa_mixed --spa single=spa_single
+
+A single reduced precision run is one noisy sample, so a statistical
+difference from one double precision run is weak evidence.  Before
+calling a difference a bug, compare seed ensembles with `ensemble_test/`
+(the `seed` command varies every KOKKOS random stream):
+
+    run_ensembles.py --spa double=spa_double --spa mixed=spa_mixed --seeds 8 [dir/in.NAME ...]
 
 The TransformView sync state machine (every host/Kokkos host/device
 transition, resize, copies, the struct conversion, the abort on concurrent

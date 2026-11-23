@@ -1,0 +1,22 @@
+# fix ave/histo and ave/histo/weight on particle and grid values
+seed               12345
+dimension          3
+global             gridcut 1.0e-5 comm/sort yes
+boundary           rr rr rr
+create_box         0 0.0001 0 0.0001 0 0.0001
+create_grid        10 10 10
+balance_grid       rcb part
+species            ar.species Ar
+mixture            air Ar vstream 100.0 0.0 0.0 temp 273.15
+global             nrho 5.65634E23 fnum 7.07043E6
+collide            vss air ar.vss
+create_particles   air n 40000 twopass
+compute            t thermal/grid all air temp
+fix                h1 ave/histo 10 10 100 -1000 1000 20 vx vy vz mode vector
+fix                h2 ave/histo 10 10 100 0 600 20 c_t[1] mode vector
+compute            gn grid all air n
+fix                h3 ave/histo/weight 10 10 100 0 600 20 c_t[1] c_gn[1] mode vector
+stats              100
+stats_style        step np ncoll f_h1[1] f_h1[2] f_h1[3] f_h1[4] f_h2[1] f_h2[3] f_h2[4] f_h3[1] f_h3[3] f_h3[4]
+timestep           2.00E-9
+run                1000
