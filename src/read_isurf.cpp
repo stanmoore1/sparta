@@ -174,6 +174,16 @@ void ReadISurf::command(int narg, char **arg)
   char *sgroupID = NULL;
   if (sgrouparg) sgroupID = arg[7+sgrouparg];
 
+  // store_corners() exchanges corner points with neighbor ghost cells
+  // ghost cells may not exist, e.g. if global gridcut was re-issued after
+  //   the grid was created, so acquire them if needed
+
+  if (!grid->exist_ghost) {
+    grid->acquire_ghosts();
+    grid->find_neighbors();
+    comm->reset_neighbors();
+  }
+
   ablate->store_corners(nx,ny,nz,corner,xyzsize,
                         cvalues,NULL,tvalues,thresh,sgroupID,pushflag);
 
