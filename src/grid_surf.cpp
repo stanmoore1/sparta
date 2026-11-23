@@ -1590,6 +1590,7 @@ void Grid::clear_surf()
       if (icell != nlocal-1) {
         memcpy(&cells[icell],&cells[nlocal-1],sizeof(ChildCell));
         memcpy(&cinfo[icell],&cinfo[nlocal-1],sizeof(ChildInfo));
+        if (ncustom) copy_custom(nlocal-1,icell);
         if (collide && collide->ngroups) collide->copy_grid_one(nlocal-1,icell);
         if (modify->n_pergrid) modify->copy_grid_one(nlocal-1,icell);
       }
@@ -1692,6 +1693,7 @@ void Grid::clear_surf_implicit()
       if (icell != nlocal-1) {
         memcpy(&cells[icell],&cells[nlocal-1],sizeof(ChildCell));
         memcpy(&cinfo[icell],&cinfo[nlocal-1],sizeof(ChildInfo));
+        if (ncustom) copy_custom(nlocal-1,icell);
       }
       nlocal--;
     } else {
