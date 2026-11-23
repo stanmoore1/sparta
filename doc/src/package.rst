@@ -17,7 +17,7 @@ package command
   
        kokkos args = keyword value ...
          zero or more keyword/value pairs may be appended
-         keywords = comm or react/extra or react/retry or gpu/aware
+         keywords = comm or react/extra or react/retry or gpu/aware or plist
            comm value = threaded or serial
              threaded = perform pack/unpack using KOKKOS (e.g. on GPU or using OpenMP) (default for GPUs)
              serial = perform communication pack/unpack in non-KOKKOS mode (default for CPUs)
@@ -29,6 +29,10 @@ package command
            gpu/aware = yes or no
              yes = use GPU-aware MPI (default)
              no = do not use GPU-aware MPI
+           plist value = dense or flat or sliced
+             dense = store per-cell particle lists in a 2d array (default)
+             flat = store per-cell particle lists back to back in a 1d array
+             sliced = store per-cell particle lists in a 1d array, interleaved in blocks of 32 cells
 
 
 
@@ -40,6 +44,7 @@ package command
    package kokkos comm serial
    package kokkos comm threaded react/retry yes
    package kokkos gpu/aware no
+   package kokkos plist flat
 
 **Description:**
 
@@ -122,6 +127,33 @@ copying the data to the host CPU. However GPU-aware MPI is not supported on
 all systems, which can lead to segmentation faults and would require 
 using a value of *off*\ .
 
+The *plist* keyword chooses how the list of particles in each grid
+cell is stored. With *dense*\ , the lists are rows of a 2d array, each
+as long as the fullest cell plus padding, so memory scales as the
+number of grid cells times the largest per-cell particle count. When
+particle counts per cell vary widely, as they do after grid adaptation
+refines cells near a surface, this can be many times the memory of the
+particles themselves, and can exhaust GPU memory. With *flat* and
+*sliced*\ , memory instead scales with the number of particles. With
+*flat*\ , each cell's list is sized from its own particle count and the
+lists are stored back to back. With *sliced*\ , consecutive cells are
+grouped in blocks of 32, each block is sized from its fullest cell,
+and the lists in a block are interleaved, so that GPU threads working
+on neighboring cells access neighboring memory. The per-cell scratch
+arrays used by collisions are laid out the same way as the particle
+list.
+
+All three settings give the same results; with a single thread on
+CPUs they are bitwise identical. On GPUs, *sliced* is
+typically as fast as *dense* on uniform grids, using slightly more
+memory than *flat*\ . *Flat* can be faster than *sliced* for adapted
+grids with near-neighbor collisions (see the
+:doc:`collide\_modify <collide_modify>` nearcp option), where each thread
+scans many particles in its own cell. When reactions are defined, each
+cell's list in the *flat* and *sliced* layouts is padded by the
+*react/extra* factor plus a few slots, and the padding is increased
+automatically if a cell overflows and *react/retry* is set to *yes*\ .
+
 
 ----------
 
@@ -141,7 +173,7 @@ with the KOKKOS package.  See the `Making SPARTA <Section_start.html#start_3>`_ 
 **Default:**
 
 For the KOKKOS package, the option defaults are react/extra = 1.1,
-react/retry = no, and gpu/aware yes. For CPUs: comm = serial, and for
+react/retry = no, gpu/aware yes, and plist = dense. For CPUs: comm = serial, and for
 GPUs: comm = threaded.  These settings are made automatically by the
 required "-k on" `command-line switch <Section_start.html#start_7>`_. You
 can change them by using the package kokkos command in your input script

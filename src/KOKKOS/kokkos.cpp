@@ -218,6 +218,8 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
 
   react_retry_flag = 0;
   react_extra = 1.1;
+  plist_flat = 0;
+  plist_cshift = 0;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -272,6 +274,18 @@ void KokkosSPARTA::accelerator(int narg, char **arg)
     } else if (strcmp(arg[iarg],"react/extra") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal package kokkos command");
       react_extra = atof(arg[iarg+1]);
+      iarg += 2;
+    } else if (strcmp(arg[iarg],"plist") == 0) {
+      if (iarg+2 > narg) error->all(FLERR,"Illegal package kokkos command");
+      if (strcmp(arg[iarg+1],"dense") == 0) {
+        plist_flat = 0;
+      } else if (strcmp(arg[iarg+1],"flat") == 0) {
+        plist_flat = 1;
+        plist_cshift = 0;
+      } else if (strcmp(arg[iarg+1],"sliced") == 0) {
+        plist_flat = 1;
+        plist_cshift = 5;
+      } else error->all(FLERR,"Illegal package kokkos command");
       iarg += 2;
     } else if ((strcmp(arg[iarg],"gpu/aware") == 0)
                || (strcmp(arg[iarg],"gpu/direct") == 0)) { // gpu/direct is deprecated

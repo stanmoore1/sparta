@@ -103,6 +103,8 @@ GridKokkos::~GridKokkos()
 
 /* ----------------------------------------------------------------------
    insure cells and cinfo can hold N and M new cells respectively
+   grow geometrically: adapt adds cells one at a time, and each grow
+     syncs and resizes the whole DualView, O(N^2) for a fixed increment
 ------------------------------------------------------------------------- */
 
 void GridKokkos::grow_cells(int n, int m)
@@ -113,7 +115,7 @@ void GridKokkos::grow_cells(int n, int m)
 
     if (nlocal+nghost+n >= maxcell) {
       const int oldmax = maxcell;
-      while (maxcell < nlocal+nghost+n) maxcell += DELTA;
+      while (maxcell < nlocal+nghost+n) maxcell += MAX(DELTA,maxcell/2);
       if (cells == NULL) {
         MemKK::realloc_kokkos(k_cells,"grid:cells",maxcell);
         memset(k_cells.view_host().data(),0,maxcell*sizeof(ChildCell));
@@ -128,7 +130,7 @@ void GridKokkos::grow_cells(int n, int m)
     }
 
     if (nlocal+m >= maxlocal) {
-      while (maxlocal < nlocal+m) maxlocal += DELTA;
+      while (maxlocal < nlocal+m) maxlocal += MAX(DELTA,maxlocal/2);
       if (cinfo == NULL) {
         MemKK::realloc_kokkos(k_cinfo,"grid:cinfo",maxlocal);
         memset(k_cinfo.view_host().data(),0,maxlocal*sizeof(ChildInfo));
@@ -152,7 +154,7 @@ void GridKokkos::grow_pcells()
     Grid::grow_pcells();
   } else {
 
-    maxparent += DELTA;
+    maxparent += MAX(DELTA,maxparent/2);
     if (pcells == NULL)
       MemKK::realloc_kokkos(k_pcells,"grid:pcells",maxparent);
     else {
@@ -176,7 +178,7 @@ void GridKokkos::grow_sinfo(int n)
   } else {
 
     if (nsplitlocal+nsplitghost+n >= maxsplit) {
-      while (maxsplit < nsplitlocal+nsplitghost+n) maxsplit += DELTA;
+      while (maxsplit < nsplitlocal+nsplitghost+n) maxsplit += MAX(DELTA,maxsplit/2);
       if (sinfo == NULL) {
         MemKK::realloc_kokkos(k_sinfo,"grid:sinfo",maxsplit);
         memset(k_sinfo.view_host().data(),0,maxsplit*sizeof(SplitInfo));
@@ -554,7 +556,7 @@ bigint GridKokkos::memory_usage()
   bytes += MemKK::memory_usage(d_csubs.row_map);
 
   bytes += MemKK::memory_usage(d_cellcount);
-  bytes += MemKK::memory_usage(d_plist);
+  bytes += d_plist.memory_usage();
   bytes += MemKK::memory_usage(d_halo_index);
 
   return bytes;

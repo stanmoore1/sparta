@@ -28,6 +28,7 @@
 #include "memory_kokkos.h"
 #include "error.h"
 #include "kokkos.h"
+#include "react.h"
 #include "sparta_masks.h"
 #include <type_traits>
 
@@ -45,6 +46,7 @@ enum{COPYPARTICLELIST,FIXEDMEMORY};
 
 #define CELLCOUNT_MARGIN 4
 #define CELLCOUNT_GROWTH 1.2
+#define FLAT_PAD 4                // flat layout: fixed slack per cell with reactions
 
 /* ----------------------------------------------------------------------
    spare slots to keep above the fullest cell's count
@@ -311,16 +313,7 @@ void ParticleKokkos::sort_kokkos()
   // cannot silently leave the padding above sized for the other layout
 
   const bool cell_contiguous =
-    std::is_same<decltype(d_plist)::array_layout,Kokkos::LayoutLeft>::value;
-
-  maxcellcount =
-    MAX(maxcellcount,cellcount_target(0,nlocal,ngrid,cell_contiguous));
-
-  if (ngrid > int(d_plist.extent(0)) || maxcellcount > int(d_plist.extent(1))) {
-    d_plist = {};
-    MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
-    d_plist = grid_kk->d_plist;
-  }
+    std::is_same<decltype(d_plist.d_dense)::array_layout,Kokkos::LayoutLeft>::value;
 
   this->sync(Device,PARTICLE_MASK);
   d_particles = k_particles.view_device();
@@ -331,49 +324,105 @@ void ParticleKokkos::sort_kokkos()
     }
   }
 
-  // icell = global cell the particle is in
+  if (!sparta->kokkos->plist_flat) {
+    maxcellcount =
+      MAX(maxcellcount,cellcount_target(0,nlocal,ngrid,cell_contiguous));
 
-  // Cannot grow a Kokkos view in a parallel loop, so
-  //  if the capacity of the list is exceeded, count the size
-  //  needed, reallocate on the host, and then
-  //  repeat the parallel loop again
+    if (grid_kk->d_plist.flat || ngrid > int(d_plist.d_dense.extent(0)) ||
+        maxcellcount > int(d_plist.d_dense.extent(1))) {
+      d_plist = {};
+      grid_kk->d_plist.realloc_dense(ngrid,maxcellcount);
+      d_plist = grid_kk->d_plist;
+    }
 
-  int resize = 1;
-  while (resize) {
-    resize = 0;
+    // icell = global cell the particle is in
+
+    // Cannot grow a Kokkos view in a parallel loop, so
+    //  if the capacity of the list is exceeded, count the size
+    //  needed, reallocate on the host, and then
+    //  repeat the parallel loop again
+
+    int resize = 1;
+    while (resize) {
+      resize = 0;
+
+      copymode = 1;
+      if (sparta->kokkos->need_atomics) {
+        if (reorder_flag && reorder_scheme == COPYPARTICLELIST)
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<1,1> >(0,nlocal),*this);
+        else
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<1,0> >(0,nlocal),*this);
+      } else {
+        if (reorder_flag && reorder_scheme == COPYPARTICLELIST)
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<0,1> >(0,nlocal),*this);
+        else
+          Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<0,0> >(0,nlocal),*this);
+      }
+      copymode = 0;
+
+      Kokkos::deep_copy(h_resize,d_resize);
+      resize = h_resize();
+
+      if (resize) {
+        Kokkos::deep_copy(d_cellcount,0);
+
+        // grow with headroom, not to exactly what this step needed
+
+        maxcellcount =
+          MAX(cellcount_target(resize,nlocal,ngrid,cell_contiguous),
+              static_cast<int> (maxcellcount*CELLCOUNT_GROWTH));
+
+        d_plist = {};
+        grid_kk->d_plist.realloc_dense(ngrid,maxcellcount);
+        d_plist = grid_kk->d_plist;
+
+        Kokkos::deep_copy(d_resize,0);
+      }
+    }
+
+  } else {
+    // flat layout: count, lay the cells out back to back, then fill
+    //   the count pass records each particle's index within its cell, so
+    //   the fill needs no second round of atomics and no resize retry
+    // with reactions, collisions append created particles to a cell's list,
+    //   so each cell gets react/extra proportional slack plus a fixed pad,
+    //   which CollideVSSKokkos raises if a cell overflows
+
+    if (int(d_slot.extent(0)) < nlocal) {
+      d_slot = {};
+      d_pcell = {};
+      MemKK::realloc_kokkos(d_slot,"particle:slot",d_particles.extent(0));
+      MemKK::realloc_kokkos(d_pcell,"particle:pcell",d_particles.extent(0));
+    }
 
     copymode = 1;
-    if (sparta->kokkos->need_atomics) {
-      if (reorder_flag && reorder_scheme == COPYPARTICLELIST)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<1,1> >(0,nlocal),*this);
-      else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<1,0> >(0,nlocal),*this);
-    } else {
-      if (reorder_flag && reorder_scheme == COPYPARTICLELIST)
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<0,1> >(0,nlocal),*this);
-      else
-        Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleSort<0,0> >(0,nlocal),*this);
-    }
+    if (sparta->kokkos->need_atomics)
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleCount<1> >(0,nlocal),*this);
+    else
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleCount<0> >(0,nlocal),*this);
     copymode = 0;
 
-    Kokkos::deep_copy(h_resize,d_resize);
-    resize = h_resize();
+    double extra = 1.0;
+    if (react) {
+      extra = MAX(1.0,sparta->kokkos->react_extra);
+      grid_kk->d_plist.pad = MAX(grid_kk->d_plist.pad,FLAT_PAD);
+    } else grid_kk->d_plist.pad = 0;
 
-    if (resize) {
-      Kokkos::deep_copy(d_cellcount,0);
+    d_plist = {};
+    grid_kk->d_plist.build_flat(d_cellcount,ngrid,extra,
+                                sparta->kokkos->plist_cshift);
+    if (grid_kk->d_plist.nslot < 0)
+      error->one(FLERR,"Per-processor particle list is too big for flat layout");
+    d_plist = grid_kk->d_plist;
 
-      // grow with headroom, not to exactly what this step needed
+    // the order within a cell is unspecified with atomics, in either layout
 
-      maxcellcount =
-        MAX(cellcount_target(resize,nlocal,ngrid,cell_contiguous),
-            static_cast<int> (maxcellcount*CELLCOUNT_GROWTH));
-
-      d_plist = {};
-      MemKK::realloc_kokkos(grid_kk->d_plist,"particle:plist",ngrid,maxcellcount);
-      d_plist = grid_kk->d_plist;
-
-      Kokkos::deep_copy(d_resize,0);
-    }
+    copymode = 1;
+    if (reorder_flag && reorder_scheme == COPYPARTICLELIST)
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleFillFlat<1> >(0,nlocal),*this);
+    else
+      Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagParticleFillFlat<0> >(0,nlocal),*this);
+    copymode = 0;
   }
 
   if (reorder_flag) {
@@ -589,7 +638,7 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
     d_cellcount[icell]++;
   }
 
-  if (j >= int(d_plist.extent(1)))
+  if (j >= d_plist.capacity(icell))
     d_resize() = MAX(d_resize(),j+1);
   else {
     d_plist(icell,j) = i;
@@ -597,6 +646,28 @@ void ParticleKokkos::operator()(TagParticleSort<NEED_ATOMICS,REORDER_FLAG>, cons
     if (REORDER_FLAG)
       d_offsets_part[i] = j;
   }
+}
+
+template<int NEED_ATOMICS>
+KOKKOS_INLINE_FUNCTION
+void ParticleKokkos::operator()(TagParticleCount<NEED_ATOMICS>, const int &i) const
+{
+  const int icell = d_particles[i].icell;
+  d_pcell[i] = icell;
+  if (NEED_ATOMICS)
+    d_slot[i] = Kokkos::atomic_fetch_add(&d_cellcount[icell],1);
+  else
+    d_slot[i] = d_cellcount[icell]++;
+}
+
+template<int REORDER_FLAG>
+KOKKOS_INLINE_FUNCTION
+void ParticleKokkos::operator()(TagParticleFillFlat<REORDER_FLAG>, const int &i) const
+{
+  const int icell = d_pcell[i];
+  const int j = d_slot[i];
+  d_plist(icell,j) = i;
+  if (REORDER_FLAG) d_offsets_part[i] = j;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -1156,6 +1227,8 @@ bigint ParticleKokkos::memory_usage()
   bytes += MemKK::memory_usage(d_sorted);
   bytes += MemKK::memory_usage(d_sorted_id);
   bytes += MemKK::memory_usage(d_offsets_part);
+  bytes += MemKK::memory_usage(d_slot);
+  bytes += MemKK::memory_usage(d_pcell);
 
   return bytes;
 }

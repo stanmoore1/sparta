@@ -32,6 +32,8 @@ class KokkosSPARTA : protected Pointers {
   int gpu_aware_flag;
   int react_retry_flag;
   double react_extra;
+  int plist_flat;          // 0 = dense 2d per-cell particle list, 1 = flat or sliced
+  int plist_cshift;        // flat: log2 of cells per chunk, 0 = CSR
 
   static int is_finalized;
 

@@ -633,7 +633,11 @@ void FixAveGridKokkos::grow_percell(int nnew)
   }
 
   if (nglocal+nnew < maxgrid) return;
-  while (maxgrid < nglocal+nnew) maxgrid += DELTAGRID;
+
+  // grow geometrically: adapt adds cells one at a time, and each grow
+  //   reallocates and syncs every per-cell array
+
+  while (maxgrid <= nglocal+nnew) maxgrid += MAX(DELTAGRID,maxgrid/2);
   int n = maxgrid;
 
   // resize with the device as the source of truth, then refresh the host

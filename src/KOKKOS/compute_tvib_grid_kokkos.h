@@ -24,6 +24,7 @@ ComputeStyle(tvib/grid/kk,ComputeTvibGridKokkos)
 #include "compute_tvib_grid.h"
 #include "kokkos_base.h"
 #include "kokkos_type.h"
+#include "cell_plist_kokkos.h"
 #include "particle_kokkos.h"
 
 namespace SPARTA_NS {
@@ -76,7 +77,7 @@ class ComputeTvibGridKokkos : public ComputeTvibGrid, public KokkosBase {
   DAT::t_int_2d d_s2g;
 
   DAT::t_int_1d d_cellcount;
-  DAT::t_int_2d d_plist;
+  CellPList d_plist;
 
 
   DAT::t_int_2d d_groupspecies;

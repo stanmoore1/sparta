@@ -93,6 +93,12 @@ enum{CONSTANT,VARIABLE};
 
 #define GROWREQUEST(n,delta) ((n) + ((delta) > (n)/2 ? (delta) : (n)/2))
 
+// a cell that overflows its plist/elist slots requests GROWREQUEST of its
+//   capacity.  dense: capacity(icell) is the row width, as before.  flat and
+//   sliced: the retry regrows the list whenever the request exceeds the
+//   current maxcellcount (maxelectron starts at 0 there), so the plist
+//   request is taken from at least maxcellcount
+
 #define EPSZERO 1.0e-14
 #define BIG 1.0e20
 
@@ -125,6 +131,7 @@ CollideVSSKokkos::CollideVSSKokkos(SPARTA *sparta, int narg, char **arg) :
   nglist_collision = nglist_reaction = 0;
   nglist_coll_tally = nglist_react_tally = 0;
   egroup = -1;
+  elist_extra = 0;
 
   // use 1D view for scalars to reduce GPU memory operations
 
@@ -817,8 +824,7 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
   copymode = 1;
 
   if (NEARCP) {
-    if (int(d_nn_last_partner.extent(0)) < nglocal || int(d_nn_last_partner.extent(1)) < d_plist.extent(1))
-      MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,d_plist.extent(1));
+    d_nn_last_partner.resize_like(d_plist,nglocal,"collide:nn_last_partner");
     //Kokkos::parallel_for(Kokkos::RangePolicy<DeviceType, TagCollideZeroNN>(0,nglocal),*this);
   }
 
@@ -854,12 +860,12 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
 
     maxcellcount = particle_kk->get_maxcellcount();
     int maxcellcount_extra = maxcellcount*extra_factor;
-    if (d_plist.extent(1) < maxcellcount_extra) {
+    if (!d_plist.flat && d_plist.d_dense.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      grid_kk->d_plist.grow_dense(nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       if (NEARCP)
-        MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount_extra);
+        d_nn_last_partner.resize_like(d_plist,nglocal,"collide:nn_last_partner");
     }
 
     bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
@@ -980,15 +986,18 @@ template < int NEARCP, int GASTALLY > void CollideVSSKokkos::collisions_one(COLL
         d_dellist = k_dellist.view_device();
       }
 
+      // flat layout: regrow only if a cell overflowed its capacity
+      const int maxcellcount_old = maxcellcount;
       maxcellcount = h_maxcellcount();
       particle_kk->set_maxcellcount(maxcellcount);
-      if (d_plist.extent(1) < maxcellcount) {
-        d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-        d_plist = grid_kk->d_plist;
-        if (NEARCP)
-          MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",nglocal,maxcellcount);
-      }
+      if (!d_plist.flat) {
+        if (d_plist.d_dense.extent(1) < maxcellcount) {
+          d_plist = {};
+          grid_kk->d_plist.grow_dense(nglocal,maxcellcount);
+          d_plist = grid_kk->d_plist;
+        }
+      } else if (maxcellcount > maxcellcount_old) regrow_flat_plist();
+      if (NEARCP) d_nn_last_partner.resize_like(d_plist,nglocal,"collide:nn_last_partner");
 
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
@@ -1196,12 +1205,12 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
     // particle data structs may have been realloced by kpart
 
     if (kpart) {
-      if (np < d_plist.extent(1)) {
+      if (np < d_plist.capacity(icell)) {
         if (NEARCP) d_nn_last_partner(icell,np) = 0;
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1213,23 +1222,87 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOne< NEARCP, GASTALLY, ATO
 }
 
 /* ----------------------------------------------------------------------
-   (re)allocate the per-cell transient subcell scratch views
-   all are sized (nglocal, maxcellcount), same as d_nn_last_partner
+   largest per-cell capacity of plist over the first n cells
 ------------------------------------------------------------------------- */
 
-void CollideVSSKokkos::grow_subcell_views(int n1, int n2)
+static int max_plist_capacity(const CellPList &plist, int n)
 {
-  if (int(d_nn_last_partner.extent(0)) < n1 ||
-      int(d_nn_last_partner.extent(1)) < n2)
-    MemKK::realloc_kokkos(d_nn_last_partner,"collide:nn_last_partner",n1,n2);
+  if (!plist.flat) return plist.d_dense.extent(1);
 
-  if (int(d_subcell_id.extent(0)) < n1 || int(d_subcell_id.extent(1)) < n2) {
-    MemKK::realloc_kokkos(d_subcell_id,"collide:subcell_id",n1,n2);
-    MemKK::realloc_kokkos(d_subcell_count,"collide:subcell_count",n1,n2);
-    MemKK::realloc_kokkos(d_subcell_first,"collide:subcell_first",n1,n2);
-    MemKK::realloc_kokkos(d_subcell_next,"collide:subcell_next",n1,n2);
-    MemKK::realloc_kokkos(d_subcell_ring,"collide:subcell_ring",n1,n2);
+  int wmax = 0;
+  Kokkos::parallel_reduce("collide:max_capacity",
+    Kokkos::RangePolicy<DeviceType>(0,n),
+    KOKKOS_LAMBDA(const int icell, int &m) {
+      const int c = plist.capacity(icell);
+      if (c > m) m = c;
+    },Kokkos::Max<int>(wmax));
+  return wmax;
+}
+
+/* ----------------------------------------------------------------------
+   # of subcells for a cell holding width particles
+   mirrors the nsub formula in collisions_one_subcell(), tolerance included
+   nsub^DIM <= np by construction, np <= plist capacity of the cell, and
+     nsub is computed once per cell from the initial np (particles created
+     later are binned into the existing subcells), so this bounds the
+     subcell count of a cell of capacity width
+   a shell of subcells is clipped to the subcell grid and has no repeats,
+     so nring <= nsub^DIM too
+------------------------------------------------------------------------- */
+
+int CollideVSSKokkos::subcell_bound(int width) const
+{
+  int nsub;
+  if (domain->dimension == 2) nsub = static_cast<int> (sqrt((double) width) + 1.0e-9);
+  else nsub = static_cast<int> (cbrt((double) width) + 1.0e-9);
+  int nsubcell = nsub*nsub;
+  if (domain->dimension == 3) nsubcell *= nsub;
+  return MAX(1,nsubcell);
+}
+
+/* ----------------------------------------------------------------------
+   (re)allocate the per-cell transient subcell scratch views
+   nn_last_partner, subcell_id, subcell_next follow the plist shape
+   subcell_count, first, ring are (nglocal, maxsub), see subcell_bound()
+------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::grow_subcell_views()
+{
+  d_nn_last_partner.resize_like(d_plist,nglocal,"collide:nn_last_partner");
+  d_subcell_id.resize_like(d_plist,nglocal,"collide:subcell_id");
+  d_subcell_next.resize_like(d_plist,nglocal,"collide:subcell_next");
+
+  const int maxsub = subcell_bound(max_plist_capacity(d_plist,nglocal));
+
+  if (int(d_subcell_count.extent(0)) < nglocal ||
+      int(d_subcell_count.extent(1)) < maxsub) {
+    MemKK::realloc_kokkos(d_subcell_count,"collide:subcell_count",nglocal,maxsub);
+    MemKK::realloc_kokkos(d_subcell_first,"collide:subcell_first",nglocal,maxsub);
+    MemKK::realloc_kokkos(d_subcell_ring,"collide:subcell_ring",nglocal,maxsub);
   }
+}
+
+/* ----------------------------------------------------------------------
+   flat layout: a cell overflowed its plist capacity
+   called after restore(), so plist holds the pre-collision lists, and
+     d_cellcount still holds the pre-collision counts (the collide kernels
+     only read it)
+   re-lay out with a larger per-cell pad, preserving the lists
+------------------------------------------------------------------------- */
+
+void CollideVSSKokkos::regrow_flat_plist()
+{
+  GridKokkos* grid_kk = (GridKokkos*) grid;
+
+  double extra = 1.0;
+  if (react) extra = MAX(1.0,sparta->kokkos->react_extra);
+
+  d_plist = {};
+  grid_kk->d_plist.regrow_flat(grid_kk->d_cellcount,extra,
+                               2*grid_kk->d_plist.pad + DELTACELLCOUNT);
+  if (grid_kk->d_plist.nslot < 0)
+    error->one(FLERR,"Per-processor particle list is too big for flat layout");
+  d_plist = grid_kk->d_plist;
 }
 
 /* ----------------------------------------------------------------------
@@ -1258,7 +1331,7 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
   copymode = 1;
 
-  grow_subcell_views(nglocal,d_plist.extent(1));
+  grow_subcell_views();
 
   /* ATOMIC_REDUCTION: 1 = use atomics
                        0 = don't need atomics
@@ -1291,11 +1364,11 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
 
     maxcellcount = particle_kk->get_maxcellcount();
     int maxcellcount_extra = maxcellcount*extra_factor;
-    if (d_plist.extent(1) < maxcellcount_extra) {
+    if (!d_plist.flat && d_plist.d_dense.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      grid_kk->d_plist.grow_dense(nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
-      grow_subcell_views(nglocal,maxcellcount_extra);
+      grow_subcell_views();
     }
 
     bigint nlocal_extra = static_cast<bigint> (particle->nlocal*extra_factor);
@@ -1416,14 +1489,18 @@ template < int DIM, int GASTALLY > void CollideVSSKokkos::collisions_one_subcell
         d_dellist = k_dellist.view_device();
       }
 
+      // flat layout: regrow only if a cell overflowed its capacity
+      const int maxcellcount_old = maxcellcount;
       maxcellcount = h_maxcellcount();
       particle_kk->set_maxcellcount(maxcellcount);
-      if (d_plist.extent(1) < maxcellcount) {
-        d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-        d_plist = grid_kk->d_plist;
-        grow_subcell_views(nglocal,maxcellcount);
-      }
+      if (!d_plist.flat) {
+        if (d_plist.d_dense.extent(1) < maxcellcount) {
+          d_plist = {};
+          grid_kk->d_plist.grow_dense(nglocal,maxcellcount);
+          d_plist = grid_kk->d_plist;
+        }
+      } else if (maxcellcount > maxcellcount_old) regrow_flat_plist();
+      grow_subcell_views();
 
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
@@ -1633,12 +1710,12 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
     // kpart was just added to particle list, index = index_kpart
 
     if (kpart) {
-      if (np < d_plist.extent(1)) {
+      if (np < d_plist.capacity(icell)) {
         d_nn_last_partner(icell,np) = 0;
         d_plist(icell,np++) = index_kpart;
       } else {
         d_retry() = 1;
-        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+        Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
         rand_pool.free_state(rand_gen);
         return;
       }
@@ -1944,11 +2021,11 @@ int CollideVSSKokkos::find_nn_subcell(rand_type &rand_gen, int i, int np, int ic
 
 void CollideVSSKokkos::grow_group_lists()
 {
-  MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,ngroups,d_plist.extent(1));
-  MemKK::realloc_kokkos(d_p2g,"collide:p2g",nglocal,d_plist.extent(1),2);
+  d_glist.resize_like(d_plist,nglocal,ngroups,"collide:glist");
+  d_p2g.resize_like(d_plist,nglocal,"collide:p2g");
   if (nearcp) {
-    MemKK::realloc_kokkos(d_nn_igroup,"collide:nn_igroup",nglocal,d_plist.extent(1));
-    MemKK::realloc_kokkos(d_nn_jgroup,"collide:nn_jgroup",nglocal,d_plist.extent(1));
+    d_nn_igroup.resize_like(d_plist,nglocal,"collide:nn_igroup");
+    d_nn_jgroup.resize_like(d_plist,nglocal,"collide:nn_jgroup");
   }
 }
 
@@ -1984,18 +2061,7 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
   // one region per group, each able to hold the whole cell: a reaction can
   //   move every particle of a cell into the same group
 
-  if (int(d_glist.extent(0)) < nglocal ||
-      int(d_glist.extent(1)) < ngroups ||
-      int(d_glist.extent(2)) < int(d_plist.extent(1))) {
-    MemKK::realloc_kokkos(d_glist,"collide:glist",nglocal,ngroups,d_plist.extent(1));
-    MemKK::realloc_kokkos(d_p2g,"collide:p2g",nglocal,d_plist.extent(1),2);
-  }
-  if (nearcp &&
-      (int(d_nn_igroup.extent(0)) < nglocal ||
-       int(d_nn_igroup.extent(1)) < int(d_plist.extent(1)))) {
-    MemKK::realloc_kokkos(d_nn_igroup,"collide:nn_igroup",nglocal,d_plist.extent(1));
-    MemKK::realloc_kokkos(d_nn_jgroup,"collide:nn_jgroup",nglocal,d_plist.extent(1));
-  }
+  grow_group_lists();
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
@@ -2035,9 +2101,9 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
 
     maxcellcount = particle_kk->get_maxcellcount();
     int maxcellcount_extra = maxcellcount*extra_factor;
-    if (d_plist.extent(1) < maxcellcount_extra) {
+    if (!d_plist.flat && d_plist.d_dense.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      grid_kk->d_plist.grow_dense(nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       grow_group_lists();
     }
@@ -2140,14 +2206,18 @@ void CollideVSSKokkos::collisions_group(COLLIDE_REDUCE &reduce)
         d_dellist = k_dellist.view_device();
       }
 
+      // flat layout: regrow only if a cell overflowed its capacity
+      const int maxcellcount_old = maxcellcount;
       maxcellcount = h_maxcellcount();
       particle_kk->set_maxcellcount(maxcellcount);
-      if (d_plist.extent(1) < maxcellcount) {
-        d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-        d_plist = grid_kk->d_plist;
-        grow_group_lists();
-      }
+      if (!d_plist.flat) {
+        if (d_plist.d_dense.extent(1) < maxcellcount) {
+          d_plist = {};
+          grid_kk->d_plist.grow_dense(nglocal,maxcellcount);
+          d_plist = grid_kk->d_plist;
+        }
+      } else if (maxcellcount > maxcellcount_old) regrow_flat_plist();
+      grow_group_lists();
 
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
@@ -2420,7 +2490,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
         if (kpart) {
           newgroup = d_species2group[kpart->ispecies];
 
-          if (np < d_plist.extent(1)) {
+          if (np < d_plist.capacity(icell)) {
             // the host clears the new particle's slot in BOTH nn arrays of
             //   the current pair (collide.cpp:1379-1390); when ig == jg the
             //   two alias, so one write covers it
@@ -2437,7 +2507,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroup< NEARCP, GASTALLY, A
             np++;
           } else {
             d_retry() = 1;
-            Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+            Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
             rand_pool.free_state(rand_gen);
             return;
           }
@@ -2499,10 +2569,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   // one region per group, each able to hold the whole cell: a reaction can
   //   move every particle of a cell into the same group
 
-  if (int(d_glist.extent(0)) < nglocal ||
-      int(d_glist.extent(1)) < ngroups ||
-      int(d_glist.extent(2)) < int(d_plist.extent(1)))
-    grow_group_lists();
+  grow_group_lists();
   if (int(d_nattempt_pair.extent(0)) < nglocal ||
       int(d_nattempt_pair.extent(1)) < ngroups)
     MemKK::realloc_kokkos(d_nattempt_pair,"collide:nattempt_pair",nglocal,ngroups,ngroups);
@@ -2535,10 +2602,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
   maxcellcount = particle_kk->get_maxcellcount();
 
   int maxelectron_extra = maxcellcount*extra_factor;
-  if (int(d_elist.extent(0)) < nglocal || int(d_elist.extent(1)) < maxelectron_extra) {
-    d_elist = t_particle_2d(); // reduce memory use by deallocating first
-    d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
-  }
+  d_elist.resize_like(d_plist,nglocal,"collide:elist",elist_extra,maxelectron_extra);
 
   if (react) {
     // form the product in double and check it before it becomes an int,
@@ -2554,9 +2618,9 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
     }
 
     int maxcellcount_extra = maxcellcount*extra_factor;
-    if (d_plist.extent(1) < maxcellcount_extra) {
+    if (!d_plist.flat && d_plist.d_dense.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      grid_kk->d_plist.grow_dense(nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
       grow_group_lists();
     }
@@ -2604,7 +2668,7 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
     //   DELTACELLCOUNT from zero and re-run the whole pass until it finally
     //   exceeds the extent -- dozens of wasted sweeps before the realloc
 
-    maxelectron = d_elist.extent(1);
+    maxelectron = d_plist.flat ? 0 : int(d_elist.d_dense.extent(1));
     h_maxelectron() = maxelectron;
     h_maxdelete() = maxdelete;
     h_maxcellcount() = maxcellcount;
@@ -2686,11 +2750,10 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
 
       reduce = COLLIDE_REDUCE();
 
+      const int maxelectron_old = maxelectron;
       maxelectron = h_maxelectron();
-      if (int(d_elist.extent(1)) < maxelectron) {
-        d_elist = t_particle_2d(); // reduce memory use by deallocating first
-        d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron);
-      }
+      if (d_plist.flat && maxelectron > maxelectron_old)
+        elist_extra = 2*elist_extra + DELTACELLCOUNT;
 
       maxdelete = h_maxdelete();
       if (d_dellist.extent(0) < maxdelete) {
@@ -2699,14 +2762,19 @@ void CollideVSSKokkos::collisions_group_ambipolar(COLLIDE_REDUCE &reduce)
         d_dellist = k_dellist.view_device();
       }
 
+      // flat layout: regrow only if a cell overflowed its capacity
+      const int maxcellcount_old = maxcellcount;
       maxcellcount = h_maxcellcount();
       particle_kk->set_maxcellcount(maxcellcount);
-      if (d_plist.extent(1) < maxcellcount) {
-        d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-        d_plist = grid_kk->d_plist;
-        grow_group_lists();
-      }
+      if (!d_plist.flat) {
+        if (d_plist.d_dense.extent(1) < maxcellcount) {
+          d_plist = {};
+          grid_kk->d_plist.grow_dense(nglocal,maxcellcount);
+          d_plist = grid_kk->d_plist;
+        }
+      } else if (maxcellcount > maxcellcount_old) regrow_flat_plist();
+      grow_group_lists();
+      d_elist.resize_like(d_plist,nglocal,"collide:elist",elist_extra,maxelectron);
 
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
@@ -2972,19 +3040,19 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
           newgroup = d_species2group[kpart->ispecies];
 
           if (newgroup != egroup) {
-            if (np < int(d_plist.extent(1))) {
+            if (np < d_plist.capacity(icell)) {
               d_plist(icell,np) = index_kpart;
               addgroup_kk(icell,newgroup,np);
               np++;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
 
           } else {
-            if (nelectron < int(d_elist.extent(1))) {
+            if (nelectron < d_elist.capacity(icell)) {
               Particle::OnePart* ep = &d_elist(icell,nelectron);
               *ep = *kpart;
               ep->ispecies = ambispecies;
@@ -3005,7 +3073,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
 #endif
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
+              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(d_elist.capacity(icell),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3032,7 +3100,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             //   the electron goes to elist; jpart is nulled so the block
             //   below removes its now-stale plist and group entries
 
-            if (nelectron < int(d_elist.extent(1))) {
+            if (nelectron < d_elist.capacity(icell)) {
               Particle::OnePart* ep = &d_elist(icell,nelectron);
               *ep = *jpart;
               ep->ispecies = ambispecies;
@@ -3041,7 +3109,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
               jpart = NULL;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
+              Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(d_elist.capacity(icell),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3070,13 +3138,13 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsGroupAmbipolar< GASTALLY, 
             nelectron--;
             d_gcount(icell,egroup)--;
 
-            if (np < int(d_plist.extent(1))) {
+            if (np < d_plist.capacity(icell)) {
               d_plist(icell,np) = index;
               addgroup_kk(icell,newgroup,np);
               np++;
             } else {
               d_retry() = 1;
-              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+              Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
               rand_pool.free_state(rand_gen);
               return;
             }
@@ -3213,10 +3281,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
   maxcellcount = particle_kk->get_maxcellcount();
 
   int maxelectron_extra = maxcellcount*extra_factor;
-  if (d_elist.extent(0) < nglocal || d_elist.extent(1) < maxelectron_extra) {
-    d_elist = t_particle_2d(); // reduce memory use by deallocating first
-    d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron_extra);
-  }
+  d_elist.resize_like(d_plist,nglocal,"collide:elist",elist_extra,maxelectron_extra);
 
   if (react) {
     // form the product in double and check it before it becomes an int,
@@ -3232,9 +3297,9 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     }
 
     int maxcellcount_extra = maxcellcount*extra_factor;
-    if (d_plist.extent(1) < maxcellcount_extra) {
+    if (!d_plist.flat && d_plist.d_dense.extent(1) < maxcellcount_extra) {
       d_plist = {};
-      Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount_extra);
+      grid_kk->d_plist.grow_dense(nglocal,maxcellcount_extra);
       d_plist = grid_kk->d_plist;
     }
 
@@ -3281,7 +3346,7 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
     //   DELTACELLCOUNT from zero and re-run the whole pass until it finally
     //   exceeds the extent -- dozens of wasted sweeps before the realloc
 
-    maxelectron = d_elist.extent(1);
+    maxelectron = d_plist.flat ? 0 : int(d_elist.d_dense.extent(1));
     h_maxelectron() = maxelectron;
     h_maxdelete() = maxdelete;
     h_maxcellcount() = maxcellcount;
@@ -3366,11 +3431,10 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
 
       reduce = COLLIDE_REDUCE();
 
+      const int maxelectron_old = maxelectron;
       maxelectron = h_maxelectron();
-      if (d_elist.extent(1) < maxelectron) {
-        d_elist = t_particle_2d(); // reduce memory use by deallocating first
-        d_elist = t_particle_2d(Kokkos::view_alloc("collide:elist",Kokkos::WithoutInitializing),nglocal,maxelectron);
-      }
+      if (d_plist.flat && maxelectron > maxelectron_old)
+        elist_extra = 2*elist_extra + DELTACELLCOUNT;
 
       maxdelete = h_maxdelete();
       if (d_dellist.extent(0) < maxdelete) {
@@ -3379,13 +3443,18 @@ void CollideVSSKokkos::collisions_one_ambipolar(COLLIDE_REDUCE &reduce)
         d_dellist = k_dellist.view_device();
       }
 
+      // flat layout: regrow only if a cell overflowed its capacity
+      const int maxcellcount_old = maxcellcount;
       maxcellcount = h_maxcellcount();
       particle_kk->set_maxcellcount(maxcellcount);
-      if (d_plist.extent(1) < maxcellcount) {
-        d_plist = {};
-        Kokkos::resize(grid_kk->d_plist,nglocal,maxcellcount);
-        d_plist = grid_kk->d_plist;
-      }
+      if (!d_plist.flat) {
+        if (d_plist.d_dense.extent(1) < maxcellcount) {
+          d_plist = {};
+          grid_kk->d_plist.grow_dense(nglocal,maxcellcount);
+          d_plist = grid_kk->d_plist;
+        }
+      } else if (maxcellcount > maxcellcount_old) regrow_flat_plist();
+      d_elist.resize_like(d_plist,nglocal,"collide:elist",elist_extra,maxelectron);
 
       auto nlocal_new = h_nlocal();
       if (d_particles.extent(0) < nlocal_new) {
@@ -3623,18 +3692,18 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 
     if (kpart) {
       if (kpart->ispecies != ambispecies) {
-        if (np < d_plist.extent(1)) {
+        if (np < d_plist.capacity(icell)) {
           d_plist(icell,np++) = index_kpart;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
 
       } else {
 
-        if (nelectron < d_elist.extent(1)) {
+        if (nelectron < d_elist.capacity(icell)) {
           ep = &d_elist(icell,nelectron);
           //memcpy(ep,kpart,nbytes);
           *ep = *kpart;
@@ -3655,7 +3724,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 #endif
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
+          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(d_elist.capacity(icell),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3677,7 +3746,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
 
     if (jpart) {
       if (jspecies != ambispecies && jpart->ispecies == ambispecies) {
-        if (nelectron < d_elist.extent(1)) {
+        if (nelectron < d_elist.capacity(icell)) {
           ep = &d_elist(icell,nelectron);
           //memcpy(ep,jpart,nbytes);
           *ep = *jpart;
@@ -3686,7 +3755,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
           jpart = NULL;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(int(d_elist.extent(1)),DELTACELLCOUNT));
+          Kokkos::atomic_max(&d_maxelectron(),GROWREQUEST(d_elist.capacity(icell),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -3710,11 +3779,11 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneAmbipolar< GASTALLY, AT
         if (nelectron-1 != j-np) d_elist(icell,j-np) = d_elist(icell,nelectron-1);
         nelectron--;
 
-        if (np < d_plist.extent(1)) {
+        if (np < d_plist.capacity(icell)) {
           d_plist(icell,np++) = index;
         } else {
           d_retry() = 1;
-          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(int(d_plist.extent(1)),DELTACELLCOUNT));
+          Kokkos::atomic_max(&d_maxcellcount(),GROWREQUEST(MAX(maxcellcount,d_plist.capacity(icell)),DELTACELLCOUNT));
           rand_pool.free_state(rand_gen);
           return;
         }
@@ -5148,7 +5217,7 @@ void CollideVSSKokkos::adapt_grid()
 void CollideVSSKokkos::grow_percell(int n)
 {
   if (nglocal+n < nglocalmax || !ngroups) return;
-  while (nglocal+n >= nglocalmax) nglocalmax += DELTAGRID;
+  while (nglocal+n >= nglocalmax) nglocalmax += MAX(DELTAGRID,nglocalmax/2);
 
   this->sync(Device,ALL_MASK); // force resize on device
 
@@ -5218,7 +5287,7 @@ void CollideVSSKokkos::modified(ExecutionSpace space, unsigned int mask)
 void CollideVSSKokkos::backup()
 {
   d_particles_backup = decltype(d_particles)(Kokkos::view_alloc("collide:particles_backup",Kokkos::WithoutInitializing),d_particles.extent(0));
-  d_plist_backup = decltype(d_plist)(Kokkos::view_alloc("collide:plist_backup",Kokkos::WithoutInitializing),d_plist.extent(0),d_plist.extent(1));
+  d_plist_backup = d_plist.clone("collide:plist_backup");
   d_vremax_backup = decltype(d_vremax)(Kokkos::view_alloc("collide:vremax_backup",Kokkos::WithoutInitializing),d_vremax.extent(0),d_vremax.extent(1),d_vremax.extent(2));
   d_remain_backup = decltype(d_remain)(Kokkos::view_alloc("collide:remain_backup",Kokkos::WithoutInitializing),d_remain.extent(0),d_remain.extent(1),d_remain.extent(2));
 
@@ -5228,7 +5297,6 @@ void CollideVSSKokkos::backup()
   }
 
   Kokkos::deep_copy(d_particles_backup,d_particles);
-  Kokkos::deep_copy(d_plist_backup,d_plist);
   Kokkos::deep_copy(d_vremax_backup,d_vremax);
   Kokkos::deep_copy(d_remain_backup,d_remain);
 
@@ -5269,7 +5337,7 @@ void CollideVSSKokkos::restore()
   d_particles = particle_kk->k_particles.view_device();
 
   GridKokkos* grid_kk = (GridKokkos*) grid;
-  Kokkos::deep_copy(grid_kk->d_plist,d_plist_backup);
+  grid_kk->d_plist.deep_copy_from(d_plist_backup);
   d_plist = grid_kk->d_plist;
 
   Kokkos::deep_copy(d_vremax,d_vremax_backup);
@@ -5313,7 +5381,7 @@ void CollideVSSKokkos::restore()
   // deallocate references to reduce memory use
 
   d_particles_backup = {};
-  d_plist_backup = {};
+  d_plist_backup.clear();
   d_vremax_backup = {};
   d_remain_backup = {};
 
