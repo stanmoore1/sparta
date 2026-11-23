@@ -86,7 +86,8 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     // TCE uses partial energy ecc2, QK tests the energy of the molecule
 
     double ecc2 = pre_etrans;
-    if (pre_ave_rotdof > 0.1) ecc2 += pre_erot*r->d_coeff[0]/pre_ave_rotdof;
+    if (pre_ave_rotdof > 0.1 && r->style == ARRHENIUS)
+      ecc2 += pre_erot*rotational_share_kk(r->d_coeff[0],pre_ave_rotdof,rand_gen);
     const double e_excess = ecc2 - r->d_coeff[1];
 
     if (pre_etotal + r->d_coeff[4] > 0.0) {

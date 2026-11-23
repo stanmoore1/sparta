@@ -138,7 +138,8 @@ int ReactTCEQK::attempt_tce(Particle::OnePart *ip, Particle::OnePart *jp,
   double pre_etotal = pre_etrans + pre_erot + pre_evib;
 
   double ecc = pre_etrans;
-  if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
+  if (pre_ave_rotdof > 0.1)
+    ecc += pre_erot*rotational_share(r->coeff[0],pre_ave_rotdof);
 
   double e_excess = ecc - r->coeff[1];
   if (e_excess <= 0.0) return 0;

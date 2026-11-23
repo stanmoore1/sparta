@@ -120,6 +120,49 @@ class ReactBirdKokkos : public ReactBird {
   RandPoolWrap rand_pool;
   typedef RandWrap rand_type;
 #endif
+
+  // device versions of ReactBird::rotational_share() and gamma_deviate()
+
+  KOKKOS_INLINE_FUNCTION
+  double rotational_share_kk(double z, double ave_rotdof, rand_type &rand_gen) const
+  {
+    if (z <= 0.0) return 0.0;
+    if (z >= ave_rotdof) return z/ave_rotdof;
+
+    const double b = ave_rotdof - z;
+    if (z == 1.0) return 1.0 - pow(rand_gen.drand(),1.0/b);
+    if (b == 1.0) return pow(rand_gen.drand(),1.0/z);
+
+    const double x = gamma_deviate_kk(z,rand_gen);
+    const double y = gamma_deviate_kk(b,rand_gen);
+    if (x+y <= 0.0) return z/ave_rotdof;
+    return x/(x+y);
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  double gamma_deviate_kk(double shape, rand_type &rand_gen) const
+  {
+    double boost = 1.0;
+    if (shape < 1.0) {
+      boost = pow(rand_gen.drand(),1.0/shape);
+      shape += 1.0;
+    }
+
+    const double d = shape - 1.0/3.0;
+    const double c = 1.0/sqrt(9.0*d);
+    double x,v,u;
+
+    while (1) {
+      do {
+        x = rand_gen.normal();
+        v = 1.0 + c*x;
+      } while (v <= 0.0);
+      v = v*v*v;
+      u = rand_gen.drand();
+      if (u < 1.0 - 0.0331*x*x*x*x) return boost*d*v;
+      if (log(u) < 0.5*x*x + d*(1.0-v+log(v))) return boost*d*v;
+    }
+  }
 };
 
 }

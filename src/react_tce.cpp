@@ -143,7 +143,8 @@ int ReactTCE::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     if (partialEnergy) {
        ecc = pre_etrans;
        z = r->coeff[0];
-       if (pre_ave_rotdof > 0.1) ecc += pre_erot*z/pre_ave_rotdof;
+       if (pre_ave_rotdof > 0.1)
+         ecc += pre_erot*rotational_share(z,pre_ave_rotdof);
     } else {
        ecc = pre_etotal;
        z = pre_ave_rotdof;

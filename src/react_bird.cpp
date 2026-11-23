@@ -863,6 +863,62 @@ int ReactBird::readone(char *line1, char *line2, int &n1, int &n2)
 }
 
 /* ----------------------------------------------------------------------
+   fraction of the rotational energy of a colliding pair which contributes
+     to the TCE collision energy with the partial energy (rDOF) model
+   z = coeff[0] = # of internal DOF (in units of 2 DOF) of the reaction
+   ave_rotdof = average rotational DOF of the 2 species = shape of the
+     Gamma(ave_rotdof,kT) distribution of the pair rotational energy
+   the TCE probability is normalized for an internal energy share
+     distributed as Gamma(z,kT), the fixed fraction z/ave_rotdof gives
+     a share with the right mean but a tail that decays as
+     exp(-E*ave_rotdof/(z*kT)), which under-samples high-energy collisions
+   a random fraction f ~ Beta(z,ave_rotdof-z) gives f*Erot ~ Gamma(z,kT)
+     with the same mean, this is exact for any z < ave_rotdof
+   for z <= 0 or z >= ave_rotdof return the fixed fraction z/ave_rotdof
+------------------------------------------------------------------------- */
+
+double ReactBird::rotational_share(double z, double ave_rotdof)
+{
+  if (z <= 0.0) return 0.0;
+  if (z >= ave_rotdof) return z/ave_rotdof;
+
+  double b = ave_rotdof - z;
+  if (z == 1.0) return 1.0 - pow(random->uniform(),1.0/b);
+  if (b == 1.0) return pow(random->uniform(),1.0/z);
+
+  double x = gamma_deviate(z);
+  double y = gamma_deviate(b);
+  if (x+y <= 0.0) return z/ave_rotdof;
+  return x/(x+y);
+}
+
+/* ----------------------------------------------------------------------
+   random deviate from Gamma(shape,1) distribution, shape > 0
+   Marsaglia and Tsang, ACM Trans Math Software, 26, 363 (2000)
+------------------------------------------------------------------------- */
+
+double ReactBird::gamma_deviate(double shape)
+{
+  if (shape < 1.0)
+    return gamma_deviate(shape+1.0) * pow(random->uniform(),1.0/shape);
+
+  double d = shape - 1.0/3.0;
+  double c = 1.0/sqrt(9.0*d);
+  double x,v,u;
+
+  while (1) {
+    do {
+      x = random->gaussian();
+      v = 1.0 + c*x;
+    } while (v <= 0.0);
+    v = v*v*v;
+    u = random->uniform();
+    if (u < 1.0 - 0.0331*x*x*x*x) return d*v;
+    if (log(u) < 0.5*x*x + d*(1.0-v+log(v))) return d*v;
+  }
+}
+
+/* ----------------------------------------------------------------------
    check reaction energies in list of reactions read from file
    warn if an endothermic reaction (coeff[4] < 0) has an activation energy
      Ea = coeff[1] below its endothermicity -coeff[4]

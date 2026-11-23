@@ -79,7 +79,14 @@ Bird is used, and only the sum of the relative translational energy
 between the partcles and a fraction of the rotational energy is
 used. The participating internal degrees of freedom are either set to
 1 (dissociation reactions), or 0 (recombination, exchange, ionization
-reactions).
+reactions).  The fraction is a random number with a Beta(z, zrot - z)
+distribution, where z is the C1 coefficient of the reaction and zrot
+is the average number of rotational degrees of freedom of the two
+colliding species.  Its mean is z/zrot, and it makes the participating
+rotational energy distributed as the TCE model assumes for z internal
+degrees of freedom, so that the reaction rate matches the Arrhenius
+rate for molecule-molecule as well as atom-molecule collisions.  If z
+>= zrot, the fixed fraction z/zrot is used.
 
 Conversely, if the *partial\_energy* keyword is set to *no*\ , then the
 total energy model is used, i.e. the sum of the relative translational

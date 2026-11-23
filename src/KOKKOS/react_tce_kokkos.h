@@ -181,8 +181,11 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     if (partialEnergy) {
       ecc = pre_etrans;
       z = r->d_coeff[0];
-      if (pre_ave_rotdof > 0.1)
-        ecc += pre_erot*z/pre_ave_rotdof;
+      if (pre_ave_rotdof > 0.1) {
+        rand_type rand_gen = rand_pool.get_state();
+        ecc += pre_erot*rotational_share_kk(z,pre_ave_rotdof,rand_gen);
+        rand_pool.free_state(rand_gen);
+      }
     } else {
       ecc = pre_etotal;
       z = pre_ave_rotdof;
