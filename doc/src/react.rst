@@ -315,6 +315,13 @@ coefficients:
 The different reaction styles use these values in different ways, as
 explained above.
 
+For an endothermic reaction (C5 < 0), the activation energy C2 should
+be at least the energy the reaction consumes, -C5, otherwise a reaction
+in a collision with an energy between C2 and -C5 cannot conserve
+energy.  SPARTA warns about such reactions when it reads the file.
+The TCE model then uses -C5 as the threshold energy, and the QK model
+rejects these collisions.
+
 
 ----------
 

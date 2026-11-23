@@ -43,6 +43,7 @@ enum{NONE,DISCRETE,SMOOTH};                            // several files
 
 #define MAXLINE 1024
 #define DELTALIST 16
+#define EPSILON_ENERGY 1.0e-10
 
 /* ---------------------------------------------------------------------- */
 
@@ -55,6 +56,7 @@ ReactBird::ReactBird(SPARTA *sparta, int narg, char **arg) :
   rlist = NULL;
   readfile(arg[1]);
   check_duplicate();
+  check_energy();
 
   tally_reactions = new bigint[nlist];
   tally_reactions_all = new bigint[nlist];
@@ -858,6 +860,40 @@ int ReactBird::readone(char *line1, char *line2, int &n1, int &n2)
   }
 
   return 1;
+}
+
+/* ----------------------------------------------------------------------
+   check reaction energies in list of reactions read from file
+   warn if an endothermic reaction (coeff[4] < 0) has an activation energy
+     Ea = coeff[1] below its endothermicity -coeff[4]
+   a reaction in a collision with Ea < E < -coeff[4] cannot conserve energy,
+     so TCE uses -coeff[4] as the threshold and QK rejects such collisions,
+     either way the input Ea is not used as given
+   all such reactions are reported in one warning
+------------------------------------------------------------------------- */
+
+void ReactBird::check_energy()
+{
+  char str[MAXLINE+64];
+  int nbad = 0;
+  std::string mesg;
+
+  for (int m = 0; m < nlist; m++) {
+    OneReaction *r = &rlist[m];
+    if (r->coeff[4] >= 0.0) continue;
+    if (r->coeff[1] >= -r->coeff[4]*(1.0-EPSILON_ENERGY)) continue;
+    snprintf(str,sizeof(str),"\n  %s: Ea %g < -dE %g",
+             r->id,r->coeff[1],-r->coeff[4]);
+    mesg += str;
+    nbad++;
+  }
+
+  if (nbad && comm->me == 0) {
+    std::string head = std::to_string(nbad) + " endothermic reaction(s) in "
+      "the reaction file have an activation energy Ea below -dE, the energy "
+      "they consume, so Ea is not used as given:";
+    error->warning(FLERR,(head + mesg).c_str());
+  }
 }
 
 /* ----------------------------------------------------------------------
