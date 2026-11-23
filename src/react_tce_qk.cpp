@@ -70,7 +70,7 @@ int ReactTCEQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   double pre_etotal;
   double e_excess;
   double ecc;
-  int reaction;
+  int reaction = 0;
 
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
@@ -143,6 +143,10 @@ int ReactTCEQK::attempt_tce(Particle::OnePart *ip, Particle::OnePart *jp,
   double e_excess = ecc - r->coeff[1];
   if (e_excess <= 0.0) return 0;
 
+  // post-collision energy would be <= 0 if Ea < -coeff[4] in the input file
+
+  if (pre_etotal + r->coeff[4] <= 0.0) return 0;
+
   // compute probability of reaction
   // same TCE expression as ReactTCE::attempt() with z = coeff[0],
   //   consistent with coeff normalization in ReactBird::init()
@@ -188,15 +192,13 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
                            double pre_etrans, double pre_erot, double pre_evib,
                            double &post_etotal, int &kspecies)
 {
-  double prob,evib,inverse_kT;
+  double prob,evib,inverse_kT,inverse_kT_post;
   int iv,ilevel,maxlev,limlev;
   int mspec,aspec;
 
   Particle::Species *species = particle->species;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
-
-  double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
   double omega = collide->extract(isp,jsp,"omega");
 
@@ -206,12 +208,13 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
   double random_prob = random->uniform();
 
   double pre_etotal = pre_etrans + pre_erot + pre_evib;
+  double ecc;
 
-  double ecc = pre_etrans;
-  if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
+  // ignore energetically impossible reactions
+  // post-collision energy would be <= 0 if Ea < -coeff[4] in the input file
+  // QK tests the energy of the molecule below, not the TCE partial energy
 
-  double e_excess = ecc - r->coeff[1];
-  if (e_excess <= 0.0) return 0;
+  if (pre_etotal + r->coeff[4] <= 0.0) return 0;
 
   // compute probability of reaction
   // QK model uses vibrational state of the molecule
@@ -237,6 +240,14 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
       maxlev = static_cast<int> (ecc * inverse_kT);
       limlev = static_cast<int> (fabs(r->coeff[1]) * inverse_kT);
       if (maxlev > limlev) react_prob = 1.0;
+
+      // if both particles are the dissociating species, either can dissociate
+
+      else if (isp == jsp) {
+        ecc = pre_etrans + op->evib;
+        maxlev = static_cast<int> (ecc * inverse_kT);
+        if (maxlev > limlev) react_prob = 1.0;
+      }
       break;
     }
   case EXCHANGE:
@@ -250,6 +261,9 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
         if (ecc > r->coeff[1]) {
 
           // PROB is the probability ratio of eqn (5.61)
+          // sample a vibrational level with Larsen-Borgnakke,
+          //   accept it with probability prob, as in CollideVSS
+          // reaction occurs if the level reaches the activation energy
 
           prob = 0.0;
           do {
@@ -257,9 +271,9 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
             evib = static_cast<double> (iv / inverse_kT);
             if (evib < ecc) prob = pow(1.0-evib/ecc,1.5-omega);
             else prob = 0.0;
-          } while (random->uniform() < prob);
+          } while (prob < random->uniform());
 
-          ilevel = static_cast<int> (fabs(r->coeff[4]) * inverse_kT);
+          ilevel = static_cast<int> (r->coeff[1] * inverse_kT);
           if (iv >= ilevel) react_prob = 1.0;
         }
 
@@ -279,19 +293,20 @@ int ReactTCEQK::attempt_qk(Particle::OnePart *ip, Particle::OnePart *jp,
         }
 
         // potential post-collision energy
+        // sample a vibrational level of the product molecule
+        //   with Larsen-Borgnakke, as in CollideVSS
 
         ecc += r->coeff[4];
-        maxlev = static_cast<int> (ecc * inverse_kT);
+        inverse_kT_post = 1.0 / (update->boltz*species[mspec].vibtemp[0]);
+        maxlev = static_cast<int> (ecc * inverse_kT_post);
         do {
           iv = random->uniform()*(maxlev+0.99999999);
-          evib = static_cast<double>
-            (iv * update->boltz*species[mspec].vibtemp[0]);
+          evib = static_cast<double> (iv / inverse_kT_post);
           if (evib < ecc) prob = pow(1.0-evib/ecc,1.5 - r->coeff[6]);
           else prob = 0.0;
-        } while (random->uniform() < prob);
+        } while (prob < random->uniform());
 
-        ilevel = static_cast<int>
-          (fabs(r->coeff[4]/update->boltz/species[mspec].vibtemp[0]));
+        ilevel = static_cast<int> (r->coeff[4] * inverse_kT_post);
         if (iv >= ilevel) react_prob = 1.0;
       }
 

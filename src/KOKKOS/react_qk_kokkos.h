@@ -54,7 +54,6 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
   const int isp = ip->ispecies;
   const int jsp = jp->ispecies;
 
-  const double pre_ave_rotdof = (d_species[isp].rotdof + d_species[jsp].rotdof)/2.0;
   const double omega = d_omega(isp,jsp);
 
   const int n = d_reactions(isp,jsp).n;
@@ -70,11 +69,12 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
 
     const double pre_etotal = pre_etrans + pre_erot + pre_evib;
 
-    double ecc = pre_etrans;
-    if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->d_coeff[0]/pre_ave_rotdof;
+    // ignore energetically impossible reactions
+    // post-collision energy would be <= 0 if Ea < -coeff[4] in the input file
+    // QK tests the energy of the molecule below, not the TCE partial energy
 
-    double e_excess = ecc - r->d_coeff[1];
-    if (e_excess <= 0.0) continue;
+    if (pre_etotal + r->d_coeff[4] <= 0.0) continue;
+    double ecc;
 
     // QK model uses vibrational state of the molecule
     // use R1 (dissociating species) if it vibrates, else the other reactant
@@ -102,6 +102,14 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
         maxlev = static_cast<int> (ecc * inverse_kT);
         limlev = static_cast<int> (fabs(r->d_coeff[1]) * inverse_kT);
         if (maxlev > limlev) react_prob = 1.0;
+
+        // if both particles are the dissociating species, either can dissociate
+
+        else if (isp == jsp) {
+          ecc = pre_etrans + op->evib;
+          maxlev = static_cast<int> (ecc * inverse_kT);
+          if (maxlev > limlev) react_prob = 1.0;
+        }
         break;
       }
     case EXCHANGE:
@@ -117,15 +125,17 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
             //   reaction probability this function returns on, and a rejected
             //   draw must not leave a fractional value in it (or carry one
             //   into the next reaction).  Mirrors ReactQK::attempt()
+            // Larsen-Borgnakke level, accepted with probability prob
+            // reaction occurs if the level reaches the activation energy
             double prob = 0.0;
             do {
               iv = static_cast<int> (rand_gen.drand()*(maxlev+0.99999999));
               double evib = static_cast<double> (iv / inverse_kT);
               if (evib < ecc) prob = pow(1.0-evib/ecc,1.5-omega);
               else prob = 0.0;
-            } while (rand_gen.drand() < prob);
+            } while (prob < rand_gen.drand());
 
-            ilevel = static_cast<int> (fabs(r->d_coeff[4]) * inverse_kT);
+            ilevel = static_cast<int> (r->d_coeff[1] * inverse_kT);
             if (iv >= ilevel) react_prob = 1.0;
           }
 
@@ -138,17 +148,20 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
           int mspec = r->d_products[0];
           if (d_species[mspec].rotdof < 2.0) mspec = r->d_products[1];
 
+          // levels of the product molecule
+
           ecc += r->d_coeff[4];
-          maxlev = static_cast<int> (ecc * inverse_kT);
+          const double inverse_kT_post = 1.0 / (boltz*d_species[mspec].vibtemp[0]);
+          maxlev = static_cast<int> (ecc * inverse_kT_post);
           double prob = 0.0;
           do {
             iv = rand_gen.drand()*(maxlev+0.99999999);
-            double evib = static_cast<double> (iv * boltz*d_species[mspec].vibtemp[0]);
+            double evib = static_cast<double> (iv / inverse_kT_post);
             if (evib < ecc) prob = pow(1.0-evib/ecc,1.5 - r->d_coeff[6]);
             else prob = 0.0;
-          } while (rand_gen.drand() < prob);
+          } while (prob < rand_gen.drand());
 
-          ilevel = static_cast<int> (fabs(r->d_coeff[4]/boltz/d_species[mspec].vibtemp[0]));
+          ilevel = static_cast<int> (r->d_coeff[4] * inverse_kT_post);
           if (iv >= ilevel) react_prob = 1.0;
         }
 

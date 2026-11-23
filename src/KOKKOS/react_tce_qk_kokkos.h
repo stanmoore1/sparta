@@ -81,30 +81,36 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
     const double random_prob = rand_gen.drand();
 
     double react_prob = 0.0;
+
+    // post-collision energy would be <= 0 if Ea < -coeff[4] in the input file
+    // TCE uses partial energy ecc2, QK tests the energy of the molecule
+
     double ecc2 = pre_etrans;
     if (pre_ave_rotdof > 0.1) ecc2 += pre_erot*r->d_coeff[0]/pre_ave_rotdof;
     const double e_excess = ecc2 - r->d_coeff[1];
 
-    if (e_excess > 0.0) {
+    if (pre_etotal + r->d_coeff[4] > 0.0) {
       if (r->style == ARRHENIUS) {                 // attempt_tce
-        switch (r->type) {
-        case DISSOCIATION:
-        case EXCHANGE:
-          {
-            const double z = r->d_coeff[0];
-            const double eta = r->d_coeff[3];
-            const double omega = r->d_coeff[5];
-            react_prob += r->d_coeff[2] *
-              tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+eta+1.5)) *
-              pow(ecc2-r->d_coeff[1],eta-1.0+omega) *
-              pow(1.0-r->d_coeff[1]/ecc2,z+1.5-omega);
+        if (e_excess > 0.0) {
+          switch (r->type) {
+          case DISSOCIATION:
+          case EXCHANGE:
+            {
+              const double z = r->d_coeff[0];
+              const double eta = r->d_coeff[3];
+              const double omega = r->d_coeff[5];
+              react_prob += r->d_coeff[2] *
+                tgamma(z+2.5-omega) / MAX(1.0e-6,tgamma(z+eta+1.5)) *
+                pow(ecc2-r->d_coeff[1],eta-1.0+omega) *
+                pow(1.0-r->d_coeff[1]/ecc2,z+1.5-omega);
+            }
+            break;
+          default:
+            Kokkos::abort("ReactTCEQKKokkos: Unknown outcome in reaction\n");
+            break;
           }
-          break;
-        default:
-          Kokkos::abort("ReactTCEQKKokkos: Unknown outcome in reaction\n");
-          break;
+          if (react_prob > random_prob) fired = 1;
         }
-        if (react_prob > random_prob) fired = 1;
 
       } else {                                     // attempt_qk
 
@@ -133,6 +139,15 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
               maxlev = static_cast<int> (eccq * inverse_kT);
               limlev = static_cast<int> (fabs(r->d_coeff[1]) * inverse_kT);
               if (maxlev > limlev) react_prob = 1.0;
+
+              // if both particles are the dissociating species,
+              //   either can dissociate
+
+              else if (isp == jsp) {
+                eccq = pre_etrans + op->evib;
+                maxlev = static_cast<int> (eccq * inverse_kT);
+                if (maxlev > limlev) react_prob = 1.0;
+              }
               break;
             }
           case EXCHANGE:
@@ -144,30 +159,35 @@ int attempt_kk(Particle::OnePart *ip, Particle::OnePart *jp,
                   // sample into a local prob, not react_prob: react_prob feeds
                   //   the "fired" test below, and a rejected draw must not leave
                   //   a fractional value in it.  Mirrors ReactTCEQK::attempt()
+                  // Larsen-Borgnakke level, accepted with probability prob
+                  // reaction occurs if the level reaches the activation energy
                   double prob = 0.0;
                   do {
                     iv = static_cast<int> (rand_gen.drand()*(maxlev+0.99999999));
                     double evib = static_cast<double> (iv / inverse_kT);
                     if (evib < eccq) prob = pow(1.0-evib/eccq,1.5-omega);
                     else prob = 0.0;
-                  } while (rand_gen.drand() < prob);
-                  ilevel = static_cast<int> (fabs(r->d_coeff[4]) * inverse_kT);
+                  } while (prob < rand_gen.drand());
+                  ilevel = static_cast<int> (r->d_coeff[1] * inverse_kT);
                   if (iv >= ilevel) react_prob = 1.0;
                 }
               } else if (r->d_coeff[4] > 0.0 && d_species[msp].rotdof > 0) {
                 eccq = pre_etrans + mp->evib;
                 int mspec = r->d_products[0];
                 if (d_species[mspec].rotdof < 2.0) mspec = r->d_products[1];
+                // levels of the product molecule
                 eccq += r->d_coeff[4];
-                maxlev = static_cast<int> (eccq * inverse_kT);
+                const double inverse_kT_post =
+                  1.0 / (boltz*d_species[mspec].vibtemp[0]);
+                maxlev = static_cast<int> (eccq * inverse_kT_post);
                 double prob = 0.0;
                 do {
                   iv = rand_gen.drand()*(maxlev+0.99999999);
-                  double evib = static_cast<double> (iv * boltz*d_species[mspec].vibtemp[0]);
+                  double evib = static_cast<double> (iv / inverse_kT_post);
                   if (evib < eccq) prob = pow(1.0-evib/eccq,1.5 - r->d_coeff[6]);
                   else prob = 0.0;
-                } while (rand_gen.drand() < prob);
-                ilevel = static_cast<int> (fabs(r->d_coeff[4]/boltz/d_species[mspec].vibtemp[0]));
+                } while (prob < rand_gen.drand());
+                ilevel = static_cast<int> (r->d_coeff[4] * inverse_kT_post);
                 if (iv >= ilevel) react_prob = 1.0;
               }
               break;

@@ -67,8 +67,8 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
                      double pre_etrans, double pre_erot, double pre_evib,
                      double &post_etotal, int &kspecies)
 {
-  double pre_etotal,ecc,e_excess;
-  double prob,evib,inverse_kT;
+  double pre_etotal,ecc;
+  double prob,evib,inverse_kT,inverse_kT_post;
   int iv,ilevel,maxlev,limlev;
   int mspec,aspec;
   OneReaction *r;
@@ -76,8 +76,6 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
   Particle::Species *species = particle->species;
   int isp = ip->ispecies;
   int jsp = jp->ispecies;
-
-  double pre_ave_rotdof = (species[isp].rotdof + species[jsp].rotdof)/2.0;
 
   double omega = collide->extract(isp,jsp,"omega");
 
@@ -96,14 +94,11 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
     r = &rlist[list[i]];
 
     // ignore energetically impossible reactions
+    // post-collision energy would be <= 0 if Ea < -coeff[4] in the input file
+    // QK tests the energy of the molecule below, not the TCE partial energy
 
     pre_etotal = pre_etrans + pre_erot + pre_evib;
-
-    ecc = pre_etrans;
-    if (pre_ave_rotdof > 0.1) ecc += pre_erot*r->coeff[0]/pre_ave_rotdof;
-
-    e_excess = ecc - r->coeff[1];
-    if (e_excess <= 0.0) continue;
+    if (pre_etotal + r->coeff[4] <= 0.0) continue;
 
     // compute probability of reaction
     // QK model uses vibrational state of the molecule
@@ -130,6 +125,14 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
         limlev = static_cast<int> (fabs(r->coeff[1]) * inverse_kT);
 
         if (maxlev > limlev) react_prob = 1.0;
+
+        // if both particles are the dissociating species, either can dissociate
+
+        else if (isp == jsp) {
+          ecc = pre_etrans + op->evib;
+          maxlev = static_cast<int> (ecc * inverse_kT);
+          if (maxlev > limlev) react_prob = 1.0;
+        }
         break;
       }
     case EXCHANGE:
@@ -142,15 +145,19 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
           maxlev = static_cast<int> (ecc * inverse_kT);
           if (ecc > r->coeff[1]) {
 
+            // sample a vibrational level with Larsen-Borgnakke,
+            //   accept it with probability prob, as in CollideVSS
+            // reaction occurs if the level reaches the activation energy
+
             prob = 0.0;
             do {
               iv =  static_cast<int> (random->uniform()*(maxlev+0.99999999));
               evib = static_cast<double> (iv / inverse_kT);
               if (evib < ecc) prob = pow(1.0-evib/ecc,1.5-omega);
               else prob = 0.0;
-            } while (random->uniform() < prob);
+            } while (prob < random->uniform());
 
-            ilevel = static_cast<int> (fabs(r->coeff[4]) * inverse_kT);
+            ilevel = static_cast<int> (r->coeff[1] * inverse_kT);
             if (iv >= ilevel) react_prob = 1.0;
           }
 
@@ -170,19 +177,20 @@ int ReactQK::attempt(Particle::OnePart *ip, Particle::OnePart *jp,
           }
 
           // post-collision energy
+          // sample a vibrational level of the product molecule
+          //   with Larsen-Borgnakke, as in CollideVSS
 
           ecc += r->coeff[4];
-          maxlev = static_cast<int> (ecc * inverse_kT);
+          inverse_kT_post = 1.0 / (update->boltz*species[mspec].vibtemp[0]);
+          maxlev = static_cast<int> (ecc * inverse_kT_post);
           do {
             iv = random->uniform()*(maxlev+0.99999999);
-            evib = static_cast<double>
-              (iv * update->boltz*species[mspec].vibtemp[0]);
+            evib = static_cast<double> (iv / inverse_kT_post);
             if (evib < ecc) prob = pow(1.0-evib/ecc,1.5 - r->coeff[6]);
             else prob = 0.0;
-          } while (random->uniform() < prob);
+          } while (prob < random->uniform());
 
-          ilevel = static_cast<int>
-            (fabs(r->coeff[4]/update->boltz/species[mspec].vibtemp[0]));
+          ilevel = static_cast<int> (r->coeff[4] * inverse_kT_post);
           if (iv >= ilevel) react_prob = 1.0;
         }
 
