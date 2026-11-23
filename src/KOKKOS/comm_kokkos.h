@@ -64,7 +64,7 @@ class CommKokkos : public Comm {
 
   DAT::t_int_1d d_plist;
   DAT::t_int_1d d_pproc;
-  HAT::t_int_1d h_pproc;
+  t_int_1d_pinned h_pproc;
   DAT::t_char_1d d_sbuf;
   DAT::t_char_1d d_rbuf;
 

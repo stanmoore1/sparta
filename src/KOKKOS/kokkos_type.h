@@ -215,6 +215,21 @@ typedef Kokkos::SYCLHostUSMSpace SPAPinnedHostType;
 typedef Kokkos::Serial SPAPinnedHostType;
 #endif
 
+// pinned host views for staging MPI buffers when not GPU-aware
+// pinned so host <--> device copies run at full speed and need no extra
+//   staging copy; allocation is expensive, so only grow these, never shrink
+// SharedHostPinnedSpace is plain HostSpace on host-only builds
+
+namespace SPARTA_NS {
+#ifdef KOKKOS_HAS_SHARED_HOST_PINNED_SPACE
+typedef Kokkos::SharedHostPinnedSpace SPAPinnedHostSpace;
+#else
+typedef Kokkos::HostSpace SPAPinnedHostSpace;
+#endif
+typedef Kokkos::View<char*, SPAPinnedHostSpace> t_char_1d_pinned;
+typedef Kokkos::View<int*, SPAPinnedHostSpace> t_int_1d_pinned;
+}
+
 // Determine memory traits for atomic arrays
 template<int NEED_ATOMICS>
 struct AtomicView {
