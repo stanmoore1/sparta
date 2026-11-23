@@ -30,8 +30,8 @@ package command
              yes = use GPU-aware MPI (default)
              no = do not use GPU-aware MPI
            comm/batch = yes or no
-             yes = pack all irregular messages in one kernel and send them with MPI_Isend
-             no = pack and send irregular messages one at a time (default)
+             yes = pack all irregular messages in one kernel and send them with MPI_Isend (default)
+             no = pack and send irregular messages one at a time
 
 
 
@@ -127,19 +127,22 @@ all systems, which can lead to segmentation faults and would require
 using a value of *off*\ .
 
 The *comm/batch* keyword changes how irregular communication, such as
-particle migration, sends its messages.  With the default *no*\ , the
-messages are sent one at a time: each one is packed by its own kernel,
-the device is synchronized, and the message is sent with a blocking
-MPI_Send before the next one is packed.  With *yes*\ , all messages are
-packed by a single kernel into one buffer, the device is synchronized
-once, and every message is then posted with a non-blocking MPI_Isend,
-so that their latencies overlap.  For particle migration, the
+particle migration, sends its messages.  With the default *yes*\ , all
+messages are packed by a single kernel into one buffer, the device is
+synchronized once, and every message is then posted with a non-blocking
+MPI_Isend, so that their latencies overlap.  For particle migration, the
 per-message particle counts are also exchanged only with neighboring
 processors using non-blocking calls, which removes the global
 MPI_Barrier otherwise done every timestep.  This can reduce communication time
 when a processor sends to many other processors, particularly over
 networks with higher latency.  It uses extra device memory (and host
 memory if *gpu/aware* is *no*\ ) to hold all outgoing messages at once.
+With *no*\ , the messages are sent one at a time: each one is packed by
+its own kernel, the device is synchronized, and the message is sent with
+a blocking MPI_Send before the next one is packed, which uses less
+memory.  The keyword only affects the KOKKOS package with *comm
+threaded*\ ; with *comm serial*, or without KOKKOS, migration uses the
+non-KOKKOS communication, which this keyword does not change.
 
 
 ----------
@@ -160,7 +163,7 @@ with the KOKKOS package.  See the `Making SPARTA <Section_start.html#start_3>`_ 
 **Default:**
 
 For the KOKKOS package, the option defaults are react/extra = 1.1,
-react/retry = no, gpu/aware yes, and comm/batch no. For CPUs: comm = serial, and for
+react/retry = no, gpu/aware yes, and comm/batch yes. For CPUs: comm = serial, and for
 GPUs: comm = threaded.  These settings are made automatically by the
 required "-k on" `command-line switch <Section_start.html#start_7>`_. You
 can change them by using the package kokkos command in your input script

@@ -178,7 +178,7 @@ KokkosSPARTA::KokkosSPARTA(SPARTA *sparta, int narg, char **arg) : Pointers(spar
   prewrap = 1;
   auto_sync = 1;
   gpu_aware_flag = 1;
-  comm_batch_flag = 0;
+  comm_batch_flag = 1;
 
   if (ngpus > 0) {
     comm_serial = 0;
