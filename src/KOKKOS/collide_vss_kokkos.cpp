@@ -1532,6 +1532,7 @@ void CollideVSSKokkos::operator()(TagCollideCollisionsOneSubcell< DIM, GASTALLY,
   for (int m = 0; m < nattempt; m++) {
     const int i = np * rand_gen.drand();
     const int j = find_nn_subcell<DIM>(rand_gen,i,np,icell,nsub,nsubsq);
+    if (j < 0) continue;
 
     Particle::OnePart* ipart = &d_particles[d_plist(icell,i)];
     Particle::OnePart* jpart = &d_particles[d_plist(icell,j)];
@@ -1781,6 +1782,16 @@ void CollideVSSKokkos::unbin_one_subcell(int icell, int j, int np) const
 }
 
 /* ----------------------------------------------------------------------
+   return 1 if two particles are at the same point, e.g. a clone and its original
+------------------------------------------------------------------------- */
+
+KOKKOS_INLINE_FUNCTION
+static int zero_distance_kk(const double *x, const double *y)
+{
+  return x[0] == y[0] && x[1] == y[1] && x[2] == y[2];
+}
+
+/* ----------------------------------------------------------------------
    for particle I, find collision partner J via the transient subcell method
    partner is random from same subcell, else expanding shells of subcells
    excludes an I,J pair that most recently collided with each other
@@ -1798,25 +1809,37 @@ int CollideVSSKokkos::find_nn_subcell(rand_type &rand_gen, int i, int np, int ic
   int jcand;
 
   // if another particle is in same subcell, select partner randomly from it
+  // exclude clones of I (particles at zero distance from cell weighting),
+  //   which cannot collide with I, as in Collide::collisions_one_subcell()
   // if that partner most recently collided with I, pick a different one,
   //   else fall thru to shell search for next-nearest partner
 
+  const double *xi = d_particles[d_plist(icell,i)].x;
+
   int scount = d_subcell_count(icell,isc);
-  if (scount >= 2) {
+  int nclone = 0;
+  if (scount >= 2)
+    for (int k = d_subcell_first(icell,isc); k >= 0; k = d_subcell_next(icell,k))
+      if (k != i && zero_distance_kk(xi,d_particles[d_plist(icell,k)].x))
+        nclone++;
+
+  if (scount-nclone >= 2) {
     do {
       jcand = static_cast<int> (scount*rand_gen.drand());
       j = d_subcell_first(icell,isc);
       while (jcand--) j = d_subcell_next(icell,j);
-    } while (j == i);
+    } while (j == i ||
+             (nclone && zero_distance_kk(xi,d_particles[d_plist(icell,j)].x)));
 
     if (d_nn_last_partner(icell,i) == j+1 && d_nn_last_partner(icell,j) == i+1) {
       jexcl = j;
-      if (scount > 2) {
+      if (scount-nclone > 2) {
         do {
           jcand = static_cast<int> (scount*rand_gen.drand());
           j = d_subcell_first(icell,isc);
           while (jcand--) j = d_subcell_next(icell,j);
-        } while (j == i || j == jexcl);
+        } while (j == i || j == jexcl ||
+                 (nclone && zero_distance_kk(xi,d_particles[d_plist(icell,j)].x)));
       } else j = -1;
     }
   }
@@ -1929,6 +1952,8 @@ int CollideVSSKokkos::find_nn_subcell(rand_type &rand_gen, int i, int np, int ic
     }
 
     // only remaining partner is the one just collided with: accept it
+    // if there is none, all other particles in the cell are clones of I,
+    //   return -1 and caller skips the attempt
 
     if (j < 0) j = jexcl;
   }

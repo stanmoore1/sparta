@@ -42,6 +42,13 @@ enum{PKEEP,PINSERT,PDONE,PDISCARD,PENTRY,PEXIT,PSURF};   // several files
 
 #define BIG 1.0e20
 
+// return 1 if two particles are at the same point, e.g. a clone and its original
+
+static inline int zero_distance(const double *x, const double *y)
+{
+  return x[0] == y[0] && x[1] == y[1] && x[2] == y[2];
+}
+
 /* ---------------------------------------------------------------------- */
 
 Collide::Collide(SPARTA *sparta, int, char **arg) : Pointers(sparta)
@@ -666,7 +673,8 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
   Particle::OnePart iorig,jorig;
   Particle::OnePart *ipart,*jpart,*kpart;
 
-  int nsub,nsubsq,isc,jsc,scount,jexcl;
+  int nsub,nsubsq,isc,jsc,scount,jexcl,nclone,jc;
+  double *xi = NULL;
   int ibox,jbox,kbox,radius,nring,ncand,jcand;
   int ilo,ihi,jlo,jhi,klo,khi,i2,j2,k2;
   double lo[3],ood[3];
@@ -758,26 +766,40 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
 
       // if another particle is in same subcell, select partner randomly
       //   from the others in the same subcell
+      // exclude clones of particle I, i.e. particles at zero distance
+      //   created by cell weighting, as find_nn() does for nearcp,
+      //   they have the same velocity as I so cannot collide with it,
+      //   and since they are always in the same subcell as I, they
+      //   would otherwise suppress collisions in cells with clones
+      // nclone = # of clones of I in the subcell, usually 0
       // if partner was just collided with by particle I and
       //   others are in same subcell, select a different partner,
       //   else fall thru to shell search for next-nearest partner
 
       scount = subcell_count[isc];
+      nclone = 0;
       if (scount >= 2) {
+        xi = particles[plist[i]].x;
+        for (jc = subcell_first[isc]; jc >= 0; jc = subcell_next[jc])
+          if (jc != i && zero_distance(xi,particles[plist[jc]].x)) nclone++;
+      }
+
+      if (scount-nclone >= 2) {
         do {
           jcand = static_cast<int> (scount*random->uniform());
           j = subcell_first[isc];
           while (jcand--) j = subcell_next[j];
-        } while (j == i);
+        } while (j == i || (nclone && zero_distance(xi,particles[plist[j]].x)));
 
         if (nn_last_partner[i] == j+1 && nn_last_partner[j] == i+1) {
           jexcl = j;
-          if (scount > 2) {
+          if (scount-nclone > 2) {
             do {
               jcand = static_cast<int> (scount*random->uniform());
               j = subcell_first[isc];
               while (jcand--) j = subcell_next[j];
-            } while (j == i || j == jexcl);
+            } while (j == i || j == jexcl ||
+                     (nclone && zero_distance(xi,particles[plist[j]].x)));
           } else j = -1;
         }
       }
@@ -899,8 +921,10 @@ template < int DIM, int GASTALLY > void Collide::collisions_one_subcell()
         }
 
         // only remaining partner is the one just collided with: accept it
+        // if there is none, all other particles in the cell are clones of I
 
         if (j < 0) j = jexcl;
+        if (j < 0) continue;
       }
 
       ipart = &particles[plist[i]];
