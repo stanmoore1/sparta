@@ -44,6 +44,10 @@ env:
 #   - The apt packages are cached where the mirror makes them slow: libvtk9
 #     pulls in a full Java JDK.  Each key names its package list, so
 #     changing the list starts a fresh cache.
+#   - Each cache is saved as soon as it is filled -- the apt packages after
+#     the install, ccache after the build -- not at the end of the job,
+#     where actions/cache saves only if every step passed: one failing
+#     test would otherwise throw away the whole download.
 jobs:
   mpi:
     runs-on: ubuntu-24.04
@@ -61,14 +65,16 @@ jobs:
     - name: Prepare apt cache
       run: sudo chmod -R a+rwx /var/cache/apt/archives
 
-    - name: Cache apt packages
-      uses: actions/cache@v4
+    - name: Restore apt packages
+      id: apt-cache
+      uses: actions/cache/restore@v4
       with:
-        path: /var/cache/apt/archives
+        path: /var/cache/apt/archives/*.deb
         key: apt-archives-ubuntu-24.04-openmpi-vtk9-python3-ccache
 
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: ccache
+      uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}/.ccache
         key: ccache-mpi-${{ github.sha }}
@@ -83,6 +89,16 @@ jobs:
         sudo DEBIAN_FRONTEND=noninteractive apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
           openmpi-bin libopenmpi-dev libvtk9-dev python3-dev ccache
+
+    # Saved here, not at the end of the job, so a failing build or test
+    # does not lose the download.  Only the .deb files: apt's partial/
+    # directory is readable by root alone, and tar fails on it.
+    - name: Save apt packages
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: apt-archives-ubuntu-24.04-openmpi-vtk9-python3-ccache
 
     - name: Configure
       run: |
@@ -106,6 +122,14 @@ jobs:
         ccache -s
         ccache --evict-older-than 14d
 
+    # Saved even when the build fails, so the next run keeps what compiled
+    - name: Save ccache
+      if: ${{ !cancelled() && steps.ccache.outcome == 'success' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-mpi-${{ github.sha }}
+
     - name: Test
       run: |
         cd build
@@ -128,8 +152,9 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: ccache
+      uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}/.ccache
         key: ccache-mpi-stubs-${{ github.sha }}
@@ -160,6 +185,14 @@ jobs:
         ccache -s
         ccache --evict-older-than 14d
 
+    # Saved even when the build fails, so the next run keeps what compiled
+    - name: Save ccache
+      if: ${{ !cancelled() && steps.ccache.outcome == 'success' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-mpi-stubs-${{ github.sha }}
+
     - name: Test
       run: |
         cd build
@@ -187,14 +220,16 @@ jobs:
     - name: Prepare apt cache
       run: sudo chmod -R a+rwx /var/cache/apt/archives
 
-    - name: Cache apt packages
-      uses: actions/cache@v4
+    - name: Restore apt packages
+      id: apt-cache
+      uses: actions/cache/restore@v4
       with:
-        path: /var/cache/apt/archives
+        path: /var/cache/apt/archives/*.deb
         key: apt-archives-ubuntu-24.04-openmpi-python3-ccache
 
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: ccache
+      uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}/.ccache
         key: ccache-mpi-kokkos-exact-${{ github.sha }}
@@ -208,6 +243,16 @@ jobs:
         sudo DEBIAN_FRONTEND=noninteractive apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
           openmpi-bin libopenmpi-dev python3-dev ccache
+
+    # Saved here, not at the end of the job, so a failing build or test
+    # does not lose the download.  Only the .deb files: apt's partial/
+    # directory is readable by root alone, and tar fails on it.
+    - name: Save apt packages
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: apt-archives-ubuntu-24.04-openmpi-python3-ccache
 
     - name: Configure
       # Build the KOKKOS package with the Serial backend and SPARTA_KOKKOS_EXACT
@@ -240,6 +285,14 @@ jobs:
         ccache -s
         ccache --evict-older-than 14d
 
+    # Saved even when the build fails, so the next run keeps what compiled
+    - name: Save ccache
+      if: ${{ !cancelled() && steps.ccache.outcome == 'success' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-mpi-kokkos-exact-${{ github.sha }}
+
     - name: Test
       run: |
         cd build
@@ -261,14 +314,16 @@ jobs:
     - name: Prepare apt cache
       run: sudo chmod -R a+rwx /var/cache/apt/archives
 
-    - name: Cache apt packages
-      uses: actions/cache@v4
+    - name: Restore apt packages
+      id: apt-cache
+      uses: actions/cache/restore@v4
       with:
-        path: /var/cache/apt/archives
+        path: /var/cache/apt/archives/*.deb
         key: apt-archives-ubuntu-24.04-openmpi-python3-ccache
 
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: ccache
+      uses: actions/cache/restore@v4
       with:
         path: ${{ github.workspace }}/.ccache
         key: ccache-bigbig-${{ github.sha }}
@@ -282,6 +337,16 @@ jobs:
         sudo DEBIAN_FRONTEND=noninteractive apt-get update
         sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
           openmpi-bin libopenmpi-dev python3-dev ccache
+
+    # Saved here, not at the end of the job, so a failing build or test
+    # does not lose the download.  Only the .deb files: apt's partial/
+    # directory is readable by root alone, and tar fails on it.
+    - name: Save apt packages
+      if: steps.apt-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /var/cache/apt/archives/*.deb
+        key: apt-archives-ubuntu-24.04-openmpi-python3-ccache
 
     - name: Configure
       run: |
@@ -302,6 +367,14 @@ jobs:
         make -j4
         ccache -s
         ccache --evict-older-than 14d
+
+    # Saved even when the build fails, so the next run keeps what compiled
+    - name: Save ccache
+      if: ${{ !cancelled() && steps.ccache.outcome == 'success' }}
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.ccache
+        key: ccache-bigbig-${{ github.sha }}
 
   # The manual is Sphinx now, and nothing else in this workflow would notice
   # if it stopped building.  -W turns Sphinx's warnings into errors, so a
@@ -328,6 +401,8 @@ jobs:
     - uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+        cache: pip
+        cache-dependency-path: doc/utils/requirements.txt
 
     - name: Build the manual
       run: make -C doc html SPHINXEXTRA="-W --keep-going"
